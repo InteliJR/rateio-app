@@ -1,0 +1,24 @@
+name: Restrição de PRs para main
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  restrict-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verificar origem do PR
+        run: |
+          BASE_BRANCH="${{ github.base_ref }}"
+          HEAD_BRANCH="${{ github.head_ref }}"
+          echo "Base: $BASE_BRANCH"
+          echo "Head: $HEAD_BRANCH"
+          
+          if [[ "$BASE_BRANCH" == "main" && ! "$HEAD_BRANCH" =~ ^(develop|hotfix/.*)$ ]]; then
+            echo "🚨 Pull Requests para 'main' só são permitidos a partir de 'develop' ou 'hotfix/*'."
+            exit 1
+          else
+            echo "✅ PR com origem válida."
+          fi

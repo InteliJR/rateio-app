@@ -1,0 +1,61 @@
+.features {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 10px;
+  width: 100%;
+  flex: 1;
+  background: radial-gradient(circle at center, #901616 0%, #4a0b0b 100%);
+  position: relative;
+  overflow: hidden;
+}
+.features::before {
+  content: "";
+  position: absolute;
+  top: -10px;
+  left: -115px;
+  width: 600px;
+  height: 337.5px;
+  background: url("/img/graphismEj.png") no-repeat;
+  background-size: contain;
+  z-index: 1;
+  pointer-events: none;
+  -webkit-transform: rotate(150deg); /* Chrome, Safari, Opera */
+  -moz-transform: rotate(150deg); /* Firefox */
+  -ms-transform: rotate(150deg); /* Internet Explorer, Edge */
+  -o-transform: rotate(150deg); /* Opera antigo */
+  transform: rotate(150deg);
+}
+.features::after {
+  content: "";
+  position: absolute;
+  bottom: -20px;
+  right: -50px;
+  width: 600px;
+  height: 337.5px;
+  background: url("/img/graphismEj.png") no-repeat;
+  background-size: contain;
+  z-index: 1;
+  pointer-events: none;
+}
+.features * {
+  z-index: 2;
+}
+
+.featureGrid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2rem;
+  color: #ffffff;
+}
+.featureGrid h3 {
+  font-size: 2rem;
+}
+
+.feature {
+  flex: 1;
+  min-width: 300px;
+  max-width: 350px;
+  text-align: center;
+}

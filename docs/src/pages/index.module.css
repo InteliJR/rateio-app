@@ -1,0 +1,118 @@
+.heroBanner {
+  padding: 4rem 0;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Gradiente claro */
+.lightGradient {
+  background: radial-gradient(circle at bottom right, #ffffff, #e6e6e6);
+}
+
+/* Gradiente escuro */
+.darkGradient {
+  background: radial-gradient(circle at top left, #1a1a1a, #000000);
+}
+
+@media screen and (max-width: 996px) {
+  .heroBanner {
+    padding: 2rem 0;
+  }
+
+  .headerContent {
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 40px;
+  }
+
+  .textContent {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .buttons {
+    margin-top: 0 !important;
+  }
+}
+
+.headerContent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.textContent {
+  flex: 1;
+  text-align: left;
+  min-width: 300px;
+}
+
+.logoContent {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 250px;
+}
+
+.logoImage {
+  width: 100%;
+  max-width: 300px;
+  min-width: 200px;
+  height: auto;
+}
+
+.buttons {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-top: 1.5rem;
+}
+
+/* Botão base */
+.docButton {
+  border: none;
+  font-weight: 600;
+  padding: 0.75rem 2rem;
+  font-size: 1.1rem;
+  border-radius: 8px;
+  transition: background-color 0.3s ease, color 0.3s ease, transform 0.2s;
+  text-decoration: none;
+}
+
+/* Tema claro */
+.lightButton {
+  background-color: #901616;
+  color: #ffffff;
+}
+
+.lightButton:hover {
+  background-color: #5e0d0d;
+  color: #fff;
+  transform: translateY(-2px);
+}
+
+/* Tema escuro */
+.darkButton {
+  background-color: #ffffff;
+  color: #1a1a1a;
+}
+
+.darkButton:hover {
+  background-color: #e0b4b4;
+  color: #000000;
+  transform: translateY(-2px);
+}
+
+main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
