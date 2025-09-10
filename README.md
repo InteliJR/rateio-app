@@ -1,10 +1,6 @@
-# 📘 Nome do Projeto
+# 📘 RateioAPP
 
-<!--
-Breve descrição do projeto, incluindo o objetivo, nome do cliente e o setor envolvido.
--->
-
-Exemplo: _Aplicação web para gestão de processos internos da Empresa X, no setor de logística._
+Aplicativo para simplificar o rateio de despesas a partir da foto de uma nota fiscal: reconhece automaticamente os itens e seus custos, permitindo dividir os valores entre múltiplas pessoas de forma rápida e prática.
 
 Acesse a solução por meio deste [🔗 Link](https://www.nasa.gov/)
 
@@ -14,7 +10,7 @@ Acesse a solução por meio deste [🔗 Link](https://www.nasa.gov/)
 
 A documentação completa do projeto pode ser acessada através do link abaixo:  
 
-**[Template de Documentação](https://intelijr.github.io/template-repo/)**
+**[Template de Documentação](https://intelijr.github.io/rateio-app/)**
 
 > A documentação é mantida utilizando o [Docusaurus](https://docusaurus.io/). Para informações sobre como configurar e manter a documentação, consulte o [guia de configuração](./docs/README.md).
 
