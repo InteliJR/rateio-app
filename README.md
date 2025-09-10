@@ -10,7 +10,7 @@ Acesse a solução por meio deste [🔗 Link](https://www.nasa.gov/)
 
 A documentação completa do projeto pode ser acessada através do link abaixo:  
 
-**[Template de Documentação](https://intelijr.github.io/rateio-app/)**
+**[Documentação](https://intelijr.github.io/rateio-app/)**
 
 > A documentação é mantida utilizando o [Docusaurus](https://docusaurus.io/). Para informações sobre como configurar e manter a documentação, consulte o [guia de configuração](./docs/README.md).
 
