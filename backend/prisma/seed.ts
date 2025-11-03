@@ -1,28 +1,28 @@
+// prisma/seed.ts
 import { PrismaClient, UserRole } from '@prisma/client';
 import * as argon2 from 'argon2';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Iniciando seed do banco de dados...');
-
+  const pepper = process.env.PASSWORD_PEPPER || '';
+  
   // Verificar se já existe admin
   const existingAdmin = await prisma.user.findFirst({
     where: { role: UserRole.ADMIN },
   });
 
   if (existingAdmin) {
-    console.log('⚠️  Admin já existe no sistema. Pulando criação.');
+    console.log('✅ Admin já existe no sistema');
     return;
   }
 
-  // Criar primeiro admin
-  const adminEmail = process.env.ADMIN_EMAIL || 'admin@example.com';
-  const adminPassword = process.env.ADMIN_PASSWORD || 'Admin@123456';
-  const adminName = process.env.ADMIN_NAME || 'Administrador';
+  // Criar admin padrão
+  const email = process.env.SEED_USER_EMAIL || 'admin@rateio.com';
+  const name = process.env.SEED_USER_NAME || 'Admin Rateio';
+  const password = process.env.SEED_USER_PASSWORD || 'Admin@123456';
 
-  const pepper = process.env.PASSWORD_PEPPER || '';
-  const passwordWithPepper = adminPassword + pepper;
+  const passwordWithPepper = password + pepper;
   const hashedPassword = await argon2.hash(passwordWithPepper, {
     type: argon2.argon2id,
     memoryCost: 65536,
@@ -32,18 +32,18 @@ async function main() {
 
   const admin = await prisma.user.create({
     data: {
-      email: adminEmail,
-      name: adminName,
+      email,
+      name,
       password: hashedPassword,
       role: UserRole.ADMIN,
       isActive: true,
     },
   });
 
-  console.log('✅ Admin criado com sucesso!');
-  console.log(`📧 Email: ${admin.email}`);
-  console.log(`🔑 Senha: ${adminPassword}`);
-  console.log('⚠️  ALTERE A SENHA IMEDIATAMENTE APÓS O PRIMEIRO LOGIN!');
+  console.log('✅ Admin criado com sucesso:');
+  console.log('   Email:', email);
+  console.log('   Senha:', password);
+  console.log('   ID:', admin.id);
 }
 
 main()

@@ -29,7 +29,7 @@ export class UsersService {
     email: string,
     name: string,
     password: string,
-    role: UserRole = UserRole.COMERCIAL,
+    role: UserRole = UserRole.USER, // ✅ MUDANÇA AQUI
     isActive: boolean = false,
   ) {
     const existingUser = await this.prisma.user.findUnique({
@@ -107,9 +107,9 @@ export class UsersService {
 
   async update(
     id: string,
-    data: { 
-      name?: string; 
-      role?: UserRole; 
+    data: {
+      name?: string;
+      role?: UserRole;
       isActive?: boolean;
       password?: string;
     },
@@ -119,7 +119,9 @@ export class UsersService {
 
     // Validação: Admin não pode desativar a si mesmo
     if (requestingUserId === id && data.isActive === false) {
-      throw new BadRequestException('Você não pode desativar sua própria conta');
+      throw new BadRequestException(
+        'Você não pode desativar sua própria conta',
+      );
     }
 
     // Validação: Admin não pode mudar a própria role
@@ -145,29 +147,29 @@ export class UsersService {
     }
 
     // ✅ CORREÇÃO: usar método centralizado de hash
-     let hashedPassword: string | undefined;
-  if (data.password) {
-    hashedPassword = await this.hashPassword(data.password);
-  }
+    let hashedPassword: string | undefined;
+    if (data.password) {
+      hashedPassword = await this.hashPassword(data.password);
+    }
 
-  return this.prisma.user.update({
-    where: { id },
-    data: {
-      name: data.name,
-      role: data.role,
-      isActive: data.isActive,
-      ...(hashedPassword && { password: hashedPassword }),
-    },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      role: true,
-      isActive: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  });
+    return this.prisma.user.update({
+      where: { id },
+      data: {
+        name: data.name,
+        role: data.role,
+        isActive: data.isActive,
+        ...(hashedPassword && { password: hashedPassword }),
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
   }
 
   async updateOwnProfile(
@@ -208,7 +210,11 @@ export class UsersService {
     return argon2.verify(user.password, passwordWithPepper);
   }
 
-  async createFirstAdmin(email: string, password: string, name: string = 'Admin') {
+  async createFirstAdmin(
+    email: string,
+    password: string,
+    name: string = 'Admin',
+  ) {
     const existingAdmin = await this.prisma.user.findFirst({
       where: { role: UserRole.ADMIN },
     });

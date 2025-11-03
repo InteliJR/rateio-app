@@ -1,3 +1,4 @@
+// prisma/schema.prisma
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
@@ -13,10 +14,8 @@ datasource db {
 // ============================================
 
 enum UserRole {
-  ADMIN       // Acessa tudo + gestão de usuários
-  COMERCIAL   // Vê produtos e matérias-primas
-  LOGISTICA   // Vê frete (além de admin)
-  IMPOSTO     // Mexe nas premissas/impostos (além de admin)
+  ADMIN
+  USER
 }
 
 model User {
@@ -24,14 +23,13 @@ model User {
   email     String   @unique
   name      String
   password  String
-  role      UserRole
+  role      UserRole @default(USER)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relações
-  createdProducts Product[]
-  revokedTokens   RevokedToken[]
+  bills         Bill[]
+  revokedTokens RevokedToken[]
 
   @@map("users")
 }
@@ -43,7 +41,6 @@ model RevokedToken {
   expiresAt DateTime
   createdAt DateTime @default(now())
 
-  // Relações
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([token])
@@ -53,228 +50,126 @@ model RevokedToken {
 }
 
 // ============================================
-// IMPOSTOS E PREMISSAS
+// CONTAS (BILLS)
 // ============================================
 
-model Tax {
-  id          String   @id @default(uuid())
-  name        String
-  description String?  @db.Text
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relações
-  taxItems     TaxItem[]
-  rawMaterials RawMaterial[]
-
-  @@map("taxes")
+enum BillStatus {
+  PENDING_OCR    // Aguardando processamento OCR
+  OCR_FAILED     // Falha no OCR
+  REVIEWING      // Usuário revisando itens
+  DIVIDING       // Usuário dividindo conta
+  COMPLETED      // Divisão finalizada
 }
 
-// Items específicos de imposto (PIS, COFINS, ICMS, IPI, etc)
-model TaxItem {
+model Bill {
+  id              String     @id @default(uuid())
+  userId          String
+  imageUrl        String     // URL da imagem no S3
+  imageKey        String     // Chave do S3 para deletar
+  status          BillStatus @default(PENDING_OCR)
+  ocrRawText      String?    @db.Text // Texto bruto do OCR
+  totalAmount     Decimal?   @db.Decimal(10, 2)
+  establishmentName String?
+  
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items        BillItem[]
+  participants Participant[]
+  fees         Fee[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("bills")
+}
+
+// ============================================
+// ITENS DA CONTA
+// ============================================
+
+model BillItem {
   id          String  @id @default(uuid())
-  taxId       String
-  name        String // PIS, COFINS, ICMS, IPI, IR e CSLL, COMISSÕES, etc
-  rate        Decimal @db.Decimal(5, 2) // Percentual (ex: 7.60)
-  recoverable Boolean @default(false) // Se é premissa recuperável
+  billId      String
+  name        String
+  quantity    Int     @default(1)
+  unitPrice   Decimal @db.Decimal(10, 2)
+  totalPrice  Decimal @db.Decimal(10, 2)
+  
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // Relações
-  tax Tax @relation(fields: [taxId], references: [id], onDelete: Cascade)
+  bill      Bill       @relation(fields: [billId], references: [id], onDelete: Cascade)
+  divisions Division[]
 
-  @@index([taxId])
-  @@map("tax_items")
+  @@index([billId])
+  @@map("bill_items")
 }
 
 // ============================================
-// FRETE (TRANSPORTE)
+// PARTICIPANTES
 // ============================================
 
-enum Currency {
-  BRL
-  USD
-  EUR
-}
-
-model Freight {
-  id               String   @id @default(uuid())
-  name             String
-  description      String?  @db.Text
-  paymentTerm      Int // dias
-  unitPrice        Decimal  @db.Decimal(12, 2)
-  currency         Currency @default(BRL)
-  additionalCosts  Decimal  @default(0) @db.Decimal(12, 2)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  // Relações
-  freightTaxes FreightTax[]
-  rawMaterials RawMaterial[]
-
-  @@map("freights")
-}
-
-// Impostos do frete (ICMS, PIS, COFINS)
-model FreightTax {
-  id        String  @id @default(uuid())
-  freightId String
-  name      String // ICMS, PIS, COFINS
-  rate      Decimal @db.Decimal(5, 2)
+model Participant {
+  id        String   @id @default(uuid())
+  billId    String
+  name      String
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relações
-  freight Freight @relation(fields: [freightId], references: [id], onDelete: Cascade)
+  bill      Bill       @relation(fields: [billId], references: [id], onDelete: Cascade)
+  divisions Division[]
 
-  @@index([freightId])
-  @@map("freight_taxes")
+  @@index([billId])
+  @@map("participants")
 }
 
 // ============================================
-// MATÉRIAS-PRIMAS
+// DIVISÕES (Quem paga o quê)
 // ============================================
 
-enum MeasurementUnit {
-  KG
-  G
-  L
-  ML
-  M
-  CM
-  UN
-  CX
-  PC
-}
-
-model RawMaterial {
-  id                 String          @id @default(uuid())
-  code               String          @unique
-  name               String
-  description        String?         @db.Text
-  measurementUnit    MeasurementUnit
-  inputGroup         String? // Grupo de insumo (texto livre)
-  paymentTerm        Int // dias
-  acquisitionPrice   Decimal         @db.Decimal(12, 2)
-  currency           Currency        @default(BRL)
-  priceConvertedBrl  Decimal         @db.Decimal(12, 2)
-  additionalCost     Decimal         @default(0) @db.Decimal(12, 2)
+model Division {
+  id            String  @id @default(uuid())
+  billItemId    String
+  participantId String
+  shareAmount   Decimal @db.Decimal(10, 2) // Valor que essa pessoa paga deste item
   
-  // Relações obrigatórias (1 imposto, 1 frete)
-  taxId              String
-  freightId          String
-  
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  // Relações
-  tax                Tax             @relation(fields: [taxId], references: [id], onDelete: Restrict)
-  freight            Freight         @relation(fields: [freightId], references: [id], onDelete: Restrict)
-  productRawMaterials ProductRawMaterial[]
-  changeLogs         RawMaterialChangeLog[]
+  billItem    BillItem    @relation(fields: [billItemId], references: [id], onDelete: Cascade)
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
 
-  @@index([code])
-  @@index([name])
-  @@index([taxId])
-  @@index([freightId])
-  @@map("raw_materials")
-}
-
-// Log de alterações de matérias-primas
-model RawMaterialChangeLog {
-  id            String   @id @default(uuid())
-  rawMaterialId String
-  field         String // Nome do campo alterado
-  oldValue      String? // Valor antigo
-  newValue      String? // Valor novo
-  changedBy     String // ID do usuário que fez a alteração
-  changedAt     DateTime @default(now())
-
-  // Relações
-  rawMaterial RawMaterial @relation(fields: [rawMaterialId], references: [id], onDelete: Cascade)
-
-  @@index([rawMaterialId])
-  @@index([changedAt])
-  @@map("raw_material_change_logs")
+  @@unique([billItemId, participantId]) // Cada pessoa divide cada item apenas 1x
+  @@index([billItemId])
+  @@index([participantId])
+  @@map("divisions")
 }
 
 // ============================================
-// PRODUTOS
+// TAXAS (Garçom, Couvert)
 // ============================================
 
-model Product {
+enum FeeType {
+  SERVICE_PERCENTAGE // Taxa de serviço (% sobre total)
+  SERVICE_FIXED      // Taxa fixa de serviço
+  COVER_CHARGE       // Couvert fixo
+}
+
+model Fee {
   id          String   @id @default(uuid())
-  code        String   @unique // Numérico apenas
-  name        String
-  description String?  @db.Text
-  creatorId   String
-  
-  // Preço automático (calculado, mas pode ser armazenado para cache)
-  priceWithoutTaxesAndFreight Decimal? @db.Decimal(12, 2)
-  priceWithTaxesAndFreight    Decimal? @db.Decimal(12, 2)
-  
-  // Relação opcional com custo fixo (0 ou 1)
-  fixedCostId String?
+  billId      String
+  type        FeeType
+  description String?
+  value       Decimal  @db.Decimal(10, 2) // Valor ou percentual
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // Relações
-  creator             User              @relation(fields: [creatorId], references: [id])
-  fixedCost           FixedCost?        @relation(fields: [fixedCostId], references: [id], onDelete: SetNull)
-  productRawMaterials ProductRawMaterial[]
+  bill Bill @relation(fields: [billId], references: [id], onDelete: Cascade)
 
-  @@index([code])
-  @@index([name])
-  @@index([fixedCostId])
-  @@map("products")
-}
-
-// ============================================
-// RELAÇÃO PRODUTO <-> MATÉRIA-PRIMA
-// ============================================
-
-model ProductRawMaterial {
-  productId     String
-  rawMaterialId String
-  quantity      Decimal  @db.Decimal(10, 2)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  // Relações
-  product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
-  rawMaterial RawMaterial @relation(fields: [rawMaterialId], references: [id], onDelete: Restrict)
-
-  @@id([productId, rawMaterialId])
-  @@map("product_raw_materials")
-}
-
-// ============================================
-// CUSTOS FIXOS (OVERHEAD)
-// ============================================
-
-model FixedCost {
-  id                String   @id @default(uuid())
-  description       String
-  code              String?  @unique
-  personnelExpenses Decimal  @db.Decimal(12, 2)
-  generalExpenses   Decimal  @db.Decimal(12, 2)
-  proLabore         Decimal  @db.Decimal(12, 2)
-  depreciation      Decimal  @default(0) @db.Decimal(12, 2)
-  totalCost         Decimal  @db.Decimal(12, 2)
-  
-  // Parâmetros para cálculo de overhead
-  considerationPercentage Decimal @default(100) @db.Decimal(5, 2) // % de gastos a considerar
-  salesVolume             Decimal @db.Decimal(12, 2) // Volume de vendas para cálculo
-  overheadPerUnit         Decimal @db.Decimal(12, 2) // Overhead por unidade
-  
-  calculationDate   DateTime @default(now())
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  // Relações
-  products Product[]
-
-  @@index([calculationDate])
-  @@map("fixed_costs")
+  @@index([billId])
+  @@map("fees")
 }

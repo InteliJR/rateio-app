@@ -23,18 +23,21 @@ A documentação completa do projeto pode ser acessada através deste **[link](h
 ### Mobile (Android)
 
 <p align="center">
-  <img src="https://reactnative.dev/img/header_logo.svg" width="120" alt="React Native Logo" />
+  <img src="https://docs.expo.dev/static/images/logo.svg" width="120" alt="Expo Logo" />
 </p>
 
-- React Native 0.74+
+- **Expo SDK 52+** (Managed Workflow)
+- **React Native 0.76+**
 - TypeScript
 - React Navigation 6
 - Zustand (State Management)
 - React Hook Form + Zod
 - Axios
-- React Native Vision Camera
+- Expo Camera
+- Expo Image Picker
+- Expo SecureStore (Persistência Segura)
 - React Native Paper (UI Components)
-- AsyncStorage / MMKV (Persistência)
+- **Expo Application Services (EAS)** - Build & Deploy
 
 ### Backend
 
@@ -55,9 +58,10 @@ A documentação completa do projeto pode ser acessada através deste **[link](h
 - Docker & Docker Compose
 
 ### Infraestrutura
-- Docker (desenvolvimento)
+- Docker (desenvolvimento backend)
 - DBaaS - PostgreSQL (produção)
 - AWS S3 + CloudFront (storage de imagens)
+- **Expo Application Services (EAS)** - Build & Deploy
 - Google Play Store (distribuição)
 
 ---
@@ -67,10 +71,11 @@ A documentação completa do projeto pode ser acessada através deste **[link](h
 ### Pré-requisitos
 
 - Node.js 20+
-- Docker e Docker Compose
+- Docker e Docker Compose (para backend)
 - npm ou yarn
-- Android Studio (para emulador Android)
-- JDK 17+ (para build Android)
+- **Expo CLI** (`npm install -g expo-cli`)
+- Conta Expo (criar em [expo.dev](https://expo.dev))
+- Android Studio (para emulador Android, opcional)
 - Conta Google Cloud (para Vision API)
 - Conta AWS (para S3, opcional em dev)
 
@@ -95,7 +100,7 @@ cp backend/.env.example backend/.env
 # Edite backend/.env e adicione suas credenciais:
 # - DATABASE_URL
 # - JWT_SECRET
-# - GOOGLE_VISION_API_KEY (ou AWS Textract)
+# - GOOGLE_VISION_API_KEY
 # - AWS_S3_* (se usar S3)
 
 # Inicie o backend + banco de dados com Docker
@@ -111,8 +116,8 @@ docker-compose exec api npx prisma migrate deploy
 docker-compose exec api npx prisma db seed
 
 # ✅ Credenciais padrão do usuário teste:
-# Email: teste@example.com
-# Senha: Teste@123456
+# Email: admin@rateio.com
+# Senha: Admin@123456
 
 # Acesse:
 # - Backend API: http://localhost:3000
@@ -120,7 +125,7 @@ docker-compose exec api npx prisma db seed
 # - Health Check: http://localhost:3000/health
 ```
 
-### 3. Configure o Mobile App
+### 3. Configure o Mobile App (Expo)
 
 ```bash
 # Acesse o diretório do mobile
@@ -132,47 +137,54 @@ npm install
 # Configure as variáveis de ambiente
 cp .env.example .env
 
-# ⚠️ IMPORTANTE: Edite o .env e coloque o IP DA SUA MÁQUINA
-# NÃO use localhost! Use seu IP local (ex: 192.168.1.100)
-# Para descobrir seu IP:
-# - Windows: ipconfig
-# - macOS/Linux: ifconfig ou ip addr
+# ⚠️ IMPORTANTE: Edite o .env e configure a URL da API
+# Para desenvolvimento local:
+# - Use o IP da sua máquina (não localhost!)
+# - Para descobrir seu IP:
+#   • Windows: ipconfig
+#   • macOS/Linux: ifconfig ou ip addr
 # 
 # Exemplo no .env:
-# REACT_APP_API_URL=http://192.168.1.100:3000
+# EXPO_PUBLIC_API_URL=http://192.168.1.100:3000
 ```
 
-#### Para Android
+### 4. Rodar o App com Expo
 
 ```bash
-# Certifique-se de que o Android Studio está instalado
-# e que você configurou as variáveis de ambiente:
-# - ANDROID_HOME
-# - PATH incluindo platform-tools
+# Iniciar o Expo Dev Server
+npx expo start
 
-# Inicie o emulador ou conecte um dispositivo físico
-# Via Android Studio → AVD Manager → Start Emulator
+# Você verá um QR Code no terminal
 
-# OU conecte um dispositivo físico via USB com USB Debugging habilitado
+# Opções para rodar:
+# 1. Pressione 'a' para abrir no emulador Android
+# 2. Pressione 'i' para abrir no simulador iOS (apenas macOS)
+# 3. Escaneie o QR Code com o app Expo Go no seu celular
 
-# Compile e rode o app
-npx react-native run-android
+# Para rodar diretamente no emulador Android:
+npx expo run:android
 
-# Se usar emulador Android, você pode usar 10.0.2.2 no lugar do IP:
-# REACT_APP_API_URL=http://10.0.2.2:3000
+# Para rodar diretamente no simulador iOS (apenas macOS):
+npx expo run:ios
 ```
 
-#### Para iOS (Apenas macOS)
+#### 📱 Usando Expo Go (Recomendado para Desenvolvimento)
 
-```bash
-# Instale as dependências nativas
-cd ios
-pod install
-cd ..
+1. **Instale o Expo Go** no seu celular:
+   - Android: [Google Play Store](https://play.google.com/store/apps/details?id=host.exp.exponent)
+   - iOS: [App Store](https://apps.apple.com/app/expo-go/id982107779)
 
-# Rode o app
-npx react-native run-ios
-```
+2. **Escaneie o QR Code:**
+   - Android: Use o app Expo Go para escanear
+   - iOS: Use a câmera nativa do iPhone
+
+3. **App abrirá automaticamente** no seu dispositivo
+
+**Vantagens do Expo Go:**
+- ✅ Não precisa de emulador
+- ✅ Teste em dispositivo real
+- ✅ Hot reload instantâneo
+- ✅ Múltiplos dispositivos simultaneamente
 
 ---
 
@@ -188,7 +200,7 @@ cd backend
 npm install
 
 # Configure o .env com a DATABASE_URL local
-# Exemplo: DATABASE_URL="postgresql://postgres:senha@localhost:5432/divisor_dev"
+# Exemplo: DATABASE_URL="postgresql://postgres:senha@localhost:5432/rateio_dev"
 
 # Gere o Prisma Client
 npx prisma generate
@@ -211,7 +223,7 @@ npm run start:dev
 
 ### Criar Usuário de Teste
 
-O seed cria automaticamente um usuário para desenvolvimento:
+O seed cria automaticamente um usuário admin para desenvolvimento:
 
 ```bash
 # Com Docker
@@ -222,14 +234,15 @@ cd backend && npm run seed
 ```
 
 **Credenciais padrão:**
-- Email: `teste@example.com`
-- Senha: `Teste@123456`
+- Email: `admin@rateio.com`
+- Senha: `Admin@123456`
 
 ### Fazer Login no App
 
-1. Inicie o app mobile
-2. Tela de Login → Use as credenciais acima
-3. Após login, você pode alterar seus dados no perfil
+1. Inicie o app mobile com `npx expo start`
+2. Abra no Expo Go ou emulador
+3. Tela de Login → Use as credenciais acima
+4. Após login, você pode alterar seus dados no perfil
 
 ### Customizar Usuário de Teste
 
@@ -251,7 +264,7 @@ SEED_USER_NAME=Seu Nome
 │   └── workflows/
 │       ├── deploy_api.yml
 │       ├── deploy_docs.yml
-│       └── android_build.yml
+│       └── eas_build.yml         # ✨ Build via EAS
 │
 ├── backend/                       # Código backend (NestJS)
 │   ├── src/
@@ -274,31 +287,33 @@ SEED_USER_NAME=Seu Nome
 │   ├── Dockerfile
 │   └── package.json
 │
-├── mobile/                        # Código mobile (React Native)
-│   ├── src/
-│   │   ├── api/                   # Chamadas à API
-│   │   ├── components/
-│   │   │   ├── common/            # Componentes reutilizáveis
-│   │   │   ├── camera/            # Componentes de câmera
-│   │   │   └── division/          # Componentes de divisão
-│   │   ├── hooks/                 # Custom hooks
-│   │   ├── navigation/            # React Navigation
-│   │   ├── screens/               # Telas do app
-│   │   │   ├── Auth/              # Login, Registro
-│   │   │   ├── Camera/            # Captura de foto
-│   │   │   ├── BillReview/        # Revisão de itens OCR
-│   │   │   ├── Division/          # Divisão de conta
-│   │   │   ├── Summary/           # Resumo final
-│   │   │   └── History/           # Histórico
-│   │   ├── store/                 # Zustand stores
-│   │   │   ├── authStore.ts
-│   │   │   ├── billStore.ts
-│   │   │   └── participantsStore.ts
-│   │   ├── types/                 # TypeScript types
-│   │   ├── utils/                 # Funções utilitárias
-│   │   └── App.tsx
-│   ├── android/                   # Código nativo Android
-│   ├── ios/                       # Código nativo iOS
+├── mobile/                        # Código mobile (Expo)
+│   ├── app/                       # ✨ Expo Router (file-based routing)
+│   │   ├── (auth)/
+│   │   │   ├── login.tsx
+│   │   │   └── register.tsx
+│   │   ├── (tabs)/
+│   │   │   ├── index.tsx          # Home
+│   │   │   ├── history.tsx
+│   │   │   └── profile.tsx
+│   │   ├── camera.tsx
+│   │   ├── bill/[id].tsx
+│   │   ├── division/[id].tsx
+│   │   └── _layout.tsx
+│   ├── components/
+│   │   ├── common/                # Componentes reutilizáveis
+│   │   ├── camera/                # Componentes de câmera
+│   │   └── division/              # Componentes de divisão
+│   ├── hooks/                     # Custom hooks
+│   ├── services/                  # API calls
+│   ├── store/                     # Zustand stores
+│   │   ├── authStore.ts
+│   │   ├── billStore.ts
+│   │   └── participantsStore.ts
+│   ├── types/                     # TypeScript types
+│   ├── utils/                     # Funções utilitárias
+│   ├── app.json                   # ✨ Configuração Expo
+│   ├── eas.json                   # ✨ Configuração EAS Build
 │   ├── .env.example
 │   └── package.json
 │
@@ -339,7 +354,7 @@ npx prisma studio
 npx prisma migrate reset
 ```
 
-### Docker
+### Docker (Backend)
 
 ```bash
 # Iniciar containers
@@ -368,34 +383,38 @@ docker-compose exec api npx prisma studio
 docker-compose exec api npm run test
 ```
 
-### React Native (Mobile)
+### Expo (Mobile)
 
 ```bash
-# Desenvolvimento Android
-npx react-native run-android
+# Iniciar dev server
+npx expo start
 
-# Desenvolvimento iOS (apenas macOS)
-npx react-native run-ios
+# Limpar cache
+npx expo start --clear
 
-# Limpar cache do Metro Bundler
-npx react-native start --reset-cache
+# Rodar no Android
+npx expo run:android
 
-# Limpar build do Android
-cd android && ./gradlew clean && cd ..
+# Rodar no iOS (apenas macOS)
+npx expo run:ios
 
-# Limpar build do iOS
-cd ios && rm -rf build && pod install && cd ..
+# Build de desenvolvimento
+eas build --profile development --platform android
 
-# Logs do dispositivo Android
-adb logcat
+# Build de preview (para testar localmente)
+eas build --profile preview --platform android
 
-# Logs do dispositivo iOS
-npx react-native log-ios
+# Build de produção
+eas build --profile production --platform android
 
-# Gerar APK de release (Android)
-cd android
-./gradlew assembleRelease
-# APK em: android/app/build/outputs/apk/release/app-release.apk
+# Submit para Play Store
+eas submit --platform android
+
+# Ver builds
+eas build:list
+
+# Atualizar app via OTA (sem rebuild)
+eas update --branch production
 ```
 
 ### Backend
@@ -428,7 +447,7 @@ Usuário → Tela Login → Insere credenciais → Backend valida → Token JWT 
 
 ### 2️⃣ Captura de Conta
 ```
-Tela Principal → Botão "Nova Conta" → Abre Câmera
+Tela Principal → Botão "Nova Conta" → Abre Câmera (Expo Camera)
                                            │
                                            ▼
                                     Tira foto da conta
@@ -528,7 +547,7 @@ Recomendamos usar **DBaaS** para facilitar gestão, backups e escalabilidade:
 Basta alterar a `DATABASE_URL` no `.env` de produção:
 
 ```bash
-DATABASE_URL="postgresql://user:senha@seu-db.provider.com:5432/divisor_prod?sslmode=require"
+DATABASE_URL="postgresql://user:senha@seu-db.provider.com:5432/rateio_prod?sslmode=require"
 ```
 
 ### 🖥️ Backend (API)
@@ -558,7 +577,7 @@ DATABASE_URL="postgresql://user:senha@seu-db.provider.com:5432/divisor_prod?sslm
 
 2. Build da imagem Docker:
    ```bash
-   docker build -t divisor-api:latest --target production ./backend
+   docker build -t rateio-api:latest --target production ./backend
    ```
 
 3. Execute migrations antes do deploy:
@@ -568,40 +587,89 @@ DATABASE_URL="postgresql://user:senha@seu-db.provider.com:5432/divisor_prod?sslm
 
 4. Configure health check: `GET /health`
 
-### 📱 Mobile App (Android)
+### 📱 Mobile App (Android via EAS)
+
+**Configuração Inicial do EAS:**
+
+1. **Login no Expo:**
+   ```bash
+   npx expo login
+   ```
+
+2. **Configure o projeto:**
+   ```bash
+   cd mobile
+   eas build:configure
+   ```
+
+3. **Edite `eas.json`:**
+   ```json
+   {
+     "build": {
+       "development": {
+         "developmentClient": true,
+         "distribution": "internal",
+         "android": {
+           "buildType": "apk"
+         }
+       },
+       "preview": {
+         "distribution": "internal",
+         "android": {
+           "buildType": "apk"
+         }
+       },
+       "production": {
+         "android": {
+           "buildType": "aab"
+         }
+       }
+     },
+     "submit": {
+       "production": {
+         "android": {
+           "serviceAccountKeyPath": "./google-service-account.json"
+         }
+       }
+     }
+   }
+   ```
 
 **Build e Distribuição:**
 
-1. **Incremente a versão:**
+1. **Build de produção (AAB para Play Store):**
    ```bash
-   # android/app/build.gradle
-   versionCode 2  # incrementar
-   versionName "1.1.0"  # formato semântico
+   eas build --platform android --profile production
    ```
 
-2. **Gere APK/AAB assinado:**
+2. **Download do build:**
    ```bash
-   cd android
-   ./gradlew bundleRelease  # para AAB (Play Store)
-   # OU
-   ./gradlew assembleRelease  # para APK
+   # O EAS gerará um link para download
+   # Ou use:
+   eas build:download --platform android
    ```
 
-3. **Configure signing:**
-   - Gere keystore: `keytool -genkey -v -keystore divisor.keystore -alias divisor -keyalg RSA -keysize 2048 -validity 10000`
-   - Configure em `android/gradle.properties` e `android/app/build.gradle`
-
-4. **Upload para Play Store:**
-   - Acesse Google Play Console
-   - Crie novo app ou nova versão
-   - Upload do AAB
-   - Preencha release notes
-   - Teste internamente → Teste fechado → Produção
+3. **Submit para Google Play:**
+   ```bash
+   # Primeiro, configure Service Account no Google Play Console
+   # Depois:
+   eas submit --platform android --latest
+   ```
 
 **⚠️ Importante:**
-- Configure as variáveis de build com a URL da API de produção
-- Teste em dispositivos reais antes do release
-- Implemente versionamento de API (ex: `/v1/`)
+- Configure secrets no EAS: `eas secret:create`
+- Variáveis de produção devem estar no `eas.json` ou como secrets
+- Incremente `version` e `versionCode` no `app.json` a cada release
+- Teste builds localmente primeiro: `eas build --profile preview --platform android --local`
+
+**Atualizações OTA (Over-The-Air):**
+
+```bash
+# Publicar atualização sem rebuild (apenas JS/assets)
+eas update --branch production --message "Correção de bugs"
+
+# Usuários recebem atualização automaticamente
+```
 
 ### 🖼️ Storage de Imagens (AWS S3)
 
@@ -629,12 +697,12 @@ DATABASE_URL="postgresql://user:senha@seu-db.provider.com:5432/divisor_prod?sslm
 ### 🔐 Senhas e Tokens
 - ✅ Senhas com hash Argon2
 - ✅ JWT com expiração curta (15min access, 7 dias refresh)
-- ✅ Tokens armazenados em AsyncStorage/EncryptedStorage
+- ✅ Tokens armazenados em **Expo SecureStore** (criptografado)
 - ✅ Logout limpa tokens do dispositivo
 
 ### 🖼️ Imagens
 - ✅ Validação de tipo e tamanho no backend
-- ✅ Compressão antes de upload
+- ✅ Compressão com Expo ImageManipulator antes de upload
 - ✅ URLs pré-assinadas do S3 (expiram em 1h)
 - ✅ Imagens temporárias deletadas após OCR
 
@@ -645,16 +713,16 @@ DATABASE_URL="postgresql://user:senha@seu-db.provider.com:5432/divisor_prod?sslm
 - ✅ Helmet.js para headers de segurança
 - ✅ Validação de todos os inputs
 
-### 📱 Mobile
-- ✅ Não armazenar dados sensíveis em plain text
+### 📱 Mobile (Expo)
+- ✅ **Expo SecureStore** para dados sensíveis
 - ✅ Usar HTTPS para todas as chamadas
 - ✅ Validar inputs localmente (Zod)
 - ✅ Solicitar permissões apenas quando necessário
-- ✅ Ofuscar código (ProGuard em produção)
+- ✅ **EAS Build** gera APKs otimizados e seguros
 
 ### 🔍 Monitoramento
 - ✅ Sentry para crash reports (mobile + API)
-- ✅ Firebase Analytics para eventos
+- ✅ Expo Analytics integrado
 - ✅ CloudWatch para logs da API
 - ✅ Alertas de erro crítico
 
@@ -664,7 +732,7 @@ DATABASE_URL="postgresql://user:senha@seu-db.provider.com:5432/divisor_prod?sslm
 
 ### ❌ Erro "Unable to connect to server"
 
-**Causa:** IP errado ou backend não está rodando
+**Causa:** URL da API incorreta ou backend não está rodando
 
 **Solução:**
 ```bash
@@ -673,25 +741,46 @@ docker-compose ps
 # OU
 curl http://localhost:3000/health
 
-# Verifique o IP no .env do mobile
+# Verifique o .env do mobile
+# Use EXPO_PUBLIC_API_URL (não REACT_APP_API_URL)
 # Use o IP da sua máquina, NÃO localhost
 # Windows: ipconfig
 # macOS/Linux: ifconfig
 
-# Para emulador Android: use 10.0.2.2:3000
+# Exemplo correto:
+# EXPO_PUBLIC_API_URL=http://192.168.1.100:3000
 ```
 
 ### ❌ Erro ao tirar foto (Permission Denied)
 
-**Causa:** Permissões de câmera não configuradas
+**Causa:** Permissões de câmera não concedidas
 
 **Solução:**
 ```bash
-# Verifique android/app/src/main/AndroidManifest.xml
-<uses-permission android:name="android.permission.CAMERA" />
+# Com Expo, as permissões são gerenciadas automaticamente
+# Certifique-se de solicitar permissão antes de usar:
 
-# Reinstale o app
-npx react-native run-android
+import { Camera } from 'expo-camera';
+
+const [permission, requestPermission] = Camera.useCameraPermissions();
+
+if (!permission?.granted) {
+  await requestPermission();
+}
+
+# No app.json, configure:
+{
+  "expo": {
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Permitir acesso à câmera para fotografar contas"
+        }
+      ]
+    ]
+  }
+}
 ```
 
 ### ❌ OCR não reconhece itens
@@ -701,6 +790,7 @@ npx react-native run-android
 **Solução:**
 - Tire foto em boa iluminação
 - Evite reflexos e sombras
+- Use Expo ImageManipulator para melhorar qualidade
 - Verifique se `GOOGLE_VISION_API_KEY` está correta
 - Verifique logs do backend: `docker-compose logs -f api`
 
@@ -719,26 +809,23 @@ AWS_S3_SECRET_KEY=secret
 aws s3 ls s3://seu-bucket
 ```
 
-### ❌ Build Android falha
+### ❌ Build EAS falha
 
-**Causa:** ANDROID_HOME não configurado ou Gradle cache corrompido
+**Causa:** Credenciais não configuradas ou erro no `eas.json`
 
 **Solução:**
 ```bash
-# Configure ANDROID_HOME
-export ANDROID_HOME=$HOME/Library/Android/sdk  # macOS
-# OU
-export ANDROID_HOME=$HOME/Android/Sdk  # Linux
+# Verifique login
+eas whoami
 
-# Limpe cache do Gradle
-cd android
-./gradlew clean
-./gradlew --stop
-rm -rf .gradle
-cd ..
+# Re-configure EAS
+eas build:configure
 
-# Reinstale
-npx react-native run-android
+# Limpe cache
+eas build --clear-cache
+
+# Build local para debug
+eas build --profile development --platform android --local
 ```
 
 ---
@@ -747,17 +834,17 @@ npx react-native run-android
 
 Conheça quem participou do desenvolvimento deste projeto:
 
-- **Isabelly Maia** _Scrum Master_  
-  [![GitHub](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/isabellymaiia)
-  [![LinkedIn](https://img.shields.io/badge/LinkedIn-blue?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/isabellymaia/)
+- **Usuário 1** _Scrum Master_  
+  [![GitHub](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/usuario)
+  [![LinkedIn](https://img.shields.io/badge/LinkedIn-blue?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/usuario/)
 
-- **Karine Paixão**  
-  [![GitHub](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/karinevicr)
-  [![LinkedIn](https://img.shields.io/badge/LinkedIn-blue?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/karine-victoria/)
+- **Usuário 2**  
+  [![GitHub](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/usuario)
+  [![LinkedIn](https://img.shields.io/badge/LinkedIn-blue?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/usuario/)
 
-- **Raphael Silva**  
-  [![GitHub](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/RaphaelSilva09)
-  [![LinkedIn](https://img.shields.io/badge/LinkedIn-blue?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/raphaelfelipesilva/)
+- **Usuário 3**  
+  [![GitHub](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/usuario)
+  [![LinkedIn](https://img.shields.io/badge/LinkedIn-blue?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/usuario/)
 
 ---
 

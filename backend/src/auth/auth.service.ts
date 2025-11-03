@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { TokenRevocationService } from '../token-revocation/token-revocation.service';
@@ -17,25 +21,33 @@ export class AuthService {
    * IMPORTANTE: Usuários são criados INATIVOS por padrão
    * Apenas ADMIN pode ativá-los posteriormente
    */
-  async register(email: string, name: string, password: string, role?: UserRole) {
+  async register(
+    email: string,
+    name: string,
+    password: string,
+    role?: UserRole,
+  ) {
     // SEGURANÇA: Bloquear criação de ADMIN via registro público
     if (role === UserRole.ADMIN) {
-      throw new ForbiddenException('Não é permitido criar usuários ADMIN via registro');
+      throw new ForbiddenException(
+        'Não é permitido criar usuários ADMIN via registro',
+      );
     }
 
     // Criar usuário INATIVO por padrão
     const user = await this.usersService.create(
-      email, 
-      name, 
-      password, 
-      role || UserRole.COMERCIAL,
-      false // isActive = false
+      email,
+      name,
+      password,
+      role || UserRole.USER, // ✅ MUDANÇA AQUI
+      false, // isActive = false
     );
 
     // Não retornar tokens - usuário precisa ser ativado primeiro
     return {
       user,
-      message: 'Usuário criado com sucesso. Aguarde ativação por um administrador.',
+      message:
+        'Usuário criado com sucesso. Aguarde ativação por um administrador.',
     };
   }
 
@@ -48,7 +60,9 @@ export class AuthService {
 
     // CRÍTICO: Verificar se usuário está ativo
     if (!user.isActive) {
-      throw new UnauthorizedException('Usuário inativo. Entre em contato com o administrador.');
+      throw new UnauthorizedException(
+        'Usuário inativo. Entre em contato com o administrador.',
+      );
     }
 
     const isPasswordValid = await this.usersService.validatePassword(
@@ -76,12 +90,12 @@ export class AuthService {
 
   async validateUser(userId: string) {
     const user = await this.usersService.findById(userId);
-    
+
     // Verificar se usuário ainda está ativo
     if (!user.isActive) {
       throw new UnauthorizedException('Usuário foi desativado');
     }
-    
+
     return user;
   }
 

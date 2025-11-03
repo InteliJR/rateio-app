@@ -7,13 +7,14 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { TokenRevocationModule } from './token-revocation/token-revocation.module';
-import { TaxesModule } from './taxes/taxes.module';
-import { FreightsModule } from './freights/freights.module';
-import { RawMaterialsModule } from './raw-materials/raw-materials.module';
-import { ProductsModule } from './products/products.module';
-import { FixedCostsModule } from './fixed-costs/fixed-costs.module';
 import { CommonModule } from './common/common.module';
-import { ExportModule } from './export/export.module';
+import { StorageModule } from './storage/storage.module';
+import { OcrModule } from './ocr/ocr.module';
+import { BillsModule } from './bills/bills.module';
+import { BillItemsModule } from './bill-items/bill-items.module';
+import { ParticipantsModule } from './participants/participants.module';
+import { DivisionsModule } from './divisions/divisions.module';
+import { FeesModule } from './fees/fees.module';
 
 @Module({
   imports: [
@@ -28,13 +29,14 @@ import { ExportModule } from './export/export.module';
     AuthModule,
     UsersModule,
     TokenRevocationModule,
-    TaxesModule,
-    FreightsModule,
-    RawMaterialsModule,
-    ProductsModule,
-    FixedCostsModule,
     CommonModule,
-    ExportModule,
+    StorageModule,
+    OcrModule,
+    BillsModule,
+    BillItemsModule,
+    ParticipantsModule,
+    DivisionsModule,
+    FeesModule,
   ],
   controllers: [AppController],
   providers: [

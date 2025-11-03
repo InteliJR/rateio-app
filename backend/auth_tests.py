@@ -7,8 +7,8 @@ import sys
 
 # --- Configuração ---
 BASE_URL = "http://localhost:3000"
-ADMIN_EMAIL = "admin@example.com"
-ADMIN_PASSWORD = "Admin@123456"
+ADMIN_EMAIL = "admin@rateio.com"
+ADMIN_PASSWORD = "Admin@123456" # Assumindo a senha do seed.ts
 
 # Email de teste para usuário comum
 TEST_EMAIL = f"teste-py-{int(time.time())}@teste.com"
@@ -44,21 +44,22 @@ def create_admin_via_docker():
     """Cria o admin inicial via Docker"""
     logging.info("=== Criando Admin Inicial via Docker ===")
     try:
+        # Verifica o nome do container no seu docker-compose.yml (container_name: rateio-api)
         cmd = [
-            "docker", "exec", "-it", "gw-api",
+            "docker", "exec", "-it", "rateio-api",
             "npx", "ts-node", "-r", "tsconfig-paths/register",
             "prisma/seed.ts"
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         
-        if result.returncode == 0:
-            logging.info("✅ Seed executado com sucesso!")
+        if result.returncode == 0 or "jexiste" in result.stdout or "already exists" in result.stdout:
+            logging.info("✅ Seed executado com sucesso ou admin já existe.")
             logging.info(result.stdout)
         else:
-            logging.warning("⚠️  Seed já foi executado ou erro:")
+            logging.warning("⚠️ Erro ao executar seed (pode já ter sido executado):")
             logging.info(result.stderr)
         
-        time.sleep(2)  # Aguardar propagação
+        time.sleep(2) # Aguardar propagação
         return True
         
     except subprocess.TimeoutExpired:
@@ -105,7 +106,7 @@ def test_create_user_as_admin():
             "email": TEST_EMAIL,
             "name": "Teste Python",
             "password": TEST_PASSWORD,
-            "role": "COMERCIAL"
+            "role": "USER"  # ✅ CORREÇÃO AQUI (de "COMERCIAL" para "USER")
         }
         response = session.post(
             f"{BASE_URL}/users",
@@ -117,8 +118,14 @@ def test_create_user_as_admin():
         if response.status_code == 201 and data:
             user_id = data.get('id')
             logging.info(f"✅ Usuário criado (ID: {user_id})")
-            logging.info(f"⚠️  Usuário está INATIVO: {not data.get('isActive', True)}")
-            return True
+            # O controller /users cria o usuário como INATIVO por padrão
+            is_active = data.get('isActive', True) 
+            if not is_active:
+                logging.info(f"✅ Verificado: Usuário está INATIVO (isActive: {is_active})")
+                return True
+            else:
+                logging.error(f"❌ Falha na lógica: Usuário deveria ser criado INATIVO, mas veio ATIVO (isActive: {is_active})")
+                return False
         else:
             logging.error("❌ Falha ao criar usuário")
             return False
@@ -138,9 +145,12 @@ def test_inactive_user_login():
         response = session.post(f"{BASE_URL}/auth/login", data=json.dumps(payload))
         data = pretty_print(response)
         
-        if response.status_code == 401:
+        if response.status_code == 401 and data and "inativo" in data.get("message", ""):
             logging.info("✅ Bloqueio correto: usuário inativo não pode logar")
             return True
+        elif response.status_code == 401 and data and "inválidas" in data.get("message", ""):
+            logging.error("❌ Erro de lógica: Login falhou por 'Credenciais inválidas' (usuário não foi encontrado), não por 'inativo'")
+            return False
         else:
             logging.error("❌ FALHA DE SEGURANÇA: usuário inativo conseguiu logar!")
             return False
@@ -201,15 +211,18 @@ def test_active_user_login():
 
 def test_user_access_admin_endpoint():
     """Usuário comum tenta acessar endpoint de admin (deve falhar)"""
-    logging.info("\n=== 6. Usuário COMERCIAL Tenta Acessar Endpoint ADMIN ===")
+    logging.info("\n=== 6. Usuário 'USER' Tenta Acessar Endpoint ADMIN ===")
     try:
         headers = {"Authorization": f"Bearer {user_token}"}
         response = session.get(f"{BASE_URL}/users", headers=headers)
         data = pretty_print(response)
         
         if response.status_code == 403:
-            logging.info("✅ Bloqueio correto: acesso negado para não-admin")
+            logging.info("✅ Bloqueio correto: acesso negado (403 Forbidden) para não-admin")
             return True
+        elif response.status_code == 401:
+            logging.error("❌ FALHA DE AUTENTICAÇÃO: O token do usuário é inválido (401)")
+            return False
         else:
             logging.error("❌ FALHA DE SEGURANÇA: usuário comum acessou rota de admin!")
             return False
@@ -237,11 +250,11 @@ def test_admin_cannot_deactivate_self():
         )
         data = pretty_print(response)
         
-        if response.status_code == 400:
+        if response.status_code == 400 and data and "sua própria conta" in data.get("message", ""):
             logging.info("✅ Bloqueio correto: admin não pode desativar a si mesmo")
             return True
         else:
-            logging.error("❌ FALHA: admin conseguiu desativar a si mesmo!")
+            logging.error("❌ FALHA: admin conseguiu desativar a si mesmo ou erro inesperado!")
             return False
             
     except Exception as e:
@@ -256,7 +269,7 @@ def test_admin_cannot_change_own_role():
         me_response = session.get(f"{BASE_URL}/auth/me", headers=headers)
         admin_id = me_response.json().get('id')
         
-        payload = {"role": "COMERCIAL"}
+        payload = {"role": "USER"} # ✅ CORREÇÃO AQUI (de "COMERCIAL" para "USER")
         response = session.patch(
             f"{BASE_URL}/users/{admin_id}",
             headers=headers,
@@ -264,9 +277,12 @@ def test_admin_cannot_change_own_role():
         )
         data = pretty_print(response)
         
-        if response.status_code == 400:
+        if response.status_code == 400 and data and "sua própria role" in data.get("message", ""):
             logging.info("✅ Bloqueio correto: admin não pode mudar própria role")
             return True
+        elif response.status_code == 400:
+             logging.error(f"❌ FALHA: Recebeu 400, mas pela razão errada: {data.get('message')}")
+             return False
         else:
             logging.error("❌ FALHA: admin conseguiu mudar própria role!")
             return False
@@ -279,12 +295,8 @@ def test_admin_reset_user_password():
     """Admin reseta senha de outro usuário"""
     logging.info("\n=== 9. ADMIN Reseta Senha de Usuário ===")
     
-    # ✅ CRÍTICO: Aguardar rate limit resetar (TTL é 60 segundos)
-    logging.info("⏳ Aguardando 65 segundos para reset do rate limit...")
-    for i in range(13):
-        remaining = 65 - (i * 5)
-        logging.info(f"   Aguardando... {remaining}s restantes")
-        time.sleep(5)
+    # ✅ REMOVIDO: O 'wait' de 65s era desnecessário, pois o rate limit
+    # (Teste 10) ainda não foi atingido.
     
     try:
         headers = {"Authorization": f"Bearer {admin_token}"}
@@ -324,9 +336,6 @@ def test_admin_reset_user_password():
             if login_response.status_code == 200:
                 logging.info("✅ Login com nova senha bem-sucedido")
                 return True
-            elif login_response.status_code == 429:
-                logging.error("❌ Rate limit ainda ativo (isso não deveria acontecer)")
-                return False
             else:
                 logging.error("❌ Falha no login com nova senha")
                 logging.error(f"Detalhes: {login_data}")
@@ -342,29 +351,38 @@ def test_admin_reset_user_password():
 def test_rate_limiting():
     """Testa rate limiting"""
     logging.info("\n=== 10. Teste de Rate Limiting ===")
+    
+    # O rate limit no /auth/login é de 3 tentativas por minuto
+    
     try:
         # Usar nova sessão
         rate_session = requests.Session()
         rate_session.headers.update({"Content-Type": "application/json"})
         
         payload = {
-            "email": TEST_EMAIL,
+            "email": TEST_EMAIL, # Usar um email existente
             "password": "senhaerrada123"
         }
         
-        for i in range(1, 5):
-            logging.info(f"Tentativa {i}/4:")
+        limit_hit = False
+        
+        for i in range(1, 6): # Tentar 5 vezes
+            logging.info(f"Tentativa {i}/5:")
             response = rate_session.post(f"{BASE_URL}/auth/login", data=json.dumps(payload))
             logging.info(f"Status: {response.status_code}")
             
             if response.status_code == 429:
-                logging.info("✅ Rate limit ativado corretamente")
-                return True
+                logging.info("✅ Rate limit ativado corretamente (Status 429)")
+                limit_hit = True
+                break
             
             time.sleep(0.2)
         
-        logging.warning("⚠️  Rate limit não foi ativado nas 4 tentativas")
-        return False
+        if not limit_hit:
+            logging.warning("⚠️ Rate limit não foi ativado nas 5 tentativas")
+            return False
+        
+        return True
         
     except Exception as e:
         logging.error(f"❌ Erro: {e}")
@@ -379,23 +397,38 @@ def main():
     # Criar admin
     results['create_admin'] = create_admin_via_docker()
     if not results['create_admin']:
-        logging.error("❌ Não foi possível criar admin. Abortando.")
+        logging.error("❌ Não foi possível criar/verificar admin. Abortando.")
         sys.exit(1)
     
     # Testes
     results['admin_login'] = test_admin_login()
     if not results['admin_login']:
-        logging.error("❌ Login admin falhou. Abortando.")
+        logging.error("❌ Login admin falhou. Verifique ADMIN_EMAIL/PASSWORD. Abortando.")
         sys.exit(1)
     
-    results['create_user'] = test_create_user_as_admin()
-    results['inactive_login'] = test_inactive_user_login()
-    results['activate_user'] = test_activate_user()
-    results['active_login'] = test_active_user_login()
-    results['user_access_denied'] = test_user_access_admin_endpoint()
-    results['admin_self_deactivate'] = test_admin_cannot_deactivate_self()
-    results['admin_change_role'] = test_admin_cannot_change_own_role()
-    results['admin_reset_password'] = test_admin_reset_user_password()
+    # Sequência de testes dependentes
+    if results['admin_login']:
+        results['create_user'] = test_create_user_as_admin()
+    
+    if results.get('create_user'):
+        results['inactive_login'] = test_inactive_user_login()
+        results['activate_user'] = test_activate_user()
+    
+    if results.get('activate_user'):
+        results['active_login'] = test_active_user_login()
+        
+    if results.get('active_login'):
+        results['user_access_denied'] = test_user_access_admin_endpoint()
+        
+    if results.get('create_user'): # Depende apenas de user_id existir
+         results['admin_reset_password'] = test_admin_reset_user_password()
+
+    # Testes independentes (só precisam do login admin)
+    if results['admin_login']:
+        results['admin_self_deactivate'] = test_admin_cannot_deactivate_self()
+        results['admin_change_role'] = test_admin_cannot_change_own_role()
+
+    # Teste de rate limit (executado por último)
     results['rate_limiting'] = test_rate_limiting()
     
     # Resumo

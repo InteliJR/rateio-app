@@ -1,159 +1,2458 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Documentação da API - RateioAPP</title>
-    <meta name="description" content="Documentação completa da API para o RateioAPP">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
+    <meta
+      name="description"
+      content="Documentação completa da API para o RateioAPP"
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>"
+    />
     <style>
       /* --- Reset e Configuração Global --- */
       body {
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-          line-height: 1.7;
-          background-color: #ffffff;
-          color: #212529;
-          margin: 0 auto;
-          max-width: 900px; /* Limita a largura para melhor leitura */
-          padding: 2rem;
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+          'Helvetica Neue', Arial, sans-serif;
+        line-height: 1.7;
+        background-color: #ffffff;
+        color: #212529;
+        margin: 0 auto;
+        max-width: 900px; /* Limita a largura para melhor leitura */
+        padding: 2rem;
       }
 
       /* --- Tipografia e Cabeçalhos --- */
-      h1, h2, h3 {
-          font-weight: 600;
-          line-height: 1.3;
-          color: #111;
-          margin-top: 2.5rem;
-          margin-bottom: 1rem;
+      h1,
+      h2,
+      h3 {
+        font-weight: 600;
+        line-height: 1.3;
+        color: #111;
+        margin-top: 2.5rem;
+        margin-bottom: 1rem;
       }
 
       h1 {
-          font-size: 2.5rem;
-          font-weight: 700;
-          border-bottom: 2px solid #f0f0f0;
-          padding-bottom: 0.5rem;
-          margin-top: 0;
+        font-size: 2.5rem;
+        font-weight: 700;
+        border-bottom: 2px solid #f0f0f0;
+        padding-bottom: 0.5rem;
+        margin-top: 0;
       }
 
       h2 {
-          font-size: 2rem;
-          border-bottom: 1px solid #eaeaea;
-          padding-bottom: 0.5rem;
-          margin-top: 3rem; /* Mais espaço entre as seções principais */
+        font-size: 2rem;
+        border-bottom: 1px solid #eaeaea;
+        padding-bottom: 0.5rem;
+        margin-top: 3rem; /* Mais espaço entre as seções principais */
       }
 
       h3 {
-          font-size: 1.5rem;
-          color: #333;
-          margin-top: 2rem;
+        font-size: 1.5rem;
+        color: #333;
+        margin-top: 2rem;
       }
 
       p {
-          margin-bottom: 1.25rem;
-          font-size: 1rem;
+        margin-bottom: 1.25rem;
+        font-size: 1rem;
       }
 
       /* --- Listas --- */
-      ul, ol {
-          margin-bottom: 1.25rem;
-          padding-left: 2em;
+      ul,
+      ol {
+        margin-bottom: 1.25rem;
+        padding-left: 2em;
       }
 
       li {
-          margin-bottom: 0.5rem;
+        margin-bottom: 0.5rem;
       }
 
       /* --- Blocos de Código (pre) --- */
       pre {
-          background-color: #f4f7f9; /* Um cinza-azulado claro */
-          border: 1px solid #e0e6ec;
-          border-radius: 8px; /* Cantos arredondados modernos */
-          padding: 1.25rem;
-          overflow-x: auto; /* Essencial para linhas de código longas */
-          margin-bottom: 1.5rem;
-          font-size: 0.9rem;
-          line-height: 1.5;
+        background-color: #f4f7f9; /* Um cinza-azulado claro */
+        border: 1px solid #e0e6ec;
+        border-radius: 8px; /* Cantos arredondados modernos */
+        padding: 1.25rem;
+        overflow-x: auto; /* Essencial para linhas de código longas */
+        margin-bottom: 1.5rem;
+        font-size: 0.9rem;
+        line-height: 1.5;
       }
 
       pre code {
-          font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
-          background-color: transparent; /* O <pre> já tem o fundo */
-          border: none;
-          padding: 0;
-          color: #232323; /* Texto do código um pouco mais escuro */
+        font-family:
+          'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier,
+          monospace;
+        background-color: transparent; /* O <pre> já tem o fundo */
+        border: none;
+        padding: 0;
+        color: #232323; /* Texto do código um pouco mais escuro */
       }
 
       /* --- Código Inline (code) --- */
-      p code, li code, table code {
-          font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
-          background-color: #eef2f5; /* Fundo sutil */
-          color: #d63384; /* Cor rosa/magenta para destaque */
-          padding: 0.2em 0.4em;
-          border-radius: 4px;
-          font-size: 0.875em;
+      p code,
+      li code,
+      table code {
+        font-family:
+          'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier,
+          monospace;
+        background-color: #eef2f5; /* Fundo sutil */
+        color: #d63384; /* Cor rosa/magenta para destaque */
+        padding: 0.2em 0.4em;
+        border-radius: 4px;
+        font-size: 0.875em;
       }
 
       /* --- Destaque para Métodos HTTP (POST, GET, etc.) --- */
       p > strong {
-          color: #0056b3; /* Um azul para dar destaque */
-          font-weight: 700;
+        color: #0056b3; /* Um azul para dar destaque */
+        font-weight: 700;
       }
 
       /* --- Linhas Horizontais (hr) --- */
       hr {
-          border: 0;
-          border-top: 1px solid #e0e0e0;
-          margin: 3rem 0; /* Bastante espaço para separar seções */
+        border: 0;
+        border-top: 1px solid #e0e0e0;
+        margin: 3rem 0; /* Bastante espaço para separar seções */
       }
 
       /* --- Tabelas --- */
       table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 1.5rem;
-          font-size: 0.95rem;
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 1.5rem;
+        font-size: 0.95rem;
       }
 
-      th, td {
-          border: 1px solid #ddd;
-          padding: 0.75rem;
-          text-align: left;
+      th,
+      td {
+        border: 1px solid #ddd;
+        padding: 0.75rem;
+        text-align: left;
       }
 
       th {
-          background-color: #f8f8f8;
-          font-weight: 600;
+        background-color: #f8f8f8;
+        font-weight: 600;
       }
 
       tbody tr:nth-child(odd) {
-          background-color: #fdfdfd; /* Listras sutis */
+        background-color: #fdfdfd; /* Listras sutis */
       }
 
       /* --- Links (se houver) --- */
       a {
-          color: #007bff;
-          text-decoration: none;
+        color: #007bff;
+        text-decoration: none;
       }
 
       a:hover {
-          text-decoration: underline;
+        text-decoration: underline;
       }
 
       /* --- Responsividade --- */
       @media (max-width: 768px) {
-          body {
-              padding: 1rem;
-          }
-          h1 { font-size: 2rem; }
-          h2 { font-size: 1.75rem; }
-          h3 { font-size: 1.25rem; }
-          pre {
-              padding: 1rem;
-          }
+        body {
+          padding: 1rem;
+        }
+        h1 {
+          font-size: 2rem;
+        }
+        h2 {
+          font-size: 1.75rem;
+        }
+        h3 {
+          font-size: 1.25rem;
+        }
+        pre {
+          padding: 1rem;
+        }
       }
-  </style>
-</head>
-<body>
-    <h1 id="documentaocompletadaapisistemadeprecificao">Documentação Completa da API - RateioAPP</h1>
-</body>
+    </style>
+  </head>
+  <body>
+    <h1>📚 Documentação Completa da API - Divisor de Conta Inteligente</h1>
+    <h2>🌐 Base URL</h2>
+    <pre><code>Development: http://localhost:3000
+Production: https://api.rateio.com
+</code></pre>
+    <h2>🔐 Autenticação</h2>
+    <p>
+      A maioria dos endpoints requer autenticação via
+      <strong>JWT Bearer Token</strong>.
+    </p>
+    <p><strong>Header obrigatório:</strong></p>
+    <pre><code>Authorization: Bearer &lt;access_token&gt;
+</code></pre>
+    <hr />
+    <h2>📑 Índice de Endpoints</h2>
+    <h3>🔒 Autenticação</h3>
+    <ul>
+      <li>
+        <a href="#post-authregister">POST /auth/register</a> - Registrar novo
+        usuário
+      </li>
+      <li><a href="#post-authlogin">POST /auth/login</a> - Login</li>
+      <li>
+        <a href="#post-authrefresh">POST /auth/refresh</a> - Renovar tokens
+      </li>
+      <li><a href="#post-authlogout">POST /auth/logout</a> - Logout</li>
+      <li><a href="#get-authme">GET /auth/me</a> - Perfil autenticado</li>
+    </ul>
+    <h3>👤 Usuários</h3>
+    <ul>
+      <li><a href="#get-users">GET /users</a> - Listar usuários (Admin)</li>
+      <li>
+        <a href="#get-usersid">GET /users/:id</a> - Buscar usuário (Admin)
+      </li>
+      <li><a href="#post-users">POST /users</a> - Criar usuário (Admin)</li>
+      <li>
+        <a href="#patch-usersid">PATCH /users/:id</a> - Atualizar usuário
+        (Admin)
+      </li>
+      <li>
+        <a href="#get-usersmeprofile">GET /users/me/profile</a> - Perfil próprio
+      </li>
+      <li>
+        <a href="#patch-usersmeprofile">PATCH /users/me/profile</a> - Atualizar
+        perfil próprio
+      </li>
+    </ul>
+    <h3>📄 Contas (Bills)</h3>
+    <ul>
+      <li>
+        <a href="#post-bills">POST /bills</a> - Criar conta (upload + OCR)
+      </li>
+      <li><a href="#get-bills">GET /bills</a> - Listar contas do usuário</li>
+      <li>
+        <a href="#get-billsid">GET /bills/:id</a> - Buscar conta específica
+      </li>
+      <li><a href="#patch-billsid">PATCH /bills/:id</a> - Atualizar conta</li>
+      <li><a href="#delete-billsid">DELETE /bills/:id</a> - Deletar conta</li>
+      <li>
+        <a href="#get-billsidsummary">GET /bills/:id/summary</a> - Resumo da
+        divisão
+      </li>
+    </ul>
+    <h3>🛒 Itens da Conta (Bill Items)</h3>
+    <ul>
+      <li><a href="#post-bill-items">POST /bill-items</a> - Adicionar item</li>
+      <li>
+        <a href="#get-bill-itemsbillbillid">GET /bill-items/bill/:billId</a> -
+        Listar itens da conta
+      </li>
+      <li>
+        <a href="#patch-bill-itemsid">PATCH /bill-items/:id</a> - Atualizar item
+      </li>
+      <li>
+        <a href="#delete-bill-itemsid">DELETE /bill-items/:id</a> - Deletar item
+      </li>
+    </ul>
+    <h3>👥 Participantes (Participants)</h3>
+    <ul>
+      <li>
+        <a href="#post-participants">POST /participants</a> - Adicionar
+        participante
+      </li>
+      <li>
+        <a href="#get-participantsbillbillid">GET /participants/bill/:billId</a>
+        - Listar participantes da conta
+      </li>
+      <li>
+        <a href="#get-participantshistory">GET /participants/history</a> -
+        Histórico de participantes
+      </li>
+      <li>
+        <a href="#patch-participantsid">PATCH /participants/:id</a> - Atualizar
+        participante
+      </li>
+      <li>
+        <a href="#delete-participantsid">DELETE /participants/:id</a> - Remover
+        participante
+      </li>
+    </ul>
+    <h3>✂️ Divisões (Divisions)</h3>
+    <ul>
+      <li><a href="#post-divisions">POST /divisions</a> - Criar divisão</li>
+      <li>
+        <a href="#get-divisionsbillbillid">GET /divisions/bill/:billId</a> -
+        Listar divisões da conta
+      </li>
+      <li>
+        <a href="#patch-divisionsid">PATCH /divisions/:id</a> - Atualizar
+        divisão
+      </li>
+      <li>
+        <a href="#delete-divisionsid">DELETE /divisions/:id</a> - Deletar
+        divisão
+      </li>
+      <li>
+        <a href="#post-divisionsbatch">POST /divisions/batch</a> - Criar
+        múltiplas divisões
+      </li>
+    </ul>
+    <h3>💰 Taxas (Fees)</h3>
+    <ul>
+      <li><a href="#post-fees">POST /fees</a> - Adicionar taxa</li>
+      <li>
+        <a href="#get-feesbillbillid">GET /fees/bill/:billId</a> - Listar taxas
+        da conta
+      </li>
+      <li><a href="#patch-feesid">PATCH /fees/:id</a> - Atualizar taxa</li>
+      <li><a href="#delete-feesid">DELETE /fees/:id</a> - Deletar taxa</li>
+    </ul>
+    <h3>🏥 Sistema</h3>
+    <ul>
+      <li><a href="#get-health">GET /health</a> - Health check</li>
+    </ul>
+    <hr />
+    <h1>🔒 Autenticação</h1>
+    <h2>POST /auth/register</h2>
+    <p>Registrar novo usuário no sistema.</p>
+    <p>
+      <strong>⚠️ Nota:</strong> Usuários criados via registro ficam
+      <strong>inativos</strong> até serem aprovados por um admin.
+    </p>
+    <h3>Request</h3>
+    <pre><code class="language-http">POST /auth/register
+Content-Type: application/json
+
+{
+  &quot;email&quot;: &quot;usuario@exemplo.com&quot;,
+  &quot;name&quot;: &quot;João Silva&quot;,
+  &quot;password&quot;: &quot;SenhaSegura@123&quot;
+}
+</code></pre>
+    <p><strong>Body Parameters:</strong></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Campo</th>
+          <th>Tipo</th>
+          <th>Obrigatório</th>
+          <th>Descrição</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>email</td>
+          <td>string</td>
+          <td>Sim</td>
+          <td>Email válido</td>
+        </tr>
+        <tr>
+          <td>name</td>
+          <td>string</td>
+          <td>Sim</td>
+          <td>Nome completo (mín. 3 caracteres)</td>
+        </tr>
+        <tr>
+          <td>password</td>
+          <td>string</td>
+          <td>Sim</td>
+          <td>Senha (mín. 8 caracteres)</td>
+        </tr>
+      </tbody>
+    </table>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>201 Created</code></p>
+    <pre><code class="language-json">{
+  &quot;user&quot;: {
+    &quot;id&quot;: &quot;uuid-do-usuario&quot;,
+    &quot;email&quot;: &quot;usuario@exemplo.com&quot;,
+    &quot;name&quot;: &quot;João Silva&quot;,
+    &quot;role&quot;: &quot;USER&quot;,
+    &quot;isActive&quot;: false,
+    &quot;createdAt&quot;: &quot;2025-11-03T10:30:00.000Z&quot;
+  },
+  &quot;message&quot;: &quot;Usuário criado com sucesso. Aguarde ativação por um administrador.&quot;
+}
+</code></pre>
+    <h3>Errors</h3>
+    <p><strong>Status:</strong> <code>409 Conflict</code></p>
+    <pre><code class="language-json">{
+  &quot;statusCode&quot;: 409,
+  &quot;message&quot;: &quot;Email já cadastrado&quot;,
+  &quot;error&quot;: &quot;Conflict&quot;
+}
+</code></pre>
+    <p><strong>Status:</strong> <code>400 Bad Request</code></p>
+    <pre><code class="language-json">{
+  &quot;statusCode&quot;: 400,
+  &quot;message&quot;: [
+    &quot;email must be an email&quot;,
+    &quot;password must be longer than or equal to 8 characters&quot;
+  ],
+  &quot;error&quot;: &quot;Bad Request&quot;
+}
+</code></pre>
+    <hr />
+    <h2>POST /auth/login</h2>
+    <p>Fazer login e receber tokens de acesso.</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">POST /auth/login
+Content-Type: application/json
+
+{
+  &quot;email&quot;: &quot;usuario@exemplo.com&quot;,
+  &quot;password&quot;: &quot;SenhaSegura@123&quot;
+}
+</code></pre>
+    <p><strong>Body Parameters:</strong></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Campo</th>
+          <th>Tipo</th>
+          <th>Obrigatório</th>
+          <th>Descrição</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>email</td>
+          <td>string</td>
+          <td>Sim</td>
+          <td>Email do usuário</td>
+        </tr>
+        <tr>
+          <td>password</td>
+          <td>string</td>
+          <td>Sim</td>
+          <td>Senha</td>
+        </tr>
+      </tbody>
+    </table>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">{
+  &quot;user&quot;: {
+    &quot;id&quot;: &quot;uuid-do-usuario&quot;,
+    &quot;email&quot;: &quot;usuario@exemplo.com&quot;,
+    &quot;name&quot;: &quot;João Silva&quot;,
+    &quot;role&quot;: &quot;USER&quot;,
+    &quot;createdAt&quot;: &quot;2025-11-03T10:30:00.000Z&quot;
+  },
+  &quot;accessToken&quot;: &quot;eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...&quot;,
+  &quot;refreshToken&quot;: &quot;eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...&quot;
+}
+</code></pre>
+    <p><strong>Token Info:</strong></p>
+    <ul>
+      <li><code>accessToken</code>: Válido por 15 minutos</li>
+      <li><code>refreshToken</code>: Válido por 7 dias</li>
+    </ul>
+    <h3>Errors</h3>
+    <p><strong>Status:</strong> <code>401 Unauthorized</code></p>
+    <pre><code class="language-json">{
+  &quot;statusCode&quot;: 401,
+  &quot;message&quot;: &quot;Credenciais inválidas&quot;,
+  &quot;error&quot;: &quot;Unauthorized&quot;
+}
+</code></pre>
+    <pre><code class="language-json">{
+  &quot;statusCode&quot;: 401,
+  &quot;message&quot;: &quot;Usuário inativo. Entre em contato com o administrador.&quot;,
+  &quot;error&quot;: &quot;Unauthorized&quot;
+}
+</code></pre>
+    <hr />
+    <h2>POST /auth/refresh</h2>
+    <p>Renovar access token usando refresh token.</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">POST /auth/refresh
+Content-Type: application/json
+
+{
+  &quot;refreshToken&quot;: &quot;eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...&quot;
+}
+</code></pre>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">{
+  &quot;accessToken&quot;: &quot;eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...&quot;,
+  &quot;refreshToken&quot;: &quot;eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...&quot;
+}
+</code></pre>
+    <h3>Errors</h3>
+    <p><strong>Status:</strong> <code>401 Unauthorized</code></p>
+    <pre><code class="language-json">{
+  &quot;statusCode&quot;: 401,
+  &quot;message&quot;: &quot;Refresh token inválido&quot;,
+  &quot;error&quot;: &quot;Unauthorized&quot;
+}
+</code></pre>
+    <hr />
+    <h2>POST /auth/logout</h2>
+    <p>Fazer logout e invalidar refresh token.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">POST /auth/logout
+Authorization: Bearer &lt;access_token&gt;
+Content-Type: application/json
+
+{
+  &quot;refreshToken&quot;: &quot;eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...&quot;
+}
+</code></pre>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">{
+  &quot;message&quot;: &quot;Logout realizado com sucesso&quot;
+}
+</code></pre>
+    <hr />
+    <h2>GET /auth/me</h2>
+    <p>Obter informações do usuário autenticado.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">GET /auth/me
+Authorization: Bearer &lt;access_token&gt;
+</code></pre>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">{
+  &quot;id&quot;: &quot;uuid-do-usuario&quot;,
+  &quot;email&quot;: &quot;usuario@exemplo.com&quot;,
+  &quot;name&quot;: &quot;João Silva&quot;,
+  &quot;role&quot;: &quot;USER&quot;,
+  &quot;isActive&quot;: true,
+  &quot;createdAt&quot;: &quot;2025-11-03T10:30:00.000Z&quot;,
+  &quot;updatedAt&quot;: &quot;2025-11-03T10:30:00.000Z&quot;
+}
+</code></pre>
+    <hr />
+    <h1>👤 Usuários</h1>
+    <h2>GET /users</h2>
+    <p>Listar todos os usuários do sistema.</p>
+    <p>
+      <strong>Autenticação:</strong> Requerida<br /><strong>Permissão:</strong>
+      ADMIN
+    </p>
+    <h3>Request</h3>
+    <pre><code class="language-http">GET /users
+Authorization: Bearer &lt;access_token&gt;
+</code></pre>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">[
+  {
+    &quot;id&quot;: &quot;uuid-1&quot;,
+    &quot;email&quot;: &quot;admin@rateio.com&quot;,
+    &quot;name&quot;: &quot;Admin&quot;,
+    &quot;role&quot;: &quot;ADMIN&quot;,
+    &quot;isActive&quot;: true,
+    &quot;createdAt&quot;: &quot;2025-11-01T10:00:00.000Z&quot;,
+    &quot;updatedAt&quot;: &quot;2025-11-01T10:00:00.000Z&quot;
+  },
+  {
+    &quot;id&quot;: &quot;uuid-2&quot;,
+    &quot;email&quot;: &quot;usuario@exemplo.com&quot;,
+    &quot;name&quot;: &quot;João Silva&quot;,
+    &quot;role&quot;: &quot;USER&quot;,
+    &quot;isActive&quot;: false,
+    &quot;createdAt&quot;: &quot;2025-11-03T10:30:00.000Z&quot;,
+    &quot;updatedAt&quot;: &quot;2025-11-03T10:30:00.000Z&quot;
+  }
+]
+</code></pre>
+    <hr />
+    <h2>GET /users/:id</h2>
+    <p>Buscar usuário específico por ID.</p>
+    <p>
+      <strong>Autenticação:</strong> Requerida<br /><strong>Permissão:</strong>
+      ADMIN
+    </p>
+    <h3>Request</h3>
+    <pre><code class="language-http">GET /users/uuid-do-usuario
+Authorization: Bearer &lt;access_token&gt;
+</code></pre>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">{
+  &quot;id&quot;: &quot;uuid-do-usuario&quot;,
+  &quot;email&quot;: &quot;usuario@exemplo.com&quot;,
+  &quot;name&quot;: &quot;João Silva&quot;,
+  &quot;role&quot;: &quot;USER&quot;,
+  &quot;isActive&quot;: true,
+  &quot;createdAt&quot;: &quot;2025-11-03T10:30:00.000Z&quot;,
+  &quot;updatedAt&quot;: &quot;2025-11-03T10:30:00.000Z&quot;
+}
+</code></pre>
+    <h3>Errors</h3>
+    <p><strong>Status:</strong> <code>404 Not Found</code></p>
+    <pre><code class="language-json">{
+  &quot;statusCode&quot;: 404,
+  &quot;message&quot;: &quot;Usuário não encontrado&quot;,
+  &quot;error&quot;: &quot;Not Found&quot;
+}
+</code></pre>
+    <hr />
+    <h2>POST /users</h2>
+    <p>Criar novo usuário (apenas Admin).</p>
+    <p>
+      <strong>Autenticação:</strong> Requerida<br /><strong>Permissão:</strong>
+      ADMIN
+    </p>
+    <h3>Request</h3>
+    <pre><code class="language-http">POST /users
+Authorization: Bearer &lt;access_token&gt;
+Content-Type: application/json
+
+{
+  &quot;email&quot;: &quot;novo@exemplo.com&quot;,
+  &quot;name&quot;: &quot;Maria Santos&quot;,
+  &quot;password&quot;: &quot;SenhaSegura@123&quot;,
+  &quot;role&quot;: &quot;USER&quot;
+}
+</code></pre>
+    <p><strong>Body Parameters:</strong></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Campo</th>
+          <th>Tipo</th>
+          <th>Obrigatório</th>
+          <th>Descrição</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>email</td>
+          <td>string</td>
+          <td>Sim</td>
+          <td>Email válido</td>
+        </tr>
+        <tr>
+          <td>name</td>
+          <td>string</td>
+          <td>Sim</td>
+          <td>Nome (mín. 3 caracteres)</td>
+        </tr>
+        <tr>
+          <td>password</td>
+          <td>string</td>
+          <td>Sim</td>
+          <td>Senha (mín. 8 caracteres)</td>
+        </tr>
+        <tr>
+          <td>role</td>
+          <td>enum</td>
+          <td>Sim</td>
+          <td>&quot;ADMIN&quot; ou &quot;USER&quot;</td>
+        </tr>
+      </tbody>
+    </table>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>201 Created</code></p>
+    <pre><code class="language-json">{
+  &quot;id&quot;: &quot;uuid-do-usuario&quot;,
+  &quot;email&quot;: &quot;novo@exemplo.com&quot;,
+  &quot;name&quot;: &quot;Maria Santos&quot;,
+  &quot;role&quot;: &quot;USER&quot;,
+  &quot;isActive&quot;: false,
+  &quot;createdAt&quot;: &quot;2025-11-03T11:00:00.000Z&quot;
+}
+</code></pre>
+    <hr />
+    <h2>PATCH /users/:id</h2>
+    <p>Atualizar usuário (apenas Admin).</p>
+    <p>
+      <strong>Autenticação:</strong> Requerida<br /><strong>Permissão:</strong>
+      ADMIN
+    </p>
+    <h3>Request</h3>
+    <pre><code class="language-http">PATCH /users/uuid-do-usuario
+Authorization: Bearer &lt;access_token&gt;
+Content-Type: application/json
+
+{
+  &quot;name&quot;: &quot;João Silva Updated&quot;,
+  &quot;isActive&quot;: true,
+  &quot;role&quot;: &quot;USER&quot;
+}
+</code></pre>
+    <p><strong>Body Parameters (todos opcionais):</strong></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Campo</th>
+          <th>Tipo</th>
+          <th>Descrição</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>name</td>
+          <td>string</td>
+          <td>Novo nome</td>
+        </tr>
+        <tr>
+          <td>role</td>
+          <td>enum</td>
+          <td>&quot;ADMIN&quot; ou &quot;USER&quot;</td>
+        </tr>
+        <tr>
+          <td>isActive</td>
+          <td>boolean</td>
+          <td>Ativar/desativar usuário</td>
+        </tr>
+        <tr>
+          <td>password</td>
+          <td>string</td>
+          <td>Nova senha (mín. 8 caracteres)</td>
+        </tr>
+      </tbody>
+    </table>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">{
+  &quot;id&quot;: &quot;uuid-do-usuario&quot;,
+  &quot;email&quot;: &quot;usuario@exemplo.com&quot;,
+  &quot;name&quot;: &quot;João Silva Updated&quot;,
+  &quot;role&quot;: &quot;USER&quot;,
+  &quot;isActive&quot;: true,
+  &quot;createdAt&quot;: &quot;2025-11-03T10:30:00.000Z&quot;,
+  &quot;updatedAt&quot;: &quot;2025-11-03T11:15:00.000Z&quot;
+}
+</code></pre>
+    <h3>Errors</h3>
+    <p><strong>Status:</strong> <code>400 Bad Request</code></p>
+    <pre><code class="language-json">{
+  &quot;statusCode&quot;: 400,
+  &quot;message&quot;: &quot;Você não pode desativar sua própria conta&quot;,
+  &quot;error&quot;: &quot;Bad Request&quot;
+}
+</code></pre>
+    <hr />
+    <h2>GET /users/me/profile</h2>
+    <p>Obter perfil do usuário autenticado.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">GET /users/me/profile
+Authorization: Bearer &lt;access_token&gt;
+</code></pre>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">{
+  &quot;id&quot;: &quot;uuid-do-usuario&quot;,
+  &quot;email&quot;: &quot;usuario@exemplo.com&quot;,
+  &quot;name&quot;: &quot;João Silva&quot;,
+  &quot;role&quot;: &quot;USER&quot;,
+  &quot;isActive&quot;: true,
+  &quot;createdAt&quot;: &quot;2025-11-03T10:30:00.000Z&quot;,
+  &quot;updatedAt&quot;: &quot;2025-11-03T10:30:00.000Z&quot;
+}
+</code></pre>
+    <hr />
+    <h2>PATCH /users/me/profile</h2>
+    <p>Atualizar perfil próprio.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">PATCH /users/me/profile
+Authorization: Bearer &lt;access_token&gt;
+Content-Type: application/json
+
+{
+  &quot;name&quot;: &quot;João Silva Atualizado&quot;,
+  &quot;password&quot;: &quot;NovaSenha@123&quot;
+}
+</code></pre>
+    <p><strong>Body Parameters (todos opcionais):</strong></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Campo</th>
+          <th>Tipo</th>
+          <th>Descrição</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>name</td>
+          <td>string</td>
+          <td>Novo nome</td>
+        </tr>
+        <tr>
+          <td>password</td>
+          <td>string</td>
+          <td>Nova senha (mín. 8 caracteres)</td>
+        </tr>
+      </tbody>
+    </table>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">{
+  &quot;id&quot;: &quot;uuid-do-usuario&quot;,
+  &quot;email&quot;: &quot;usuario@exemplo.com&quot;,
+  &quot;name&quot;: &quot;João Silva Atualizado&quot;,
+  &quot;role&quot;: &quot;USER&quot;,
+  &quot;isActive&quot;: true,
+  &quot;createdAt&quot;: &quot;2025-11-03T10:30:00.000Z&quot;,
+  &quot;updatedAt&quot;: &quot;2025-11-03T11:20:00.000Z&quot;
+}
+</code></pre>
+    <hr />
+    <h1>📄 Contas (Bills)</h1>
+    <h2>POST /bills</h2>
+    <p>Criar nova conta com upload de imagem e processamento OCR automático.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">POST /bills
+Authorization: Bearer &lt;access_token&gt;
+Content-Type: multipart/form-data
+
+--boundary
+Content-Disposition: form-data; name=&quot;image&quot;; filename=&quot;conta.jpg&quot;
+Content-Type: image/jpeg
+
+&lt;binary data&gt;
+--boundary
+Content-Disposition: form-data; name=&quot;establishmentName&quot;
+
+Restaurante do João
+--boundary--
+</code></pre>
+    <p><strong>Form Parameters:</strong></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Campo</th>
+          <th>Tipo</th>
+          <th>Obrigatório</th>
+          <th>Descrição</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>image</td>
+          <td>file</td>
+          <td>Sim</td>
+          <td>Imagem da conta (JPEG, PNG, WebP, máx. 10MB)</td>
+        </tr>
+        <tr>
+          <td>establishmentName</td>
+          <td>string</td>
+          <td>Não</td>
+          <td>Nome do estabelecimento</td>
+        </tr>
+      </tbody>
+    </table>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>201 Created</code></p>
+    <pre><code class="language-json">{
+  &quot;id&quot;: &quot;uuid-da-conta&quot;,
+  &quot;userId&quot;: &quot;uuid-do-usuario&quot;,
+  &quot;imageUrl&quot;: &quot;https://bucket.s3.amazonaws.com/bills/uuid.jpg?signature=...&quot;,
+  &quot;imageKey&quot;: &quot;bills/uuid.jpg&quot;,
+  &quot;status&quot;: &quot;PENDING_OCR&quot;,
+  &quot;ocrRawText&quot;: null,
+  &quot;totalAmount&quot;: null,
+  &quot;establishmentName&quot;: &quot;Restaurante do João&quot;,
+  &quot;createdAt&quot;: &quot;2025-11-03T12:00:00.000Z&quot;,
+  &quot;updatedAt&quot;: &quot;2025-11-03T12:00:00.000Z&quot;,
+  &quot;message&quot;: &quot;Conta criada. Processando imagem...&quot;
+}
+</code></pre>
+    <p><strong>Status da Conta:</strong></p>
+    <ul>
+      <li><code>PENDING_OCR</code>: Aguardando processamento OCR</li>
+      <li><code>OCR_FAILED</code>: Falha no OCR (foto ilegível)</li>
+      <li><code>REVIEWING</code>: Usuário revisando itens reconhecidos</li>
+      <li><code>DIVIDING</code>: Usuário dividindo a conta</li>
+      <li><code>COMPLETED</code>: Divisão finalizada</li>
+    </ul>
+    <h3>Errors</h3>
+    <p><strong>Status:</strong> <code>400 Bad Request</code></p>
+    <pre><code class="language-json">{
+  &quot;statusCode&quot;: 400,
+  &quot;message&quot;: &quot;Imagem da conta é obrigatória&quot;,
+  &quot;error&quot;: &quot;Bad Request&quot;
+}
+</code></pre>
+    <pre><code class="language-json">{
+  &quot;statusCode&quot;: 400,
+  &quot;message&quot;: &quot;Apenas imagens são permitidas (JPEG, PNG, WebP)&quot;,
+  &quot;error&quot;: &quot;Bad Request&quot;
+}
+</code></pre>
+    <pre><code class="language-json">{
+  &quot;statusCode&quot;: 400,
+  &quot;message&quot;: &quot;Tamanho máximo: 10MB&quot;,
+  &quot;error&quot;: &quot;Bad Request&quot;
+}
+</code></pre>
+    <hr />
+    <h2>GET /bills</h2>
+    <p>Listar todas as contas do usuário autenticado.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">GET /bills
+Authorization: Bearer &lt;access_token&gt;
+</code></pre>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">[
+  {
+    &quot;id&quot;: &quot;uuid-conta-1&quot;,
+    &quot;userId&quot;: &quot;uuid-do-usuario&quot;,
+    &quot;imageUrl&quot;: &quot;https://bucket.s3.amazonaws.com/bills/uuid-1.jpg?signature=...&quot;,
+    &quot;imageKey&quot;: &quot;bills/uuid-1.jpg&quot;,
+    &quot;status&quot;: &quot;COMPLETED&quot;,
+    &quot;ocrRawText&quot;: &quot;RESTAURANTE DO JOÃO\nCoca Cola 5.00\nBatata Frita 12.00\nTotal: 17.00&quot;,
+    &quot;totalAmount&quot;: &quot;17.00&quot;,
+    &quot;establishmentName&quot;: &quot;Restaurante do João&quot;,
+    &quot;createdAt&quot;: &quot;2025-11-03T12:00:00.000Z&quot;,
+    &quot;updatedAt&quot;: &quot;2025-11-03T12:30:00.000Z&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;id&quot;: &quot;uuid-item-1&quot;,
+        &quot;name&quot;: &quot;Coca Cola&quot;,
+        &quot;quantity&quot;: 1,
+        &quot;unitPrice&quot;: &quot;5.00&quot;,
+        &quot;totalPrice&quot;: &quot;5.00&quot;
+      }
+    ],
+    &quot;participants&quot;: [
+      {
+        &quot;id&quot;: &quot;uuid-participant-1&quot;,
+        &quot;name&quot;: &quot;João&quot;
+      },
+      {
+        &quot;id&quot;: &quot;uuid-participant-2&quot;,
+        &quot;name&quot;: &quot;Maria&quot;
+      }
+    ],
+    &quot;fees&quot;: [],
+    &quot;_count&quot;: {
+      &quot;items&quot;: 2,
+      &quot;participants&quot;: 2
+    }
+  }
+]
+</code></pre>
+    <hr />
+    <h2>GET /bills/:id</h2>
+    <p>Buscar detalhes completos de uma conta específica.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">GET /bills/uuid-da-conta
+Authorization: Bearer &lt;access_token&gt;
+</code></pre>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">{
+  &quot;id&quot;: &quot;uuid-da-conta&quot;,
+  &quot;userId&quot;: &quot;uuid-do-usuario&quot;,
+  &quot;imageUrl&quot;: &quot;https://bucket.s3.amazonaws.com/bills/uuid.jpg?signature=...&quot;,
+  &quot;imageKey&quot;: &quot;bills/uuid.jpg&quot;,
+  &quot;status&quot;: &quot;DIVIDING&quot;,
+  &quot;ocrRawText&quot;: &quot;RESTAURANTE DO JOÃO\nCoca Cola 5.00\nBatata Frita 12.00\nTotal: 17.00&quot;,
+  &quot;totalAmount&quot;: &quot;17.00&quot;,
+  &quot;establishmentName&quot;: &quot;Restaurante do João&quot;,
+  &quot;createdAt&quot;: &quot;2025-11-03T12:00:00.000Z&quot;,
+  &quot;updatedAt&quot;: &quot;2025-11-03T12:30:00.000Z&quot;,
+  &quot;items&quot;: [
+    {
+      &quot;id&quot;: &quot;uuid-item-1&quot;,
+      &quot;billId&quot;: &quot;uuid-da-conta&quot;,
+      &quot;name&quot;: &quot;Coca Cola&quot;,
+      &quot;quantity&quot;: 1,
+      &quot;unitPrice&quot;: &quot;5.00&quot;,
+      &quot;totalPrice&quot;: &quot;5.00&quot;,
+      &quot;divisions&quot;: [
+        {
+          &quot;id&quot;: &quot;uuid-division-1&quot;,
+          &quot;shareAmount&quot;: &quot;2.50&quot;,
+          &quot;participant&quot;: {
+            &quot;id&quot;: &quot;uuid-participant-1&quot;,
+            &quot;name&quot;: &quot;João&quot;
+          }
+        },
+        {
+          &quot;id&quot;: &quot;uuid-division-2&quot;,
+          &quot;shareAmount&quot;: &quot;2.50&quot;,
+          &quot;participant&quot;: {
+            &quot;id&quot;: &quot;uuid-participant-2&quot;,
+            &quot;name&quot;: &quot;Maria&quot;
+          }
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: &quot;uuid-item-2&quot;,
+      &quot;billId&quot;: &quot;uuid-da-conta&quot;,
+      &quot;name&quot;: &quot;Batata Frita&quot;,
+      &quot;quantity&quot;: 1,
+      &quot;unitPrice&quot;: &quot;12.00&quot;,
+      &quot;totalPrice&quot;: &quot;12.00&quot;,
+      &quot;divisions&quot;: [
+        {
+          &quot;id&quot;: &quot;uuid-division-3&quot;,
+          &quot;shareAmount&quot;: &quot;12.00&quot;,
+          &quot;participant&quot;: {
+            &quot;id&quot;: &quot;uuid-participant-1&quot;,
+            &quot;name&quot;: &quot;João&quot;
+          }
+        }
+      ]
+    }
+  ],
+  &quot;participants&quot;: [
+    {
+      &quot;id&quot;: &quot;uuid-participant-1&quot;,
+      &quot;name&quot;: &quot;João&quot;,
+      &quot;divisions&quot;: [
+        {
+          &quot;id&quot;: &quot;uuid-division-1&quot;,
+          &quot;shareAmount&quot;: &quot;2.50&quot;
+        },
+        {
+          &quot;id&quot;: &quot;uuid-division-3&quot;,
+          &quot;shareAmount&quot;: &quot;12.00&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: &quot;uuid-participant-2&quot;,
+      &quot;name&quot;: &quot;Maria&quot;,
+      &quot;divisions&quot;: [
+        {
+          &quot;id&quot;: &quot;uuid-division-2&quot;,
+          &quot;shareAmount&quot;: &quot;2.50&quot;
+        }
+      ]
+    }
+  ],
+  &quot;fees&quot;: []
+}
+</code></pre>
+    <h3>Errors</h3>
+    <p><strong>Status:</strong> <code>404 Not Found</code></p>
+    <pre><code class="language-json">{
+  &quot;statusCode&quot;: 404,
+  &quot;message&quot;: &quot;Conta não encontrada&quot;,
+  &quot;error&quot;: &quot;Not Found&quot;
+}
+</code></pre>
+    <p><strong>Status:</strong> <code>403 Forbidden</code></p>
+    <pre><code class="language-json">{
+  &quot;statusCode&quot;: 403,
+  &quot;message&quot;: &quot;Você não tem acesso a esta conta&quot;,
+  &quot;error&quot;: &quot;Forbidden&quot;
+}
+</code></pre>
+    <hr />
+    <h2>PATCH /bills/:id</h2>
+    <p>Atualizar informações da conta.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">PATCH /bills/uuid-da-conta
+Authorization: Bearer &lt;access_token&gt;
+Content-Type: application/json
+
+{
+  &quot;status&quot;: &quot;REVIEWING&quot;,
+  &quot;establishmentName&quot;: &quot;Novo Nome do Restaurante&quot;,
+  &quot;totalAmount&quot;: 17.50,
+  &quot;items&quot;: [
+    {
+      &quot;name&quot;: &quot;Coca Cola&quot;,
+      &quot;quantity&quot;: 1,
+      &quot;unitPrice&quot;: 5.00,
+      &quot;totalPrice&quot;: 5.00
+    },
+    {
+      &quot;name&quot;: &quot;Batata Frita Grande&quot;,
+      &quot;quantity&quot;: 1,
+      &quot;unitPrice&quot;: 12.50,
+      &quot;totalPrice&quot;: 12.50
+    }
+  ]
+}
+</code></pre>
+    <p><strong>Body Parameters (todos opcionais):</strong></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Campo</th>
+          <th>Tipo</th>
+          <th>Descrição</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>status</td>
+          <td>enum</td>
+          <td>
+            &quot;PENDING_OCR&quot;, &quot;OCR_FAILED&quot;,
+            &quot;REVIEWING&quot;, &quot;DIVIDING&quot;, &quot;COMPLETED&quot;
+          </td>
+        </tr>
+        <tr>
+          <td>establishmentName</td>
+          <td>string</td>
+          <td>Nome do estabelecimento</td>
+        </tr>
+        <tr>
+          <td>totalAmount</td>
+          <td>number</td>
+          <td>Valor total da conta</td>
+        </tr>
+        <tr>
+          <td>items</td>
+          <td>array</td>
+          <td>Array de itens (substitui todos os itens existentes)</td>
+        </tr>
+      </tbody>
+    </table>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">{
+  &quot;id&quot;: &quot;uuid-da-conta&quot;,
+  &quot;userId&quot;: &quot;uuid-do-usuario&quot;,
+  &quot;imageUrl&quot;: &quot;https://bucket.s3.amazonaws.com/bills/uuid.jpg?signature=...&quot;,
+  &quot;imageKey&quot;: &quot;bills/uuid.jpg&quot;,
+  &quot;status&quot;: &quot;REVIEWING&quot;,
+  &quot;ocrRawText&quot;: &quot;...&quot;,
+  &quot;totalAmount&quot;: &quot;17.50&quot;,
+  &quot;establishmentName&quot;: &quot;Novo Nome do Restaurante&quot;,
+  &quot;createdAt&quot;: &quot;2025-11-03T12:00:00.000Z&quot;,
+  &quot;updatedAt&quot;: &quot;2025-11-03T13:00:00.000Z&quot;,
+  &quot;items&quot;: [
+    {
+      &quot;id&quot;: &quot;uuid-item-new-1&quot;,
+      &quot;name&quot;: &quot;Coca Cola&quot;,
+      &quot;quantity&quot;: 1,
+      &quot;unitPrice&quot;: &quot;5.00&quot;,
+      &quot;totalPrice&quot;: &quot;5.00&quot;
+    },
+    {
+      &quot;id&quot;: &quot;uuid-item-new-2&quot;,
+      &quot;name&quot;: &quot;Batata Frita Grande&quot;,
+      &quot;quantity&quot;: 1,
+      &quot;unitPrice&quot;: &quot;12.50&quot;,
+      &quot;totalPrice&quot;: &quot;12.50&quot;
+    }
+  ],
+  &quot;participants&quot;: [],
+  &quot;fees&quot;: []
+}
+</code></pre>
+    <hr />
+    <h2>DELETE /bills/:id</h2>
+    <p>Deletar conta e remover imagem do S3.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">DELETE /bills/uuid-da-conta
+Authorization: Bearer &lt;access_token&gt;
+</code></pre>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">{
+  &quot;message&quot;: &quot;Conta deletada com sucesso&quot;
+}
+</code></pre>
+    <hr />
+    <h2>GET /bills/:id/summary</h2>
+    <p>Obter resumo da divisão calculado.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">GET /bills/uuid-da-conta/summary
+Authorization: Bearer &lt;access_token&gt;
+</code></pre>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">{
+  &quot;billId&quot;: &quot;uuid-da-conta&quot;,
+  &quot;establishmentName&quot;: &quot;Restaurante do João&quot;,
+  &quot;totalAmount&quot;: &quot;17.00&quot;,
+  &quot;itemsTotal&quot;: &quot;17.00&quot;,
+  &quot;feesTotal&quot;: &quot;0.00&quot;,
+  &quot;grandTotal&quot;: &quot;17.00&quot;,
+  &quot;participants&quot;: [
+    {
+      &quot;id&quot;: &quot;uuid-participant-1&quot;,
+      &quot;name&quot;: &quot;João&quot;,
+      &quot;totalAmount&quot;: &quot;14.50&quot;,
+      &quot;items&quot;: [
+        {
+          &quot;name&quot;: &quot;Coca Cola&quot;,
+          &quot;shareAmount&quot;: &quot;2.50&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Batata Frita&quot;,
+          &quot;shareAmount&quot;: &quot;12.00&quot;
+        }
+      ],
+      &quot;fees&quot;: []
+    },
+    {
+      &quot;id&quot;: &quot;uuid-participant-2&quot;,
+      &quot;name&quot;: &quot;Maria&quot;,
+      &quot;totalAmount&quot;: &quot;2.50&quot;,
+      &quot;items&quot;: [
+        {
+          &quot;name&quot;: &quot;Coca Cola&quot;,
+          &quot;shareAmount&quot;: &quot;2.50&quot;
+        }
+      ],
+      &quot;fees&quot;: []
+    }
+  ]
+}
+</code></pre>
+    <hr />
+    <h1>🛒 Itens da Conta (Bill Items)</h1>
+    <h2>POST /bill-items</h2>
+    <p>Adicionar item manualmente a uma conta.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">POST /bill-items
+Authorization: Bearer &lt;access_token&gt;
+Content-Type: application/json
+
+{
+  &quot;billId&quot;: &quot;uuid-da-conta&quot;,
+  &quot;name&quot;: &quot;Cerveja Artesanal&quot;,
+  &quot;quantity&quot;: 2,
+  &quot;unitPrice&quot;: 15.00,
+  &quot;totalPrice&quot;: 30.00
+}
+</code></pre>
+    <p><strong>Body Parameters:</strong></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Campo</th>
+          <th>Tipo</th>
+          <th>Obrigatório</th>
+          <th>Descrição</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>billId</td>
+          <td>string</td>
+          <td>Sim</td>
+          <td>UUID da conta</td>
+        </tr>
+        <tr>
+          <td>name</td>
+          <td>string</td>
+          <td>Sim</td>
+          <td>Nome do item</td>
+        </tr>
+        <tr>
+          <td>quantity</td>
+          <td>number</td>
+          <td>Sim</td>
+          <td>Quantidade (mínimo 1)</td>
+        </tr>
+        <tr>
+          <td>unitPrice</td>
+          <td>number</td>
+          <td>Sim</td>
+          <td>Preço unitário</td>
+        </tr>
+        <tr>
+          <td>totalPrice</td>
+          <td>number</td>
+          <td>Sim</td>
+          <td>Preço total (quantity * unitPrice)</td>
+        </tr>
+      </tbody>
+    </table>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>201 Created</code></p>
+    <pre><code class="language-json">{
+  &quot;id&quot;: &quot;uuid-do-item&quot;,
+  &quot;billId&quot;: &quot;uuid-da-conta&quot;,
+  &quot;name&quot;: &quot;Cerveja Artesanal&quot;,
+  &quot;quantity&quot;: 2,
+  &quot;unitPrice&quot;: &quot;15.00&quot;,
+  &quot;totalPrice&quot;: &quot;30.00&quot;,
+  &quot;createdAt&quot;: &quot;2025-11-03T13:00:00.000Z&quot;,
+  &quot;updatedAt&quot;: &quot;2025-11-03T13:00:00.000Z&quot;
+}
+</code></pre>
+    <hr />
+    <h2>GET /bill-items/bill/:billId</h2>
+    <p>Listar todos os itens de uma conta.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">GET /bill-items/bill/uuid-da-conta
+Authorization: Bearer &lt;access_token&gt;
+</code></pre>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">[
+  {
+    &quot;id&quot;: &quot;uuid-item-1&quot;,
+    &quot;billId&quot;: &quot;uuid-da-conta&quot;,
+    &quot;name&quot;: &quot;Coca Cola&quot;,
+    &quot;quantity&quot;: 1,
+    &quot;unitPrice&quot;: &quot;5.00&quot;,
+    &quot;totalPrice&quot;: &quot;5.00&quot;,
+    &quot;createdAt&quot;: &quot;2025-11-03T12:00:00.000Z&quot;,
+    &quot;updatedAt&quot;: &quot;2025-11-03T12:00:00.000Z&quot;
+  },
+  {
+    &quot;id&quot;: &quot;uuid-item-2&quot;,
+    &quot;billId&quot;: &quot;uuid-da-conta&quot;,
+    &quot;name&quot;: &quot;Batata Frita&quot;,
+    &quot;quantity&quot;: 1,
+    &quot;unitPrice&quot;: &quot;12.00&quot;,
+    &quot;totalPrice&quot;: &quot;12.00&quot;,
+    &quot;createdAt&quot;: &quot;2025-11-03T12:00:00.000Z&quot;,
+    &quot;updatedAt&quot;: &quot;2025-11-03T12:00:00.000Z&quot;
+  }
+]
+</code></pre>
+    <hr />
+    <h2>PATCH /bill-items/:id</h2>
+    <p>Atualizar item da conta.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">PATCH /bill-items/uuid-do-item
+Authorization: Bearer &lt;access_token&gt;
+Content-Type: application/json
+
+{
+  &quot;name&quot;: &quot;Coca Cola 2L&quot;,
+  &quot;quantity&quot;: 1,
+  &quot;unitPrice&quot;: 8.00,
+  &quot;totalPrice&quot;: 8.00
+}
+</code></pre>
+    <p><strong>Body Parameters (todos opcionais):</strong></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Campo</th>
+          <th>Tipo</th>
+          <th>Descrição</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>name</td>
+          <td>string</td>
+          <td>Novo nome do item</td>
+        </tr>
+        <tr>
+          <td>quantity</td>
+          <td>number</td>
+          <td>Nova quantidade</td>
+        </tr>
+        <tr>
+          <td>unitPrice</td>
+          <td>number</td>
+          <td>Novo preço unitário</td>
+        </tr>
+        <tr>
+          <td>totalPrice</td>
+          <td>number</td>
+          <td>Novo preço total</td>
+        </tr>
+      </tbody>
+    </table>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">{
+  &quot;id&quot;: &quot;uuid-do-item&quot;,
+  &quot;billId&quot;: &quot;uuid-da-conta&quot;,
+  &quot;name&quot;: &quot;Coca Cola 2L&quot;,
+  &quot;quantity&quot;: 1,
+  &quot;unitPrice&quot;: &quot;8.00&quot;,
+  &quot;totalPrice&quot;: &quot;8.00&quot;,
+  &quot;createdAt&quot;: &quot;2025-11-03T12:00:00.000Z&quot;,
+  &quot;updatedAt&quot;: &quot;2025-11-03T13:30:00.000Z&quot;
+}
+</code></pre>
+    <hr />
+    <h2>DELETE /bill-items/:id</h2>
+    <p>Deletar item da conta.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">DELETE /bill-items/uuid-do-item
+Authorization: Bearer &lt;access_token&gt;
+</code></pre>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">{
+  &quot;message&quot;: &quot;Item deletado com sucesso&quot;
+}
+</code></pre>
+    <hr />
+    <h1>👥 Participantes (Participants)</h1>
+    <h2>POST /participants</h2>
+    <p>Adicionar participante a uma conta.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">POST /participants
+Authorization: Bearer &lt;access_token&gt;
+Content-Type: application/json
+
+{
+  &quot;billId&quot;: &quot;uuid-da-conta&quot;,
+  &quot;name&quot;: &quot;Carlos&quot;
+}
+</code></pre>
+    <p><strong>Body Parameters:</strong></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Campo</th>
+          <th>Tipo</th>
+          <th>Obrigatório</th>
+          <th>Descrição</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>billId</td>
+          <td>string</td>
+          <td>Sim</td>
+          <td>UUID da conta</td>
+        </tr>
+        <tr>
+          <td>name</td>
+          <td>string</td>
+          <td>Sim</td>
+          <td>Nome do participante</td>
+        </tr>
+      </tbody>
+    </table>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>201 Created</code></p>
+    <pre><code class="language-json">{
+  &quot;id&quot;: &quot;uuid-do-participante&quot;,
+  &quot;billId&quot;: &quot;uuid-da-conta&quot;,
+  &quot;name&quot;: &quot;Carlos&quot;,
+  &quot;createdAt&quot;: &quot;2025-11-03T13:00:00.000Z&quot;,
+  &quot;updatedAt&quot;: &quot;2025-11-03T13:00:00.000Z&quot;
+}
+</code></pre>
+    <hr />
+    <h2>GET /participants/bill/:billId</h2>
+    <p>Listar todos os participantes de uma conta.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">GET /participants/bill/uuid-da-conta
+Authorization: Bearer &lt;access_token&gt;
+</code></pre>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">[
+  {
+    &quot;id&quot;: &quot;uuid-participant-1&quot;,
+    &quot;billId&quot;: &quot;uuid-da-conta&quot;,
+    &quot;name&quot;: &quot;João&quot;,
+    &quot;createdAt&quot;: &quot;2025-11-03T12:00:00.000Z&quot;,
+    &quot;updatedAt&quot;: &quot;2025-11-03T12:00:00.000Z&quot;
+  },
+  {
+    &quot;id&quot;: &quot;uuid-participant-2&quot;,
+    &quot;billId&quot;: &quot;uuid-da-conta&quot;,
+    &quot;name&quot;: &quot;Maria&quot;,
+    &quot;createdAt&quot;: &quot;2025-11-03T12:00:00.000Z&quot;,
+    &quot;updatedAt&quot;: &quot;2025-11-03T12:00:00.000Z&quot;
+  },
+  {
+    &quot;id&quot;: &quot;uuid-participant-3&quot;,
+    &quot;billId&quot;: &quot;uuid-da-conta&quot;,
+    &quot;name&quot;: &quot;Carlos&quot;,
+    &quot;createdAt&quot;: &quot;2025-11-03T13:00:00.000Z&quot;,
+    &quot;updatedAt&quot;: &quot;2025-11-03T13:00:00.000Z&quot;
+  }
+]
+</code></pre>
+    <hr />
+    <h2>GET /participants/history</h2>
+    <p>Buscar histórico de participantes recorrentes do usuário.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">GET /participants/history
+Authorization: Bearer &lt;access_token&gt;
+</code></pre>
+    <p><strong>Query Parameters (opcionais):</strong></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Parâmetro</th>
+          <th>Tipo</th>
+          <th>Descrição</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>search</td>
+          <td>string</td>
+          <td>Buscar por nome</td>
+        </tr>
+        <tr>
+          <td>limit</td>
+          <td>number</td>
+          <td>Limite de resultados (padrão: 20)</td>
+        </tr>
+      </tbody>
+    </table>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">[
+  {
+    &quot;name&quot;: &quot;João&quot;,
+    &quot;count&quot;: 15,
+    &quot;lastUsed&quot;: &quot;2025-11-03T12:00:00.000Z&quot;
+  },
+  {
+    &quot;name&quot;: &quot;Maria&quot;,
+    &quot;count&quot;: 12,
+    &quot;lastUsed&quot;: &quot;2025-11-02T18:30:00.000Z&quot;
+  },
+  {
+    &quot;name&quot;: &quot;Carlos&quot;,
+    &quot;count&quot;: 8,
+    &quot;lastUsed&quot;: &quot;2025-11-01T20:15:00.000Z&quot;
+  },
+  {
+    &quot;name&quot;: &quot;Ana&quot;,
+    &quot;count&quot;: 5,
+    &quot;lastUsed&quot;: &quot;2025-10-28T19:00:00.000Z&quot;
+  }
+]
+</code></pre>
+    <hr />
+    <h2>PATCH /participants/:id</h2>
+    <p>Atualizar nome do participante.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">PATCH /participants/uuid-do-participante
+Authorization: Bearer &lt;access_token&gt;
+Content-Type: application/json
+
+{
+  &quot;name&quot;: &quot;Carlos Silva&quot;
+}
+</code></pre>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">{
+  &quot;id&quot;: &quot;uuid-do-participante&quot;,
+  &quot;billId&quot;: &quot;uuid-da-conta&quot;,
+  &quot;name&quot;: &quot;Carlos Silva&quot;,
+  &quot;createdAt&quot;: &quot;2025-11-03T13:00:00.000Z&quot;,
+  &quot;updatedAt&quot;: &quot;2025-11-03T14:00:00.000Z&quot;
+}
+</code></pre>
+    <hr />
+    <h2>DELETE /participants/:id</h2>
+    <p>Remover participante da conta.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <p>
+      <strong>⚠️ Nota:</strong> Remove também todas as divisões associadas ao
+      participante.
+    </p>
+    <h3>Request</h3>
+    <pre><code class="language-http">DELETE /participants/uuid-do-participante
+Authorization: Bearer &lt;access_token&gt;
+</code></pre>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">{
+  &quot;message&quot;: &quot;Participante removido com sucesso&quot;
+}
+</code></pre>
+    <hr />
+    <h1>✂️ Divisões (Divisions)</h1>
+    <h2>POST /divisions</h2>
+    <p>Criar divisão de um item entre um participante.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">POST /divisions
+Authorization: Bearer &lt;access_token&gt;
+Content-Type: application/json
+
+{
+  &quot;billItemId&quot;: &quot;uuid-do-item&quot;,
+  &quot;participantId&quot;: &quot;uuid-do-participante&quot;,
+  &quot;shareAmount&quot;: 5.00
+}
+</code></pre>
+    <p><strong>Body Parameters:</strong></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Campo</th>
+          <th>Tipo</th>
+          <th>Obrigatório</th>
+          <th>Descrição</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>billItemId</td>
+          <td>string</td>
+          <td>Sim</td>
+          <td>UUID do item</td>
+        </tr>
+        <tr>
+          <td>participantId</td>
+          <td>string</td>
+          <td>Sim</td>
+          <td>UUID do participante</td>
+        </tr>
+        <tr>
+          <td>shareAmount</td>
+          <td>number</td>
+          <td>Sim</td>
+          <td>Valor que o participante paga deste item</td>
+        </tr>
+      </tbody>
+    </table>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>201 Created</code></p>
+    <pre><code class="language-json">{
+  &quot;id&quot;: &quot;uuid-da-divisao&quot;,
+  &quot;billItemId&quot;: &quot;uuid-do-item&quot;,
+  &quot;participantId&quot;: &quot;uuid-do-participante&quot;,
+  &quot;shareAmount&quot;: &quot;5.00&quot;,
+  &quot;createdAt&quot;: &quot;2025-11-03T14:00:00.000Z&quot;,
+  &quot;updatedAt&quot;: &quot;2025-11-03T14:00:00.000Z&quot;
+}
+</code></pre>
+    <h3>Errors</h3>
+    <p><strong>Status:</strong> <code>409 Conflict</code></p>
+    <pre><code class="language-json">{
+  &quot;statusCode&quot;: 409,
+  &quot;message&quot;: &quot;Divisão já existe para este item e participante&quot;,
+  &quot;error&quot;: &quot;Conflict&quot;
+}
+</code></pre>
+    <p><strong>Status:</strong> <code>400 Bad Request</code></p>
+    <pre><code class="language-json">{
+  &quot;statusCode&quot;: 400,
+  &quot;message&quot;: &quot;Valor da divisão excede o total do item&quot;,
+  &quot;error&quot;: &quot;Bad Request&quot;
+}
+</code></pre>
+    <hr />
+    <h2>POST /divisions/batch</h2>
+    <p>Criar múltiplas divisões de uma vez.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">POST /divisions/batch
+Authorization: Bearer &lt;access_token&gt;
+Content-Type: application/json
+
+{
+  &quot;billItemId&quot;: &quot;uuid-do-item&quot;,
+  &quot;divisions&quot;: [
+    {
+      &quot;participantId&quot;: &quot;uuid-participant-1&quot;,
+      &quot;shareAmount&quot;: 2.50
+    },
+    {
+      &quot;participantId&quot;: &quot;uuid-participant-2&quot;,
+      &quot;shareAmount&quot;: 2.50
+    }
+  ]
+}
+</code></pre>
+    <p><strong>Body Parameters:</strong></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Campo</th>
+          <th>Tipo</th>
+          <th>Obrigatório</th>
+          <th>Descrição</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>billItemId</td>
+          <td>string</td>
+          <td>Sim</td>
+          <td>UUID do item</td>
+        </tr>
+        <tr>
+          <td>divisions</td>
+          <td>array</td>
+          <td>Sim</td>
+          <td>Array de divisões</td>
+        </tr>
+        <tr>
+          <td>divisions[].participantId</td>
+          <td>string</td>
+          <td>Sim</td>
+          <td>UUID do participante</td>
+        </tr>
+        <tr>
+          <td>divisions[].shareAmount</td>
+          <td>number</td>
+          <td>Sim</td>
+          <td>Valor da divisão</td>
+        </tr>
+      </tbody>
+    </table>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>201 Created</code></p>
+    <pre><code class="language-json">{
+  &quot;message&quot;: &quot;2 divisões criadas com sucesso&quot;,
+  &quot;divisions&quot;: [
+    {
+      &quot;id&quot;: &quot;uuid-division-1&quot;,
+      &quot;billItemId&quot;: &quot;uuid-do-item&quot;,
+      &quot;participantId&quot;: &quot;uuid-participant-1&quot;,
+      &quot;shareAmount&quot;: &quot;2.50&quot;,
+      &quot;createdAt&quot;: &quot;2025-11-03T14:00:00.000Z&quot;,
+      &quot;updatedAt&quot;: &quot;2025-11-03T14:00:00.000Z&quot;
+    },
+    {
+      &quot;id&quot;: &quot;uuid-division-2&quot;,
+      &quot;billItemId&quot;: &quot;uuid-do-item&quot;,
+      &quot;participantId&quot;: &quot;uuid-participant-2&quot;,
+      &quot;shareAmount&quot;: &quot;2.50&quot;,
+      &quot;createdAt&quot;: &quot;2025-11-03T14:00:00.000Z&quot;,
+      &quot;updatedAt&quot;: &quot;2025-11-03T14:00:00.000Z&quot;
+    }
+  ]
+}
+</code></pre>
+    <h3>Errors</h3>
+    <p><strong>Status:</strong> <code>400 Bad Request</code></p>
+    <pre><code class="language-json">{
+  &quot;statusCode&quot;: 400,
+  &quot;message&quot;: &quot;Soma das divisões (6.00) excede o total do item (5.00)&quot;,
+  &quot;error&quot;: &quot;Bad Request&quot;
+}
+</code></pre>
+    <hr />
+    <h2>GET /divisions/bill/:billId</h2>
+    <p>Listar todas as divisões de uma conta.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">GET /divisions/bill/uuid-da-conta
+Authorization: Bearer &lt;access_token&gt;
+</code></pre>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">[
+  {
+    &quot;id&quot;: &quot;uuid-division-1&quot;,
+    &quot;billItemId&quot;: &quot;uuid-item-1&quot;,
+    &quot;participantId&quot;: &quot;uuid-participant-1&quot;,
+    &quot;shareAmount&quot;: &quot;2.50&quot;,
+    &quot;createdAt&quot;: &quot;2025-11-03T14:00:00.000Z&quot;,
+    &quot;updatedAt&quot;: &quot;2025-11-03T14:00:00.000Z&quot;,
+    &quot;billItem&quot;: {
+      &quot;id&quot;: &quot;uuid-item-1&quot;,
+      &quot;name&quot;: &quot;Coca Cola&quot;,
+      &quot;totalPrice&quot;: &quot;5.00&quot;
+    },
+    &quot;participant&quot;: {
+      &quot;id&quot;: &quot;uuid-participant-1&quot;,
+      &quot;name&quot;: &quot;João&quot;
+    }
+  },
+  {
+    &quot;id&quot;: &quot;uuid-division-2&quot;,
+    &quot;billItemId&quot;: &quot;uuid-item-1&quot;,
+    &quot;participantId&quot;: &quot;uuid-participant-2&quot;,
+    &quot;shareAmount&quot;: &quot;2.50&quot;,
+    &quot;createdAt&quot;: &quot;2025-11-03T14:00:00.000Z&quot;,
+    &quot;updatedAt&quot;: &quot;2025-11-03T14:00:00.000Z&quot;,
+    &quot;billItem&quot;: {
+      &quot;id&quot;: &quot;uuid-item-1&quot;,
+      &quot;name&quot;: &quot;Coca Cola&quot;,
+      &quot;totalPrice&quot;: &quot;5.00&quot;
+    },
+    &quot;participant&quot;: {
+      &quot;id&quot;: &quot;uuid-participant-2&quot;,
+      &quot;name&quot;: &quot;Maria&quot;
+    }
+  }
+]
+</code></pre>
+    <hr />
+    <h2>PATCH /divisions/:id</h2>
+    <p>Atualizar valor de uma divisão.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">PATCH /divisions/uuid-da-divisao
+Authorization: Bearer &lt;access_token&gt;
+Content-Type: application/json
+
+{
+  &quot;shareAmount&quot;: 3.00
+}
+</code></pre>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">{
+  &quot;id&quot;: &quot;uuid-da-divisao&quot;,
+  &quot;billItemId&quot;: &quot;uuid-do-item&quot;,
+  &quot;participantId&quot;: &quot;uuid-do-participante&quot;,
+  &quot;shareAmount&quot;: &quot;3.00&quot;,
+  &quot;createdAt&quot;: &quot;2025-11-03T14:00:00.000Z&quot;,
+  &quot;updatedAt&quot;: &quot;2025-11-03T15:00:00.000Z&quot;
+}
+</code></pre>
+    <hr />
+    <h2>DELETE /divisions/:id</h2>
+    <p>Deletar divisão.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">DELETE /divisions/uuid-da-divisao
+Authorization: Bearer &lt;access_token&gt;
+</code></pre>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">{
+  &quot;message&quot;: &quot;Divisão deletada com sucesso&quot;
+}
+</code></pre>
+    <hr />
+    <h1>💰 Taxas (Fees)</h1>
+    <h2>POST /fees</h2>
+    <p>Adicionar taxa à conta.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">POST /fees
+Authorization: Bearer &lt;access_token&gt;
+Content-Type: application/json
+
+{
+  &quot;billId&quot;: &quot;uuid-da-conta&quot;,
+  &quot;type&quot;: &quot;SERVICE_PERCENTAGE&quot;,
+  &quot;description&quot;: &quot;Taxa de Serviço&quot;,
+  &quot;value&quot;: 10.00
+}
+</code></pre>
+    <p><strong>Body Parameters:</strong></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Campo</th>
+          <th>Tipo</th>
+          <th>Obrigatório</th>
+          <th>Descrição</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>billId</td>
+          <td>string</td>
+          <td>Sim</td>
+          <td>UUID da conta</td>
+        </tr>
+        <tr>
+          <td>type</td>
+          <td>enum</td>
+          <td>Sim</td>
+          <td>
+            &quot;SERVICE_PERCENTAGE&quot;, &quot;SERVICE_FIXED&quot;,
+            &quot;COVER_CHARGE&quot;
+          </td>
+        </tr>
+        <tr>
+          <td>description</td>
+          <td>string</td>
+          <td>Não</td>
+          <td>Descrição da taxa</td>
+        </tr>
+        <tr>
+          <td>value</td>
+          <td>number</td>
+          <td>Sim</td>
+          <td>Valor (% ou fixo dependendo do tipo)</td>
+        </tr>
+      </tbody>
+    </table>
+    <p><strong>Tipos de Taxa:</strong></p>
+    <ul>
+      <li>
+        <code>SERVICE_PERCENTAGE</code>: Taxa de serviço percentual (ex: 10%)
+      </li>
+      <li><code>SERVICE_FIXED</code>: Taxa de serviço fixa (ex: R$ 5,00)</li>
+      <li><code>COVER_CHARGE</code>: Couvert artístico fixo (ex: R$ 15,00)</li>
+    </ul>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>201 Created</code></p>
+    <pre><code class="language-json">{
+  &quot;id&quot;: &quot;uuid-da-taxa&quot;,
+  &quot;billId&quot;: &quot;uuid-da-conta&quot;,
+  &quot;type&quot;: &quot;SERVICE_PERCENTAGE&quot;,
+  &quot;description&quot;: &quot;Taxa de Serviço&quot;,
+  &quot;value&quot;: &quot;10.00&quot;,
+  &quot;createdAt&quot;: &quot;2025-11-03T15:00:00.000Z&quot;,
+  &quot;updatedAt&quot;: &quot;2025-11-03T15:00:00.000Z&quot;
+}
+</code></pre>
+    <hr />
+    <h2>GET /fees/bill/:billId</h2>
+    <p>Listar todas as taxas de uma conta.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">GET /fees/bill/uuid-da-conta
+Authorization: Bearer &lt;access_token&gt;
+</code></pre>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">[
+  {
+    &quot;id&quot;: &quot;uuid-fee-1&quot;,
+    &quot;billId&quot;: &quot;uuid-da-conta&quot;,
+    &quot;type&quot;: &quot;SERVICE_PERCENTAGE&quot;,
+    &quot;description&quot;: &quot;Taxa de Serviço (10%)&quot;,
+    &quot;value&quot;: &quot;10.00&quot;,
+    &quot;createdAt&quot;: &quot;2025-11-03T15:00:00.000Z&quot;,
+    &quot;updatedAt&quot;: &quot;2025-11-03T15:00:00.000Z&quot;
+  },
+  {
+    &quot;id&quot;: &quot;uuid-fee-2&quot;,
+    &quot;billId&quot;: &quot;uuid-da-conta&quot;,
+    &quot;type&quot;: &quot;COVER_CHARGE&quot;,
+    &quot;description&quot;: &quot;Couvert Artístico&quot;,
+    &quot;value&quot;: &quot;15.00&quot;,
+    &quot;createdAt&quot;: &quot;2025-11-03T15:00:00.000Z&quot;,
+    &quot;updatedAt&quot;: &quot;2025-11-03T15:00:00.000Z&quot;
+  }
+]
+</code></pre>
+    <hr />
+    <h2>PATCH /fees/:id</h2>
+    <p>Atualizar taxa.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">PATCH /fees/uuid-da-taxa
+Authorization: Bearer &lt;access_token&gt;
+Content-Type: application/json
+
+{
+  &quot;type&quot;: &quot;SERVICE_PERCENTAGE&quot;,
+  &quot;description&quot;: &quot;Taxa de Garçom (12%)&quot;,
+  &quot;value&quot;: 12.00
+}
+</code></pre>
+    <p><strong>Body Parameters (todos opcionais):</strong></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Campo</th>
+          <th>Tipo</th>
+          <th>Descrição</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>type</td>
+          <td>enum</td>
+          <td>Tipo da taxa</td>
+        </tr>
+        <tr>
+          <td>description</td>
+          <td>string</td>
+          <td>Descrição</td>
+        </tr>
+        <tr>
+          <td>value</td>
+          <td>number</td>
+          <td>Novo valor</td>
+        </tr>
+      </tbody>
+    </table>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">{
+  &quot;id&quot;: &quot;uuid-da-taxa&quot;,
+  &quot;billId&quot;: &quot;uuid-da-conta&quot;,
+  &quot;type&quot;: &quot;SERVICE_PERCENTAGE&quot;,
+  &quot;description&quot;: &quot;Taxa de Garçom (12%)&quot;,
+  &quot;value&quot;: &quot;12.00&quot;,
+  &quot;createdAt&quot;: &quot;2025-11-03T15:00:00.000Z&quot;,
+  &quot;updatedAt&quot;: &quot;2025-11-03T15:30:00.000Z&quot;
+}
+</code></pre>
+    <hr />
+    <h2>DELETE /fees/:id</h2>
+    <p>Deletar taxa.</p>
+    <p><strong>Autenticação:</strong> Requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">DELETE /fees/uuid-da-taxa
+Authorization: Bearer &lt;access_token&gt;
+</code></pre>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">{
+  &quot;message&quot;: &quot;Taxa deletada com sucesso&quot;
+}
+</code></pre>
+    <hr />
+    <h1>🏥 Sistema</h1>
+    <h2>GET /health</h2>
+    <p>Verificar status da API e conexão com banco de dados.</p>
+    <p><strong>Autenticação:</strong> Não requerida</p>
+    <h3>Request</h3>
+    <pre><code class="language-http">GET /health
+</code></pre>
+    <h3>Response</h3>
+    <p><strong>Status:</strong> <code>200 OK</code></p>
+    <pre><code class="language-json">{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;timestamp&quot;: &quot;2025-11-03T16:00:00.000Z&quot;,
+  &quot;uptime&quot;: 3600,
+  &quot;database&quot;: {
+    &quot;status&quot;: &quot;connected&quot;,
+    &quot;responseTime&quot;: 5
+  },
+  &quot;version&quot;: &quot;1.0.0&quot;
+}
+</code></pre>
+    <p>
+      <strong>Status:</strong> <code>503 Service Unavailable</code> (se banco
+      desconectado)
+    </p>
+    <pre><code class="language-json">{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;timestamp&quot;: &quot;2025-11-03T16:00:00.000Z&quot;,
+  &quot;uptime&quot;: 3600,
+  &quot;database&quot;: {
+    &quot;status&quot;: &quot;disconnected&quot;,
+    &quot;responseTime&quot;: -1,
+    &quot;error&quot;: &quot;Connection timeout&quot;
+  },
+  &quot;version&quot;: &quot;1.0.0&quot;
+}
+</code></pre>
+    <hr />
+    <h1>🔄 Fluxo Completo de Uso</h1>
+    <h2>1️⃣ Registro e Login</h2>
+    <pre><code class="language-bash"># 1. Registrar usuário
+POST /auth/register
+{
+  &quot;email&quot;: &quot;joao@exemplo.com&quot;,
+  &quot;name&quot;: &quot;João Silva&quot;,
+  &quot;password&quot;: &quot;Senha@123&quot;
+}
+
+# 2. Admin ativa o usuário
+PATCH /users/:userId (Admin only)
+{
+  &quot;isActive&quot;: true
+}
+
+# 3. Login
+POST /auth/login
+{
+  &quot;email&quot;: &quot;joao@exemplo.com&quot;,
+  &quot;password&quot;: &quot;Senha@123&quot;
+}
+# → Recebe accessToken e refreshToken
+</code></pre>
+    <h2>2️⃣ Criar Conta e Processar OCR</h2>
+    <pre><code class="language-bash"># 1. Upload da foto da conta
+POST /bills
+Content-Type: multipart/form-data
+- image: &lt;arquivo&gt;
+- establishmentName: &quot;Restaurante X&quot;
+
+# → Status: PENDING_OCR (processando OCR em background)
+
+# 2. Aguardar processamento (polling ou webhook)
+GET /bills/:billId
+# → Status: REVIEWING (OCR concluído)
+# → Retorna itens reconhecidos automaticamente
+</code></pre>
+    <h2>3️⃣ Revisar e Ajustar Itens</h2>
+    <pre><code class="language-bash"># 1. Listar itens reconhecidos
+GET /bill-items/bill/:billId
+
+# 2. Editar item (se necessário)
+PATCH /bill-items/:itemId
+{
+  &quot;name&quot;: &quot;Coca Cola 2L&quot;,
+  &quot;unitPrice&quot;: 8.00,
+  &quot;totalPrice&quot;: 8.00
+}
+
+# 3. Adicionar item manualmente (se OCR perdeu)
+POST /bill-items
+{
+  &quot;billId&quot;: &quot;:billId&quot;,
+  &quot;name&quot;: &quot;Sobremesa&quot;,
+  &quot;quantity&quot;: 1,
+  &quot;unitPrice&quot;: 12.00,
+  &quot;totalPrice&quot;: 12.00
+}
+
+# 4. Atualizar status da conta
+PATCH /bills/:billId
+{
+  &quot;status&quot;: &quot;DIVIDING&quot;
+}
+</code></pre>
+    <h2>4️⃣ Adicionar Participantes</h2>
+    <pre><code class="language-bash"># 1. Buscar participantes recorrentes (histórico)
+GET /participants/history?search=João
+
+# 2. Adicionar participantes à conta
+POST /participants
+{
+  &quot;billId&quot;: &quot;:billId&quot;,
+  &quot;name&quot;: &quot;João&quot;
+}
+
+POST /participants
+{
+  &quot;billId&quot;: &quot;:billId&quot;,
+  &quot;name&quot;: &quot;Maria&quot;
+}
+</code></pre>
+    <h2>5️⃣ Dividir Itens</h2>
+    <pre><code class="language-bash"># 1. Dividir item entre múltiplos participantes
+POST /divisions/batch
+{
+  &quot;billItemId&quot;: &quot;:itemId&quot;,
+  &quot;divisions&quot;: [
+    {
+      &quot;participantId&quot;: &quot;:joaoId&quot;,
+      &quot;shareAmount&quot;: 4.00
+    },
+    {
+      &quot;participantId&quot;: &quot;:mariaId&quot;,
+      &quot;shareAmount&quot;: 4.00
+    }
+  ]
+}
+
+# 2. Item individual
+POST /divisions
+{
+  &quot;billItemId&quot;: &quot;:item2Id&quot;,
+  &quot;participantId&quot;: &quot;:joaoId&quot;,
+  &quot;shareAmount&quot;: 12.00
+}
+</code></pre>
+    <h2>6️⃣ Adicionar Taxas</h2>
+    <pre><code class="language-bash"># 1. Taxa de serviço (10%)
+POST /fees
+{
+  &quot;billId&quot;: &quot;:billId&quot;,
+  &quot;type&quot;: &quot;SERVICE_PERCENTAGE&quot;,
+  &quot;description&quot;: &quot;Taxa de Serviço&quot;,
+  &quot;value&quot;: 10.00
+}
+
+# 2. Couvert fixo
+POST /fees
+{
+  &quot;billId&quot;: &quot;:billId&quot;,
+  &quot;type&quot;: &quot;COVER_CHARGE&quot;,
+  &quot;description&quot;: &quot;Couvert Artístico&quot;,
+  &quot;value&quot;: 15.00
+}
+</code></pre>
+    <h2>7️⃣ Finalizar e Ver Resumo</h2>
+    <pre><code class="language-bash"># 1. Marcar como completa
+PATCH /bills/:billId
+{
+  &quot;status&quot;: &quot;COMPLETED&quot;
+}
+
+# 2. Ver resumo da divisão
+GET /bills/:billId/summary
+# → Retorna quanto cada pessoa deve pagar
+</code></pre>
+    <hr />
+    <h1>🛡️ Códigos de Status HTTP</h1>
+    <table>
+      <thead>
+        <tr>
+          <th>Código</th>
+          <th>Significado</th>
+          <th>Quando usar</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>200</td>
+          <td>OK</td>
+          <td>Requisição bem-sucedida (GET, PATCH, DELETE)</td>
+        </tr>
+        <tr>
+          <td>201</td>
+          <td>Created</td>
+          <td>Recurso criado com sucesso (POST)</td>
+        </tr>
+        <tr>
+          <td>400</td>
+          <td>Bad Request</td>
+          <td>Validação falhou, dados inválidos</td>
+        </tr>
+        <tr>
+          <td>401</td>
+          <td>Unauthorized</td>
+          <td>Token ausente ou inválido</td>
+        </tr>
+        <tr>
+          <td>403</td>
+          <td>Forbidden</td>
+          <td>Usuário não tem permissão</td>
+        </tr>
+        <tr>
+          <td>404</td>
+          <td>Not Found</td>
+          <td>Recurso não encontrado</td>
+        </tr>
+        <tr>
+          <td>409</td>
+          <td>Conflict</td>
+          <td>Conflito (ex: email já existe)</td>
+        </tr>
+        <tr>
+          <td>500</td>
+          <td>Internal Server Error</td>
+          <td>Erro interno do servidor</td>
+        </tr>
+      </tbody>
+    </table>
+    <hr />
+    <h1>🔒 Segurança</h1>
+    <h2>Rate Limiting</h2>
+    <p><strong>Limites gerais:</strong></p>
+    <ul>
+      <li>10 requisições/minuto para endpoints gerais</li>
+      <li>
+        3 requisições/minuto para <code>/auth/login</code> (proteção brute
+        force)
+      </li>
+      <li>5 requisições/minuto para <code>/auth/register</code></li>
+    </ul>
+    <p><strong>Header de resposta quando limite excedido:</strong></p>
+    <pre><code class="language-http">HTTP/1.1 429 Too Many Requests
+Retry-After: 60
+
+{
+  &quot;statusCode&quot;: 429,
+  &quot;message&quot;: &quot;ThrottlerException: Too Many Requests&quot;
+}
+</code></pre>
+    <h2>Expiração de Tokens</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Token</th>
+          <th>Validade</th>
+          <th>Uso</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Access Token</td>
+          <td>15 minutos</td>
+          <td>Requisições autenticadas</td>
+        </tr>
+        <tr>
+          <td>Refresh Token</td>
+          <td>7 dias</td>
+          <td>Renovar access token</td>
+        </tr>
+      </tbody>
+    </table>
+    <h2>Permissões</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Endpoint</th>
+          <th>USER</th>
+          <th>ADMIN</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>/auth/*</td>
+          <td>✅</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td>/users (listar/criar/editar)</td>
+          <td>❌</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td>/users/me/*</td>
+          <td>✅</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td>/bills/*</td>
+          <td>✅ (próprias)</td>
+          <td>✅ (todas)</td>
+        </tr>
+        <tr>
+          <td>/bill-items/*</td>
+          <td>✅</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td>/participants/*</td>
+          <td>✅</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td>/divisions/*</td>
+          <td>✅</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td>/fees/*</td>
+          <td>✅</td>
+          <td>✅</td>
+        </tr>
+      </tbody>
+    </table>
+    <hr />
+    <h1>📊 Exemplos de Integração</h1>
+    <h2>cURL</h2>
+    <pre><code class="language-bash"># Login
+TOKEN=$(curl -s -X POST http://localhost:3000/auth/login \
+  -H &quot;Content-Type: application/json&quot; \
+  -d &#39;{&quot;email&quot;:&quot;joao@exemplo.com&quot;,&quot;password&quot;:&quot;Senha@123&quot;}&#39; \
+  | jq -r &#39;.accessToken&#39;)
+
+# Upload de conta
+curl -X POST http://localhost:3000/bills \
+  -H &quot;Authorization: Bearer $TOKEN&quot; \
+  -F &quot;image=@conta.jpg&quot; \
+  -F &quot;establishmentName=Restaurante X&quot;
+
+# Listar contas
+curl http://localhost:3000/bills \
+  -H &quot;Authorization: Bearer $TOKEN&quot;
+</code></pre>
+    <h2>JavaScript (Fetch)</h2>
+    <pre><code class="language-javascript">// Login
+const loginResponse = await fetch(&#39;http://localhost:3000/auth/login&#39;, {
+  method: &#39;POST&#39;,
+  headers: { &#39;Content-Type&#39;: &#39;application/json&#39; },
+  body: JSON.stringify({
+    email: &#39;joao@exemplo.com&#39;,
+    password: &#39;Senha@123&#39;
+  })
+});
+
+const { accessToken } = await loginResponse.json();
+
+// Upload de conta
+const formData = new FormData();
+formData.append(&#39;image&#39;, fileInput.files[0]);
+formData.append(&#39;establishmentName&#39;, &#39;Restaurante X&#39;);
+
+const billResponse = await fetch(&#39;http://localhost:3000/bills&#39;, {
+  method: &#39;POST&#39;,
+  headers: { &#39;Authorization&#39;: `Bearer ${accessToken}` },
+  body: formData
+});
+
+const bill = await billResponse.json();
+console.log(&#39;Conta criada:&#39;, bill);
+</code></pre>
+    <h2>Axios (React Native)</h2>
+    <pre><code class="language-javascript">import axios from &#39;axios&#39;;
+
+const api = axios.create({
+  baseURL: &#39;http://192.168.1.100:3000&#39;,
+  timeout: 30000,
+});
+
+// Interceptor para adicionar token
+api.interceptors.request.use((config) =&gt; {
+  const token = getStoredToken(); // AsyncStorage
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Upload de conta
+const uploadBill = async (imageUri, establishmentName) =&gt; {
+  const formData = new FormData();
+  formData.append(&#39;image&#39;, {
+    uri: imageUri,
+    type: &#39;image/jpeg&#39;,
+    name: &#39;conta.jpg&#39;,
+  });
+  formData.append(&#39;establishmentName&#39;, establishmentName);
+
+  const response = await api.post(&#39;/bills&#39;, formData, {
+    headers: { &#39;Content-Type&#39;: &#39;multipart/form-data&#39; },
+  });
+
+  return response.data;
+};
+</code></pre>
+    <hr />
+    <h1>📝 Notas Importantes</h1>
+    <ol>
+      <li>
+        <p><strong>Upload de Imagens:</strong></p>
+        <ul>
+          <li>Máximo 10MB por arquivo</li>
+          <li>Formatos: JPEG, PNG, WebP</li>
+          <li>Processamento OCR é assíncrono</li>
+        </ul>
+      </li>
+      <li>
+        <p><strong>Divisões:</strong></p>
+        <ul>
+          <li>Soma das divisões deve ser ≤ valor total do item</li>
+          <li>Cada participante pode dividir um item apenas uma vez</li>
+          <li>
+            Divisões são deletadas automaticamente se participante for removido
+          </li>
+        </ul>
+      </li>
+      <li>
+        <p><strong>Taxas:</strong></p>
+        <ul>
+          <li>
+            <code>SERVICE_PERCENTAGE</code>: valor é aplicado sobre o total dos
+            itens
+          </li>
+          <li>
+            <code>SERVICE_FIXED</code> e <code>COVER_CHARGE</code>: valor fixo
+            distribuído entre participantes
+          </li>
+        </ul>
+      </li>
+      <li>
+        <p><strong>Status da Conta:</strong></p>
+        <ul>
+          <li>
+            <code>PENDING_OCR</code> → <code>REVIEWING</code> →
+            <code>DIVIDING</code> → <code>COMPLETED</code>
+          </li>
+          <li>Fluxo linear, não pode voltar para status anterior</li>
+        </ul>
+      </li>
+      <li>
+        <p><strong>URLs do S3:</strong></p>
+        <ul>
+          <li>Expiram em 1 hora</li>
+          <li>API regenera automaticamente quando buscar conta</li>
+          <li>Não armazenar URL no app, sempre buscar fresh da API</li>
+        </ul>
+      </li>
+    </ol>
+  </body>
 </html>
