@@ -23,7 +23,7 @@ A documentação completa do projeto pode ser acessada através deste **[link](h
 ### Mobile (Android)
 
 <p align="center">
-  <img src="https://docs.expo.dev/static/images/logo.svg" width="120" alt="Expo Logo" />
+  <img src="https://reactnative.dev/img/header_logo.svg" alt="React Native Logo" width="120" />
 </p>
 
 - **Expo SDK 52+** (Managed Workflow)
