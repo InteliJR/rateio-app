@@ -1,0 +1,59 @@
+services:
+  # Banco de Dados PostgreSQL (apenas para desenvolvimento)
+  db:
+    image: postgres:16-alpine
+    container_name: gw-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-gw_dev}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      # Volume nomeado para persistência local
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - gw-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # API Backend (NestJS)
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development
+    container_name: gw-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@db:5432/${DB_NAME:-gw_dev}
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    volumes:
+      # Hot reload em desenvolvimento
+      - ./backend/src:/app/src
+      - ./backend/prisma:/app/prisma
+      # Proteger node_modules do container
+      - backend_node_modules:/app/node_modules
+    networks:
+      - gw-network
+    depends_on:
+      db:
+        condition: service_healthy
+    command: sh -c "npx prisma generate && npx prisma migrate deploy && npm run start:dev"
+
+volumes:
+  postgres_data:
+    driver: local
+  backend_node_modules:
+    driver: local
+
+networks:
+  gw-network:
+    driver: bridge
