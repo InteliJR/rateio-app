@@ -17,6 +17,7 @@ import { BillsService } from './bills.service';
 import { CreateBillDto } from './dto/create-bill.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { FinalizeBillDto } from './dto/finalize-bill.dto';
 
 @Controller('bills')
 @UseGuards(JwtAuthGuard)
@@ -74,5 +75,10 @@ export class BillsController {
   @Delete(':id')
   remove(@Param('id') id: string, @Request() req: any) {
     return this.billsService.remove(id, req.user.id);
+  }
+
+  @Post(':id/finalize')
+  finalize(@Param('id') id: string, @Body() finalizeBillDto: FinalizeBillDto) {
+    return this.billsService.finalize(id, finalizeBillDto);
   }
 }

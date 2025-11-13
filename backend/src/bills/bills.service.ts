@@ -10,6 +10,7 @@ import { OcrService } from '../ocr/ocr.service';
 import { CreateBillDto } from './dto/create-bill.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
 import { BillStatus } from '@prisma/client';
+import { FinalizeBillDto } from './dto/finalize-bill.dto';
 
 @Injectable()
 export class BillsService {
@@ -232,5 +233,26 @@ export class BillsService {
     });
 
     return { message: 'Conta deletada com sucesso' };
+  }
+
+  async finalize(id: string, finalizeBillDto: FinalizeBillDto) {
+    const bill = await this.prisma.bill.findUnique({
+      where: { id },
+    });
+
+    if (!bill) {
+      throw new NotFoundException('Conta não encontrada');
+    }
+
+    if (
+      !(
+        bill.status === BillStatus.DIVIDING ||
+        bill.status === BillStatus.REVIEWING
+      )
+    ) {
+      throw new BadRequestException(
+        'Conta não está em um estado válido para finalização',
+      );
+    }
   }
 }
