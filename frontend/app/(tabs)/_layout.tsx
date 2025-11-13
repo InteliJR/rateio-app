@@ -9,7 +9,7 @@ export default function TabsLayout() {
         tabBarIcon: ({ color }) => <MaterialCommunityIcons name="camera-outline" size={24} color={color} />,
         tabBarLabel: 'Scanner'
       }} />
-      <Tabs.Screen name="accounts" options={{
+      <Tabs.Screen name="bills" options={{
         tabBarIcon: ({ color }) => <MaterialCommunityIcons name="invoice-text-clock-outline" size={24} color={color} />,
         tabBarLabel: 'Contas'
       }} />
