@@ -5,7 +5,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 export default function TabsLayout() {
   return (
     <Tabs screenOptions={{ headerShown: false, tabBarActiveTintColor: '#000', tabBarInactiveTintColor: '#0009' }}>
-      <Tabs.Screen name="scanner" options={{
+      <Tabs.Screen name="index" options={{
         tabBarIcon: ({ color }) => <MaterialCommunityIcons name="camera-outline" size={24} color={color} />,
         tabBarLabel: 'Scanner'
       }} />
