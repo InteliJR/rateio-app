@@ -30,7 +30,11 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "expo-camera",
+        {
+          "cameraPermission": "Permitir acesso à câmera para fotografar contas"
+        }
     ],
     "experiments": {
       "typedRoutes": true
