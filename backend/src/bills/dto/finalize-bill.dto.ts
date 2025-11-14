@@ -1,9 +1,6 @@
-import { IsNumber, IsString } from 'class-validator';
-
+import { Division, Fee } from '@prisma/client';
 export class FinalizeBillDto {
-  @IsString({ each: true })
-  divisions: string[];
+  divisions: Division[];
 
-  @IsNumber({})
-  fees: number[];
+  fees: Fee[];
 }

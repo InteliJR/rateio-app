@@ -235,7 +235,7 @@ export class BillsService {
     return { message: 'Conta deletada com sucesso' };
   }
 
-  async finalize(id: string, finalizeBillDto: FinalizeBillDto) {
+  async validateFinalize(id: string, finalizeBillDto: FinalizeBillDto) {
     const bill = await this.prisma.bill.findUnique({
       where: { id },
     });
@@ -243,6 +243,11 @@ export class BillsService {
     if (!bill) {
       throw new NotFoundException('Conta não encontrada');
     }
+
+    // TODO Validar se a conta pertence ao usuário
+    /* if (bill.userId !== finalizeBillDto.userId) {
+      throw new ForbiddenException('Você não tem acesso a esta conta');
+    } */
 
     if (
       !(
@@ -253,6 +258,60 @@ export class BillsService {
       throw new BadRequestException(
         'Conta não está em um estado válido para finalização',
       );
+    }
+
+    const billItens = await this.prisma.billItem.findMany({
+      where: { billId: id },
+    });
+
+    if (billItens.length === 0) {
+      throw new BadRequestException('Conta não possui itens para finalizar');
+    }
+
+    for (const item of billItens) {
+      const divisions = finalizeBillDto.divisions.filter(
+        (div) => div.billItemId === item.id,
+      );
+
+      if (divisions.length === 0) {
+        throw new BadRequestException(
+          `Item "${item.name}" não possui divisões`,
+        );
+      }
+
+      const divisionSum = divisions.reduce(
+        (acc, div) => acc + Number(div.shareAmount),
+        0,
+      );
+      if (divisionSum !== Number(item.totalPrice)) {
+        throw new BadRequestException(
+          `Soma das divisões para o item "${item.name}" não corresponde ao preço total`,
+        );
+      }
+    }
+  }
+
+  async finalize(id: string, finalizeBillDto: FinalizeBillDto) {
+    await this.validateFinalize(id, finalizeBillDto);
+
+    // Calcular total por participante da conta
+    const participantTotals: Record<string, number> = {};
+    for (const division of finalizeBillDto.divisions) {
+      if (!participantTotals[division.participantId]) {
+        participantTotals[division.participantId] = 0;
+      }
+      participantTotals[division.participantId] += Number(division.shareAmount);
+    }
+
+    // Persistir divisões
+    for (const division of finalizeBillDto.divisions) {
+      await this.prisma.division.create({
+        data: {
+          billItemId: division.billItemId,
+          participantId: division.participantId,
+          shareAmount: division.shareAmount,
+        },
+      });
     }
   }
 }
