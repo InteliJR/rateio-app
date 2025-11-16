@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useRouter } from 'expo-router';
 import {
   View,
   Text,
@@ -10,8 +11,9 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/authStore';
+import Logo from '@/assets/images/logo.svg';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -43,10 +45,11 @@ export default function LoginScreen() {
       style={styles.container}
     >
       <View style={styles.content}>
-        <Text style={styles.title}>Rateio App</Text>
-        <Text style={styles.subtitle}>Faça login para continuar</Text>
+        <Logo style={styles.logo} />
 
         <View style={styles.form}>
+          <Text style={styles.title}>Login</Text>
+
           <TextInput
             style={styles.input}
             placeholder="Email"
@@ -71,7 +74,11 @@ export default function LoginScreen() {
               onPress={() => setShowPassword(!showPassword)}
               disabled={isLoading}
             >
-              <Text style={styles.eyeIcon}>{showPassword ? '👁️' : '👁️‍🗨️'}</Text>
+              <MaterialIcons
+                name={showPassword ? 'visibility' : 'visibility-off'}
+                size={20}
+                color="#333"
+              />
             </TouchableOpacity>
           </View>
 
@@ -81,18 +88,21 @@ export default function LoginScreen() {
             disabled={isLoading}
           >
             {isLoading ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color="#FFFF00" />
             ) : (
               <Text style={styles.buttonText}>Entrar</Text>
             )}
           </TouchableOpacity>
 
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Credenciais de teste:</Text>
-            <Text style={styles.credentialText}>Email: admin@rateio.com</Text>
-            <Text style={styles.credentialText}>Senha: Admin@123456</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 16, alignItems: 'center' }}>
+            <Text style={{ color: '#333' }}>Não possui uma conta? </Text>
+            <TouchableOpacity onPress={() => router.push('/register')} disabled={isLoading}>
+              <Text style={{ color: '#81007F', fontWeight: 'bold' }}>Cadastre-se</Text>
+            </TouchableOpacity>
           </View>
         </View>
+
+        <View style={styles.footer} />
       </View>
     </KeyboardAvoidingView>
   );
@@ -101,25 +111,23 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#fff',
   },
   content: {
     flex: 1,
     justifyContent: 'center',
     paddingHorizontal: 24,
   },
+  logo: {
+    alignSelf: 'center',
+    marginBottom: 24,
+  },
   title: {
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#333',
     textAlign: 'center',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: 24,
   },
   form: {
     width: '100%',
@@ -128,8 +136,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 8,
-    marginBottom: 16,
+    borderRadius: 32,
+    marginBottom: 24,
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#ddd',
@@ -138,7 +146,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fff',
-    borderRadius: 8,
+    borderRadius: 32,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#ddd',
@@ -157,9 +165,9 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   button: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#81007F',
     paddingVertical: 14,
-    borderRadius: 8,
+    borderRadius: 32,
     alignItems: 'center',
     marginTop: 8,
   },
@@ -167,25 +175,11 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   buttonText: {
-    color: '#fff',
+    color: '#FFFF00',
     fontSize: 16,
     fontWeight: '600',
   },
   footer: {
-    marginTop: 24,
-    padding: 16,
-    backgroundColor: '#e3f2fd',
-    borderRadius: 8,
-  },
-  footerText: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
-    fontWeight: '600',
-  },
-  credentialText: {
-    fontSize: 13,
-    color: '#555',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    height: '20%',
   },
 });
