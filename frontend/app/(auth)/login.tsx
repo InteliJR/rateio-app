@@ -11,30 +11,41 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useAuthStore } from '../../store/authStore';
+import { useAuthStore } from '@/store/authStore';
 import Logo from '@/assets/images/logo.svg';
+import { z } from 'zod';
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const { login, isLoading } = useAuthStore();
   const router = useRouter();
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert('Erro', 'Preencha todos os campos');
-      return;
-    }
+  const loginSchema = z.object({
+    email: z
+      .string()
+      .nonempty('Email obrigatório')
+      .email('Email inválido')
+      .refine((val) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val), 'Formato de email inválido'),
+    password: z.string().nonempty('Senha obrigatória').min(6, 'Mínimo de 6 caracteres'),
+  });
 
+  type LoginFormData = z.infer<typeof loginSchema>;
+
+  const { control, handleSubmit, formState: { errors, isValid } } = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: '', password: '' },
+    mode: 'onChange',
+  });
+
+  const onSubmit = async (data: LoginFormData) => {
     try {
-      await login(email, password);
+      await login(data.email, data.password);
       router.replace('/(tabs)');
     } catch (error: any) {
-      const message =
-        error.response?.data?.message ||
-        'Erro ao fazer login. Verifique suas credenciais.';
+      const message = error.response?.data?.message || 'Erro ao fazer login. Verifique suas credenciais.';
       Alert.alert('Erro', message);
     }
   };
@@ -50,24 +61,37 @@ export default function LoginScreen() {
         <View style={styles.form}>
           <Text style={styles.title}>Login</Text>
 
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            editable={!isLoading}
+          <Controller
+            control={control}
+            name="email"
+            render={({ field: { onChange, value } }) => (
+              <TextInput
+                style={[styles.input, errors.email && styles.inputError]}
+                placeholder="Email"
+                value={value}
+                onChangeText={onChange}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                editable={!isLoading}
+              />
+            )}
           />
+          {errors.email && <Text style={styles.errorText}>{errors.email.message}</Text>}
 
-          <View style={styles.passwordContainer}>
-            <TextInput
-              style={styles.passwordInput}
-              placeholder="Senha"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              editable={!isLoading}
+          <View style={[styles.passwordContainer, errors.password && styles.inputError]}>
+            <Controller
+              control={control}
+              name="password"
+              render={({ field: { onChange, value } }) => (
+                <TextInput
+                  style={[styles.passwordInput]}
+                  placeholder="Senha"
+                  value={value}
+                  onChangeText={onChange}
+                  secureTextEntry={!showPassword}
+                  editable={!isLoading}
+                />
+              )}
             />
             <TouchableOpacity
               style={styles.eyeButton}
@@ -81,11 +105,12 @@ export default function LoginScreen() {
               />
             </TouchableOpacity>
           </View>
+          {errors.password && <Text style={styles.errorText}>{errors.password.message}</Text>}
 
           <TouchableOpacity
-            style={[styles.button, isLoading && styles.buttonDisabled]}
-            onPress={handleLogin}
-            disabled={isLoading}
+            style={[styles.button, (isLoading || !isValid) && styles.buttonDisabled]}
+            onPress={handleSubmit(onSubmit)}
+            disabled={isLoading || !isValid}
           >
             {isLoading ? (
               <ActivityIndicator color="#FFFF00" />
@@ -142,6 +167,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ddd',
   },
+  inputError: {
+    borderColor: '#d00',
+  },
+  errorText: {
+    color: '#d00',
+    marginTop: -16,
+    marginBottom: 16,
+    marginLeft: 8,
+    fontSize: 12,
+  },
   passwordContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -180,6 +215,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   footer: {
-    height: '20%',
+    height: '15%',
   },
 });
