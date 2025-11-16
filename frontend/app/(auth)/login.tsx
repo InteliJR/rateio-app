@@ -20,16 +20,19 @@ import { z } from 'zod';
 
 export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
   const { login, isLoading } = useAuthStore();
   const router = useRouter();
 
   const loginSchema = z.object({
     email: z
       .string()
-      .nonempty('Email obrigatório')
-      .email('Email inválido')
-      .refine((val) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val), 'Formato de email inválido'),
-    password: z.string().nonempty('Senha obrigatória').min(6, 'Mínimo de 6 caracteres'),
+      .nonempty('Por favor, informe seu email.')
+      .email('Digite um email válido (ex: usuario@dominio.com).'),
+    password: z
+      .string()
+      .nonempty('Por favor, informe sua senha.')
+      .min(6, 'A senha precisa ter pelo menos 6 caracteres.'),
   });
 
   type LoginFormData = z.infer<typeof loginSchema>;
@@ -41,14 +44,48 @@ export default function LoginScreen() {
   });
 
   const onSubmit = async (data: LoginFormData) => {
+    setServerError(null);
     try {
       await login(data.email, data.password);
       router.replace('/(tabs)');
     } catch (error: any) {
-      const message = error.response?.data?.message || 'Erro ao fazer login. Verifique suas credenciais.';
-      Alert.alert('Erro', message);
+      const message = getApiErrorMessage(error);
+      setServerError(message);
     }
   };
+
+  function getApiErrorMessage(err: any): string {
+    const data = err?.response?.data;
+    if (data) {
+      // Lista de erros como array
+      if (Array.isArray(data.errors)) {
+        const arr = data.errors.map((e: any) => e?.message || String(e)).filter(Boolean);
+        if (arr.length) return arr.join('\n');
+      }
+      // Objeto de erros campo->mensagem
+      if (data.errors && typeof data.errors === 'object' && !Array.isArray(data.errors)) {
+        const msgs = Object.values(data.errors).map((e: any) => (typeof e === 'string' ? e : e?.message)).filter(Boolean) as string[];
+        if (msgs.length) return msgs.join('\n');
+      }
+      // Códigos específicos
+      switch (data.code) {
+        case 'INVALID_CREDENTIALS':
+          return 'Email ou senha incorretos.';
+        case 'USER_NOT_FOUND':
+          return 'Usuário não encontrado.';
+        case 'ACCOUNT_LOCKED':
+          return 'Conta bloqueada temporariamente. Tente mais tarde.';
+        case 'USER_INACTIVE':
+          return 'Conta ainda não ativada. Verifique seu email.';
+        case 'TOO_MANY_ATTEMPTS':
+          return 'Muitas tentativas falhas. Aguarde alguns minutos.';
+      }
+      if (typeof data.message === 'string' && data.message.trim()) {
+        return data.message;
+      }
+    }
+    return 'Não foi possível fazer login. Tente novamente.';
+  }
 
   return (
     <KeyboardAvoidingView
@@ -60,6 +97,10 @@ export default function LoginScreen() {
 
         <View style={styles.form}>
           <Text style={styles.title}>Login</Text>
+
+          {serverError && (
+            <Text style={styles.serverErrorText}>{serverError}</Text>
+          )}
 
           <Controller
             control={control}
@@ -176,6 +217,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     marginLeft: 8,
     fontSize: 12,
+  },
+  serverErrorText: {
+    color: '#d00',
+    marginBottom: 16,
+    textAlign: 'center',
+    fontSize: 13,
+    fontWeight: '500',
   },
   passwordContainer: {
     flexDirection: 'row',
