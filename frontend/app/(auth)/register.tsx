@@ -18,7 +18,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 const registerSchema = z.object({
-  name: z.string().nonempty('Informe seu nome.').min(2, 'Nome muito curto.'),
+  name: z.string().nonempty('Informe seu nome.').min(3, 'Nome muito curto.'),
   email: z
     .string()
     .nonempty('Informe seu email.')
