@@ -34,6 +34,25 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
+  register: async (name: string, email: string, password: string) => {
+    set({ isLoading: true });
+    try {
+      const response = await authService.register({ name, email, password });
+      await SecureStore.setItemAsync("accessToken", response.accessToken);
+      await SecureStore.setItemAsync("refreshToken", response.refreshToken);
+      set({
+        user: response.user,
+        accessToken: response.accessToken,
+        refreshToken: response.refreshToken,
+        isAuthenticated: true,
+        isLoading: false,
+      });
+    } catch (error) {
+      set({ isLoading: false });
+      throw error;
+    }
+  },
+
   logout: async () => {
     try {
       await authService.logout();

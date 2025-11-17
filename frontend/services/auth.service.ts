@@ -1,7 +1,7 @@
 // mobile/services/auth.service.ts
 
 import { api } from "./api.service";
-import { LoginRequest, LoginResponse } from "../types/auth.types";
+import { LoginRequest, LoginResponse, RegisterRequest, RegisterResponse } from "../types/auth.types";
 
 export const authService = {
   async login(data: LoginRequest): Promise<LoginResponse> {
@@ -11,6 +11,11 @@ export const authService = {
 
   async getProfile() {
     const response = await api.get("/auth/me");
+    return response.data;
+  },
+
+  async register(data: RegisterRequest): Promise<RegisterResponse> {
+    const response = await api.post<RegisterResponse>("/auth/register", data);
     return response.data;
   },
 
