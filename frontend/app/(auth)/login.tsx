@@ -161,7 +161,7 @@ export default function LoginScreen() {
 
         <View style={styles.linkRow}>
           <Text style={{ color: '#333' }}>Não possui uma conta? </Text>
-          <TouchableOpacity onPress={() => router.push('/register')} disabled={isLoading}>
+          <TouchableOpacity onPress={() => router.push('/(auth)/register')} disabled={isLoading}>
             <Text style={{ color: '#81007F', fontWeight: 'bold' }}>Cadastre-se</Text>
           </TouchableOpacity>
         </View>

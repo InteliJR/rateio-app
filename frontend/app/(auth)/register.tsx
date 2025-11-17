@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import Logo from '@/assets/images/logo.svg';
@@ -51,8 +52,18 @@ export default function RegisterScreen() {
   const onSubmit = async (data: RegisterFormData) => {
     setServerError(null);
     try {
-      await registerUser(data.name, data.email, data.password);
-      router.replace('/(tabs)');
+      const response = await registerUser(data.name, data.email, data.password);
+      Alert.alert(
+        'Cadastro realizado',
+        response?.message ||
+          'Conta criada com sucesso. Aguarde a aprova��o de um administrador para acessar.',
+        [
+          {
+            text: 'Ir para login',
+            onPress: () => router.replace('/(auth)/login'),
+          },
+        ],
+      );
     } catch (error: any) {
       setServerError(getApiErrorMessage(error));
     }
@@ -189,7 +200,7 @@ export default function RegisterScreen() {
 
         <View style={styles.linkRow}>
           <Text style={{ color: '#333' }}>Já possui conta? </Text>
-          <TouchableOpacity onPress={() => router.push('/login')} disabled={isLoading}>
+          <TouchableOpacity onPress={() => router.push('/(auth)/login')} disabled={isLoading}>
             <Text style={{ color: '#81007F', fontWeight: 'bold' }}>Entrar</Text>
           </TouchableOpacity>
         </View>

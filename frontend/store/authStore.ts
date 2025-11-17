@@ -38,15 +38,14 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isLoading: true });
     try {
       const response = await authService.register({ name, email, password });
-      await SecureStore.setItemAsync("accessToken", response.accessToken);
-      await SecureStore.setItemAsync("refreshToken", response.refreshToken);
       set({
-        user: response.user,
-        accessToken: response.accessToken,
-        refreshToken: response.refreshToken,
-        isAuthenticated: true,
+        user: null,
+        accessToken: null,
+        refreshToken: null,
+        isAuthenticated: false,
         isLoading: false,
       });
+      return response;
     } catch (error) {
       set({ isLoading: false });
       throw error;
