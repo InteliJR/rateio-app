@@ -6,7 +6,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
@@ -93,9 +92,8 @@ export default function LoginScreen() {
       style={styles.container}
     >
       <View style={styles.content}>
-        <Logo style={styles.logo} />
-
-        <View style={styles.form}>
+        <View style={styles.stack}>
+          <Logo style={styles.logo} />
           <Text style={styles.title}>Login</Text>
 
           {serverError && (
@@ -159,13 +157,13 @@ export default function LoginScreen() {
               <Text style={styles.buttonText}>Entrar</Text>
             )}
           </TouchableOpacity>
+        </View>
 
-          <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 16, alignItems: 'center' }}>
-            <Text style={{ color: '#333' }}>Não possui uma conta? </Text>
-            <TouchableOpacity onPress={() => router.push('/register')} disabled={isLoading}>
-              <Text style={{ color: '#81007F', fontWeight: 'bold' }}>Cadastre-se</Text>
-            </TouchableOpacity>
-          </View>
+        <View style={styles.linkRow}>
+          <Text style={{ color: '#333' }}>Não possui uma conta? </Text>
+          <TouchableOpacity onPress={() => router.push('/register')} disabled={isLoading}>
+            <Text style={{ color: '#81007F', fontWeight: 'bold' }}>Cadastre-se</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.footer} />
@@ -184,9 +182,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 24,
   },
+  stack: {
+    width: '100%',
+    gap: 16,
+  },
   logo: {
     alignSelf: 'center',
-    marginBottom: 24,
+    marginBottom: 8,
   },
   title: {
     fontSize: 24,
@@ -203,7 +205,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 32,
-    marginBottom: 24,
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#ddd',
@@ -230,7 +231,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#fff',
     borderRadius: 32,
-    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#ddd',
   },
@@ -262,7 +262,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  linkRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+  },
   footer: {
-    height: '15%',
+    height: '10%',
   },
 });

@@ -193,6 +193,8 @@ export default function RegisterScreen() {
             <Text style={{ color: '#81007F', fontWeight: 'bold' }}>Entrar</Text>
           </TouchableOpacity>
         </View>
+
+        <View style={styles.footer} />
       </View>
     </KeyboardAvoidingView>
   );
@@ -292,5 +294,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 8,
+  },
+  footer: {
+    height: '10%',
   },
 });
