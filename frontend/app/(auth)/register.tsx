@@ -27,7 +27,7 @@ const registerSchema = z.object({
   password: z
     .string()
     .nonempty('Informe uma senha.')
-    .min(6, 'A senha precisa ter ao menos 6 caracteres.'),
+    .min(8, 'A senha precisa ter ao menos 8 caracteres.'),
   confirmPassword: z.string().nonempty('Confirme sua senha.'),
 }).refine((data) => data.password === data.confirmPassword, {
   path: ['confirmPassword'],

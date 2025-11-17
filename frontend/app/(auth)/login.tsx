@@ -31,7 +31,7 @@ export default function LoginScreen() {
     password: z
       .string()
       .nonempty('Por favor, informe sua senha.')
-      .min(6, 'A senha precisa ter pelo menos 6 caracteres.'),
+      .min(8, 'A senha precisa ter pelo menos 8 caracteres.'),
   });
 
   type LoginFormData = z.infer<typeof loginSchema>;
