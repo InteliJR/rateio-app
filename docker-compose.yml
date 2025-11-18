@@ -33,6 +33,10 @@ services:
       NODE_ENV: development
       DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@db:5432/${DB_NAME:-rateio_dev}
       PORT: 3000
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+    env_file:
+      - ./backend/.env
     ports:
       - "3000:3000"
     volumes:
