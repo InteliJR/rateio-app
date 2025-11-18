@@ -291,7 +291,8 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
     } catch (error) {
       if (error instanceof z.ZodError) {
         // Log detalhado dos erros de validação
-        const errors = error.errors.map((err) => ({
+        const zodError = error as z.ZodError;
+        const errors = zodError.issues.map((err) => ({
           path: err.path.join('.'),
           message: err.message,
           code: err.code,
@@ -462,7 +463,7 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
    * Loga erros de validação com detalhes
    */
   private logValidationError(error: z.ZodError, imageUrl: string): void {
-    const errors = error.errors.map((err) => ({
+    const errors = error.issues.map((err) => ({
       path: err.path.join('.'),
       message: err.message,
       code: err.code,
