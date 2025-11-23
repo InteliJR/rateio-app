@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { OcrService } from '../ocr/ocr.service';
+import { OcrResultDto } from '../ocr/dto/ocr-result.dto';
 import { CreateBillDto } from './dto/create-bill.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
 import { BillStatus } from '@prisma/client';
@@ -72,7 +73,7 @@ export class BillsService {
       const ocrResult = await this.ocr.processImage(imageUrl);
 
       // 2. Validar resultado
-      if (!this.ocr.validateOcrResult(ocrResult)) {
+      if (!OcrResultDto.validateOcrResult(ocrResult)) {
         await this.prisma.bill.update({
           where: { id: billId },
           data: {

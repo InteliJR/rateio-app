@@ -5,60 +5,16 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import OpenAI, { APIError, APIConnectionError, APIConnectionTimeoutError } from 'openai';
-import { z } from 'zod';
+import { ValidationError } from 'class-validator';
+import { OcrResultDto, OcrResult } from './dto/ocr-result.dto';
 
-export interface OcrResult {
-  rawText: string;
-  items: Array<{
-    name: string;
-    quantity: number;
-    unitPrice: number;
-    totalPrice: number;
-  }>;
-  totalAmount?: number;
-  establishmentName?: string;
-}
-
-// Schema de validação Zod para resposta da OpenAI
-const OpenAiResponseSchema = z.object({
-  establishmentName: z.string().optional(),
-  items: z.array(
-    z.object({
-      name: z.string().min(1, 'Nome do item é obrigatório'),
-      quantity: z.number().int().positive().default(1),
-      unitPrice: z.number().nonnegative(),
-      totalPrice: z.number().nonnegative(),
-    }),
-  ).min(1, 'Pelo menos um item é obrigatório'),
-  totalAmount: z.number().nonnegative().optional(),
-  subtotal: z.number().nonnegative().optional(),
-  taxes: z
-    .array(
-      z.object({
-        type: z.enum(['SERVICE', 'COVER_CHARGE', 'OTHER']).optional(),
-        description: z.string().optional(),
-        value: z.number().nonnegative(),
-        percentage: z.number().nonnegative().nullable().optional(),
-      }),
-    )
-    .optional(),
-  discounts: z
-    .array(
-      z.object({
-        description: z.string().optional(),
-        value: z.number().nonnegative(),
-      }),
-    )
-    .optional(),
-  currency: z.string().default('BRL'),
-});
-
-type OpenAiResponse = z.infer<typeof OpenAiResponseSchema>;
 
 @Injectable()
 export class OcrService {
   private openaiClient: OpenAI;
   private readonly model: string;
+  private readonly maxRetries = 3;
+  private readonly baseDelayMs = 1000;
 
   constructor() {
     // Validar variáveis de ambiente obrigatórias
@@ -82,29 +38,34 @@ export class OcrService {
    */
   async processImage(imageUrl: string): Promise<OcrResult> {
     try {
-      // 1. Fazer OCR da imagem
-      const response = await this.openaiClient.chat.completions.create({
-        model: this.model,
-        messages: [
-          {
-            role: 'user',
-            content: [
+      // 1. Fazer OCR da imagem com retry
+      const response = await this.retryWithBackoff(
+        async () => {
+          return await this.openaiClient.chat.completions.create({
+            model: this.model,
+            messages: [
               {
-                type: 'text',
-                text: this.getStructuredPrompt(),
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: imageUrl,
-                },
+                role: 'user',
+                content: [
+                  {
+                    type: 'text',
+                    text: this.getStructuredPrompt(),
+                  },
+                  {
+                    type: 'image_url',
+                    image_url: {
+                      url: imageUrl,
+                    },
+                  },
+                ],
               },
             ],
-          },
-        ],
-        response_format: { type: 'json_object' },
-        max_tokens: 2000,
-      });
+            response_format: { type: 'json_object' },
+            max_tokens: 2000,
+          });
+        },
+        imageUrl,
+      );
 
       const responseContent = response.choices[0]?.message?.content || '';
 
@@ -115,7 +76,7 @@ export class OcrService {
       // 2. Processar e validar resposta JSON
       try {
         const jsonData = JSON.parse(responseContent);
-        const validatedData = this.validateAndParseResponse(jsonData);
+        const validatedData = await OcrResultDto.fromOpenAiResponse(jsonData);
         const parsedData = this.parseJsonResponse(validatedData, responseContent);
 
         return {
@@ -124,23 +85,53 @@ export class OcrService {
         };
       } catch (error) {
         // Tratar erros de parsing/validação
-        if (error instanceof z.ZodError) {
-          this.logValidationError(error, imageUrl);
-          console.warn('JSON não passou na validação, usando parser de texto como fallback');
-        } else if (error instanceof SyntaxError) {
+        if (error instanceof SyntaxError) {
           this.logError('JSON_INVALID', 'Resposta não é JSON válido', { imageUrl, error }, 'warn');
           console.warn('Resposta não é JSON válido, usando parser de texto como fallback');
+          
+          // Fallback: tenta processar como texto
+          const parsedData = this.parseReceiptText(responseContent);
+          return {
+            rawText: responseContent,
+            ...parsedData,
+          };
+        } else if (Array.isArray(error) && error.length > 0 && error[0] instanceof ValidationError) {
+          this.logValidationError(error, imageUrl);
+          console.warn('JSON não passou na validação, tentando extrair dados mesmo assim...');
+          
+          // Tentar extrair dados do JSON mesmo com validação falhada
+          try {
+            const jsonData = JSON.parse(responseContent);
+            const parsedData = this.parseJsonResponseUnvalidated(jsonData, responseContent);
+            
+            // Se conseguiu extrair pelo menos alguns itens, usar esses dados
+            if (parsedData.items && parsedData.items.length > 0) {
+              console.warn('Dados extraídos do JSON apesar da validação falhar. Itens encontrados:', parsedData.items.length);
+              return {
+                rawText: responseContent,
+                ...parsedData,
+              };
+            }
+          } catch (fallbackError) {
+            console.warn('Não foi possível extrair dados do JSON, usando parser de texto como fallback');
+          }
+          
+          // Fallback final: tenta processar como texto
+          const parsedData = this.parseReceiptText(responseContent);
+          return {
+            rawText: responseContent,
+            ...parsedData,
+          };
         } else {
           this.logError('PARSE_ERROR', 'Erro ao processar resposta da OpenAI', { imageUrl, error });
+          
+          // Fallback: tenta processar como texto
+          const parsedData = this.parseReceiptText(responseContent);
+          return {
+            rawText: responseContent,
+            ...parsedData,
+          };
         }
-
-        // Fallback: tenta processar como texto
-        const parsedData = this.parseReceiptText(responseContent);
-
-        return {
-          rawText: responseContent,
-          ...parsedData,
-        };
       }
     } catch (error) {
       // Capturar e tratar erros específicos da API OpenAI
@@ -282,36 +273,16 @@ JSON esperado:
 Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos fornecidos.`;
   }
 
-  /**
-   * Valida e faz parse da resposta JSON usando Zod
-   */
-  private validateAndParseResponse(jsonData: any): OpenAiResponse {
-    try {
-      return OpenAiResponseSchema.parse(jsonData);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        // Log detalhado dos erros de validação
-        const zodError = error as z.ZodError;
-        const errors = zodError.issues.map((err) => ({
-          path: err.path.join('.'),
-          message: err.message,
-          code: err.code,
-        }));
-        console.error('Erros de validação:', JSON.stringify(errors, null, 2));
-      }
-      throw error;
-    }
-  }
 
   /**
    * Processa resposta JSON validada da OpenAI
-   * Os dados já foram validados pelo Zod, então podemos confiar nos tipos
+   * Os dados já foram validados pelo class-validator, então podemos confiar nos tipos
    */
-  private parseJsonResponse(jsonData: OpenAiResponse, rawText: string): Omit<OcrResult, 'rawText'> {
+  private parseJsonResponse(jsonData: OcrResultDto, rawText: string): Omit<OcrResult, 'rawText'> {
     // Converter itens validados para o formato OcrResult
     const items: OcrResult['items'] = jsonData.items.map((item) => ({
       name: item.name.trim(),
-      quantity: item.quantity,
+      quantity: item.quantity || 1,
       unitPrice: item.unitPrice,
       totalPrice: item.totalPrice,
     }));
@@ -320,6 +291,46 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
       items,
       totalAmount: jsonData.totalAmount,
       establishmentName: jsonData.establishmentName?.trim(),
+    };
+  }
+
+  /**
+   * Processa resposta JSON sem validação rigorosa (fallback quando validação falha)
+   * Tenta extrair dados mesmo quando a validação do DTO falhou
+   */
+  private parseJsonResponseUnvalidated(jsonData: any, rawText: string): Omit<OcrResult, 'rawText'> {
+    const items: OcrResult['items'] = [];
+    
+    // Tentar extrair itens do JSON
+    if (jsonData.items && Array.isArray(jsonData.items)) {
+      for (const item of jsonData.items) {
+        if (item && item.name) {
+          const name = String(item.name).trim();
+          const quantity = item.quantity ? Math.max(1, Math.floor(Number(item.quantity))) : 1;
+          const unitPrice = item.unitPrice ? Math.max(0, Number(item.unitPrice)) : 0;
+          const totalPrice = item.totalPrice ? Math.max(0, Number(item.totalPrice)) : 0;
+          
+          // Só adicionar se tiver nome válido e preço válido
+          if (name.length > 0 && (unitPrice > 0 || totalPrice > 0)) {
+            items.push({
+              name,
+              quantity,
+              unitPrice: unitPrice > 0 ? unitPrice : (totalPrice / quantity),
+              totalPrice: totalPrice > 0 ? totalPrice : (unitPrice * quantity),
+            });
+          }
+        }
+      }
+    }
+
+    // Extrair outros campos
+    const totalAmount = jsonData.totalAmount ? Number(jsonData.totalAmount) : undefined;
+    const establishmentName = jsonData.establishmentName ? String(jsonData.establishmentName).trim() : undefined;
+
+    return {
+      items,
+      totalAmount: totalAmount && totalAmount > 0 ? totalAmount : undefined,
+      establishmentName: establishmentName && establishmentName.length > 0 ? establishmentName : undefined,
     };
   }
 
@@ -379,15 +390,6 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
     };
   }
 
-  /**
-   * Validar resultado do OCR
-   */
-  validateOcrResult(result: OcrResult): boolean {
-    return (
-      result.rawText.length > 10 &&
-      result.items.length > 0
-    );
-  }
 
   /**
    * Trata erros específicos da API OpenAI e retorna exceções apropriadas
@@ -462,19 +464,157 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
   /**
    * Loga erros de validação com detalhes
    */
-  private logValidationError(error: z.ZodError, imageUrl: string): void {
-    const errors = error.issues.map((err) => ({
-      path: err.path.join('.'),
-      message: err.message,
-      code: err.code,
-      ...(err.code === 'invalid_type' && { received: (err as any).received, expected: (err as any).expected }),
-    }));
+  private logValidationError(errors: ValidationError[], imageUrl: string): void {
+    const validationErrors = errors.map((err) => {
+      const error: any = {
+        property: err.property,
+        value: err.value,
+        constraints: err.constraints,
+      };
+
+      if (err.children && err.children.length > 0) {
+        error.children = err.children.map((child) => ({
+          property: child.property,
+          value: child.value,
+          constraints: child.constraints,
+        }));
+      }
+
+      return error;
+    });
+
+    console.error('Erros de validação:', JSON.stringify(validationErrors, null, 2));
 
     this.logError('VALIDATION_ERROR', 'Erro de validação do JSON retornado pela OpenAI', {
       imageUrl,
-      errors,
-      errorCount: errors.length,
+      errors: validationErrors,
+      errorCount: validationErrors.length,
     });
+  }
+
+  /**
+   * Retry logic com backoff exponencial
+   * Tenta executar uma operação até maxRetries vezes com delay exponencial entre tentativas
+   */
+  private async retryWithBackoff<T>(
+    operation: () => Promise<T>,
+    imageUrl: string,
+    attempt: number = 1,
+  ): Promise<T> {
+    try {
+      this.logRetryAttempt(attempt, imageUrl, 'iniciando');
+      const result = await operation();
+      if (attempt > 1) {
+        this.logRetryAttempt(attempt, imageUrl, 'sucesso');
+      }
+      return result;
+    } catch (error) {
+      // Erros que não devem ser retentados (autenticação, requisição inválida)
+      if (this.shouldNotRetry(error)) {
+        throw error;
+      }
+
+      // Se atingiu o máximo de tentativas, lança o erro
+      if (attempt >= this.maxRetries) {
+        this.logRetryAttempt(attempt, imageUrl, 'falhou_apos_todas_tentativas', error);
+        throw error;
+      }
+
+      // Calcula delay exponencial: após tentativa 1 falhar = 1s, após tentativa 2 falhar = 2s
+      const delayMs = this.baseDelayMs * Math.pow(2, attempt - 1);
+      this.logRetryAttempt(attempt, imageUrl, 'falhou_tentando_novamente', error, delayMs);
+
+      // Aguarda antes de tentar novamente
+      await this.sleep(delayMs);
+
+      // Tenta novamente
+      return this.retryWithBackoff(operation, imageUrl, attempt + 1);
+    }
+  }
+
+  /**
+   * Verifica se o erro não deve ser retentado
+   */
+  private shouldNotRetry(error: any): boolean {
+    if (!error) {
+      return false;
+    }
+
+    // Verificar primeiro se tem a propriedade status (funciona para APIError e mocks)
+    // Isso deve vir primeiro porque instanceof pode não funcionar em mocks de teste
+    // Verificar se tem status diretamente na propriedade
+    const status = error.status;
+    if (typeof status === 'number') {
+      if (status === 401 || status === 403 || status === 400) {
+        return true;
+      }
+    }
+
+    // Erros de autenticação (401, 403) não devem ser retentados
+    if (error instanceof APIError) {
+      const apiErrorStatus = error.status;
+      if (apiErrorStatus === 401 || apiErrorStatus === 403 || apiErrorStatus === 400) {
+        return true;
+      }
+    }
+
+    // Verificar também se o erro tem a propriedade code que indica erro de autenticação
+    if (error.code && (error.code === 'unauthorized' || error.code === 'invalid_api_key')) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Aguarda um determinado tempo em milissegundos
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Loga tentativas de retry para monitoramento
+   */
+  private logRetryAttempt(
+    attempt: number,
+    imageUrl: string,
+    status: 'iniciando' | 'sucesso' | 'falhou_tentando_novamente' | 'falhou_apos_todas_tentativas',
+    error?: any,
+    delayMs?: number,
+  ): void {
+    const logData: any = {
+      timestamp: new Date().toISOString(),
+      attempt,
+      maxRetries: this.maxRetries,
+      imageUrl,
+      status,
+    };
+
+    if (error) {
+      logData.error = {
+        message: error instanceof Error ? error.message : String(error),
+        type: error?.constructor?.name,
+        ...(error instanceof APIError && {
+          status: error.status,
+          code: error.code,
+        }),
+      };
+    }
+
+    if (delayMs !== undefined) {
+      logData.nextRetryDelayMs = delayMs;
+    }
+
+    if (status === 'falhou_apos_todas_tentativas') {
+      console.error(`[OCR_RETRY] Tentativa ${attempt}/${this.maxRetries} falhou após todas as tentativas:`, JSON.stringify(logData, null, 2));
+    } else if (status === 'falhou_tentando_novamente') {
+      console.warn(`[OCR_RETRY] Tentativa ${attempt}/${this.maxRetries} falhou, tentando novamente em ${delayMs}ms:`, JSON.stringify(logData, null, 2));
+    } else if (status === 'sucesso' && attempt > 1) {
+      console.log(`[OCR_RETRY] Tentativa ${attempt}/${this.maxRetries} bem-sucedida após retry:`, JSON.stringify(logData, null, 2));
+    } else if (status === 'iniciando' && attempt === 1) {
+      // Não loga a primeira tentativa inicial para não poluir os logs
+    }
   }
 
   /**
