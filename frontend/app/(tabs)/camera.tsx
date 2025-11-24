@@ -16,7 +16,7 @@ import * as ImageManipulator from "expo-image-manipulator";
 import * as FileSystem from "expo-file-system/legacy";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import billService from "../services/bill.service";
+import billService from "../../services/bill.service";
 
 const { width, height } = Dimensions.get("window");
 
