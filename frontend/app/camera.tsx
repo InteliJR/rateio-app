@@ -16,6 +16,7 @@ import * as ImageManipulator from "expo-image-manipulator";
 import * as FileSystem from "expo-file-system/legacy";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import billService from "../services/bill.service";
 
 const { width, height } = Dimensions.get("window");
 
@@ -184,23 +185,23 @@ export default function CameraScreen() {
       // Otimizar imagem antes de processar
       const optimizedImageUri = await optimizeImage(capturedImage);
 
-      // Aqui você pode adicionar a lógica de processamento OCR
-      // Usar optimizedImageUri ao invés de capturedImage
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // Fazer upload da imagem para o servidor
+      const uploadedBill = await billService.uploadBill(optimizedImageUri);
 
-      // Navegar para a próxima tela ou processar a imagem
-      Alert.alert("Sucesso", "Imagem capturada e otimizada com sucesso!", [
+      // Navegar para tela de revisão com os dados da conta
+      Alert.alert("Sucesso", "Conta processada com sucesso!", [
         {
           text: "OK",
-          onPress: () => router.back(),
+          onPress: () => {
+            // Voltar para a tela anterior e passar dados via params se necessário
+            router.back();
+          },
         },
       ]);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao processar imagem:", error);
       const errorMessage =
-        error instanceof Error
-          ? error.message
-          : "Não foi possível processar a imagem";
+        error.message || "Não foi possível processar a imagem";
       Alert.alert("Erro", errorMessage);
     } finally {
       setIsLoading(false);
