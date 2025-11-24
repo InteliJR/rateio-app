@@ -14,7 +14,7 @@ import { useRouter } from "expo-router";
 import { useAuthStore } from "../../../frontend/store/authStore";
 import { api } from "../../../frontend/services/api.service";
 
-export default function HomeScreen() {
+export default function ScannerScreen() {
   const { user, logout } = useAuthStore();
   const router = useRouter();
   const [healthData, setHealthData] = useState<any>(null);
