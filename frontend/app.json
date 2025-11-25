@@ -31,6 +31,18 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Permitir que o $(PRODUCT_NAME) acesse sua câmera para fotografar notas fiscais"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permitir que o $(PRODUCT_NAME) acesse suas fotos"
+        }
+      ],
       "expo-web-browser"
     ],
     "experiments": {
