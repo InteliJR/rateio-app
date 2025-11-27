@@ -85,8 +85,15 @@ export class BillsController {
     return this.billsService.remove(id, req.user.id);
   }
 
+  /**
+   * Finalizar divisão da conta
+   */
   @Post(':id/finalize')
-  finalize(@Param('id') id: string, @Body() finalizeBillDto: FinalizeBillDto) {
-    return this.billsService.finalize(id, finalizeBillDto);
+  finalize(
+    @Param('id') id: string,
+    @Body() finalizeBillDto: FinalizeBillDto,
+    @Request() req: any,
+  ) {
+    return this.billsService.finalize(id, req.user.id, finalizeBillDto);
   }
 }

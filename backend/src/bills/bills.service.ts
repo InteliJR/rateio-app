@@ -369,7 +369,11 @@ export class BillsService {
     return { message: 'Conta deletada com sucesso' };
   }
 
-  async validateFinalize(id: string, finalizeBillDto: FinalizeBillDto) {
+  async validateFinalize(
+    id: string,
+    userId: string,
+    finalizeBillDto: FinalizeBillDto,
+  ) {
     const bill = await this.prisma.bill.findUnique({
       where: { id },
     });
@@ -378,10 +382,10 @@ export class BillsService {
       throw new NotFoundException('Conta não encontrada');
     }
 
-    // TODO Validar se a conta pertence ao usuário
-    /* if (bill.userId !== finalizeBillDto.userId) {
+    // Validar se a conta pertence ao usuário
+    if (bill.userId !== userId) {
       throw new ForbiddenException('Você não tem acesso a esta conta');
-    } */
+    }
 
     if (
       !(
@@ -428,8 +432,8 @@ export class BillsService {
     }
   }
 
-  async finalize(id: string, finalizeBillDto: FinalizeBillDto) {
-    await this.validateFinalize(id, finalizeBillDto);
+  async finalize(id: string, userId: string, finalizeBillDto: FinalizeBillDto) {
+    await this.validateFinalize(id, userId, finalizeBillDto);
 
     // Buscar participantes da conta para calcular taxas proporcionais
     const participants = await this.prisma.participant.findMany({
