@@ -58,6 +58,14 @@ export class BillsController {
   }
 
   /**
+   * Retornar resumo da conta com valores por participante
+   */
+  @Get(':id/summary')
+  getSummary(@Param('id') id: string, @Request() req: any) {
+    return this.billsService.getSummary(id, req.user.id);
+  }
+
+  /**
    * Atualizar conta (status, itens, etc)
    */
   @Patch(':id')
