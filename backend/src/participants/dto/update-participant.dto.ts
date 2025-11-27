@@ -1,4 +1,7 @@
-import { PartialType } from '@nestjs/mapped-types';
-import { CreateParticipantDto } from './create-participant.dto';
+import { IsOptional, IsString } from 'class-validator';
 
-export class UpdateParticipantDto extends PartialType(CreateParticipantDto) {}
+export class UpdateParticipantDto {
+  @IsOptional()
+  @IsString({ message: 'O nome deve ser uma string' })
+  name?: string;
+}
