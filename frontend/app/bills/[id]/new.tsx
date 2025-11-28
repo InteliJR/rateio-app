@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import {
   View,
@@ -9,10 +9,13 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import billService from '../../../services/bill.service';
 
 interface INewBillFormData {
   numPeople: string;
@@ -43,6 +46,7 @@ const newBillSchema = z.object({
 export default function NewBillScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
+  const [isLoading, setIsLoading] = useState(false);
 
   const { control, handleSubmit, watch, setValue, formState: { errors, isValid } } = useForm<INewBillFormData>({
     resolver: zodResolver(newBillSchema),
@@ -57,14 +61,24 @@ export default function NewBillScreen() {
 
   const defineNameOption = watch('defineNameOption');
 
-  const onSubmit = (data: INewBillFormData) => {
-    // TODO: Implement bill creation logic
-    console.log({
-      billId: id,
-      ...data,
-    });
-    // Navigate back or to next screen
-    router.back();
+  const onSubmit = async (data: INewBillFormData) => {
+    setIsLoading(true);
+    try {
+      const newBillId = await billService.createBillSetup({
+        participantCount: Number(data.numPeople),
+        billName: data.defineNameOption === 'sim' ? data.billName : undefined,
+        serviceFeePercentage: Number(data.serviceRate),
+      });
+
+      router.push({
+        pathname: '/bills/[id]/participants',
+        params: { id: newBillId, participantCount: data.numPeople }
+      });
+    } catch (error: any) {
+      Alert.alert('Erro', error.message || 'Não foi possível criar a conta. Tente novamente.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -93,6 +107,7 @@ export default function NewBillScreen() {
                   onChangeText={onChange}
                   onBlur={onBlur}
                   keyboardType="numeric"
+                  editable={!isLoading}
                 />
               )}
             />
@@ -105,6 +120,7 @@ export default function NewBillScreen() {
               <TouchableOpacity
                 style={styles.radioOption}
                 onPress={() => setValue('defineNameOption', 'sim', { shouldValidate: true })}
+                disabled={isLoading}
               >
                 <View style={styles.radioCircle}>
                   {defineNameOption === 'sim' && <View style={styles.radioCircleFilled} />}
@@ -118,6 +134,7 @@ export default function NewBillScreen() {
                   setValue('defineNameOption', 'nao', { shouldValidate: true });
                   setValue('billName', ''); // Clear name when switching to 'nao'
                 }}
+                disabled={isLoading}
               >
                 <View style={styles.radioCircle}>
                   {defineNameOption === 'nao' && <View style={styles.radioCircleFilled} />}
@@ -142,6 +159,7 @@ export default function NewBillScreen() {
                       value={value}
                       onChangeText={onChange}
                       onBlur={onBlur}
+                      editable={!isLoading}
                     />
                   )}
                 />
@@ -168,6 +186,7 @@ export default function NewBillScreen() {
                   onChangeText={onChange}
                   onBlur={onBlur}
                   keyboardType="numeric"
+                  editable={!isLoading}
                 />
               )}
             />
@@ -181,11 +200,15 @@ export default function NewBillScreen() {
       {/* Botão Confirmar fixo no bottom */}
       <View style={styles.buttonContainer}>
         <TouchableOpacity
-          style={[styles.button, !isValid && styles.buttonDisabled]}
+          style={[styles.button, (!isValid || isLoading) && styles.buttonDisabled]}
           onPress={handleSubmit(onSubmit)}
-          disabled={!isValid}
+          disabled={!isValid || isLoading}
         >
-          <Text style={styles.buttonText}>Confirmar</Text>
+          {isLoading ? (
+            <ActivityIndicator color="#FFFF00" />
+          ) : (
+            <Text style={styles.buttonText}>Confirmar</Text>
+          )}
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
