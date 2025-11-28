@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import {
   View,
@@ -10,76 +10,58 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+
+interface INewBillFormData {
+  numPeople: string;
+  defineNameOption: 'sim' | 'nao';
+  billName?: string;
+  serviceRate: string;
+}
+
+const newBillSchema = z.object({
+  numPeople: z.string()
+    .min(1, 'Campo obrigatório')
+    .refine((val) => !isNaN(Number(val)) && Number(val) >= 1, 'Mínimo de 1 participante'),
+  defineNameOption: z.enum(['sim', 'nao']),
+  billName: z.string().optional(),
+  serviceRate: z.string()
+    .min(1, 'Campo obrigatório')
+    .refine((val) => !isNaN(Number(val)) && Number(val) >= 0 && Number(val) <= 100, 'A taxa deve ser entre 0% e 100%'),
+}).superRefine((data, ctx) => {
+  if (data.defineNameOption === 'sim' && (!data.billName || data.billName.trim().length === 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Nome da conta é obrigatório',
+      path: ['billName'],
+    });
+  }
+});
 
 export default function NewBillScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
 
-  const [numPeople, setNumPeople] = useState('');
-  const [defineNameOption, setDefineNameOption] = useState<'sim' | 'nao'>('nao');
-  const [billName, setBillName] = useState('');
-  const [serviceRate, setServiceRate] = useState('');
-
-  const [touched, setTouched] = useState({
-    numPeople: false,
-    billName: false,
-    serviceRate: false,
+  const { control, handleSubmit, watch, setValue, formState: { errors, isValid } } = useForm<INewBillFormData>({
+    resolver: zodResolver(newBillSchema),
+    defaultValues: {
+      numPeople: '',
+      defineNameOption: 'nao',
+      billName: '',
+      serviceRate: '',
+    },
+    mode: 'onChange',
   });
 
-  const validate = () => {
-    const errors: { numPeople?: string; billName?: string; serviceRate?: string } = {};
+  const defineNameOption = watch('defineNameOption');
 
-    // Validate Number of People
-    if (!numPeople.trim()) {
-      errors.numPeople = 'Campo obrigatório';
-    } else {
-      const num = parseInt(numPeople, 10);
-      if (isNaN(num) || num < 1) {
-        errors.numPeople = 'Mínimo de 1 participante';
-      }
-    }
-
-    // Validate Bill Name
-    if (defineNameOption === 'sim') {
-      if (!billName.trim()) {
-        errors.billName = 'Nome da conta é obrigatório';
-      }
-    }
-
-    // Validate Service Rate
-    if (!serviceRate.trim()) {
-      errors.serviceRate = 'Campo obrigatório';
-    } else {
-      const rate = parseFloat(serviceRate);
-      if (isNaN(rate)) {
-        errors.serviceRate = 'Valor inválido';
-      } else if (rate < 0) {
-        errors.serviceRate = 'A taxa não pode ser negativa';
-      } else if (rate > 100) {
-        errors.serviceRate = 'A taxa máxima é 100%';
-      }
-    }
-
-    return errors;
-  };
-
-  const errors = validate();
-  const isFormValid = Object.keys(errors).length === 0;
-
-  const handleBlur = (field: keyof typeof touched) => {
-    setTouched((prev) => ({ ...prev, [field]: true }));
-  };
-
-  const handleConfirm = () => {
-    if (!isFormValid) return;
-
+  const onSubmit = (data: INewBillFormData) => {
     // TODO: Implement bill creation logic
     console.log({
       billId: id,
-      numPeople,
-      defineNameOption,
-      billName: defineNameOption === 'sim' ? billName : undefined,
-      serviceRate,
+      ...data,
     });
     // Navigate back or to next screen
     router.back();
@@ -100,23 +82,29 @@ export default function NewBillScreen() {
             <Text style={styles.sectionTitle}>Adicionar pessoas</Text>
 
             <Text style={styles.label}>Quantas pessoas irão participar dessa conta?</Text>
-            <TextInput
-              style={[styles.input, touched.numPeople && errors.numPeople ? styles.inputError : null]}
-              placeholder="5"
-              value={numPeople}
-              onChangeText={setNumPeople}
-              onBlur={() => handleBlur('numPeople')}
-              keyboardType="numeric"
+            <Controller
+              control={control}
+              name="numPeople"
+              render={({ field: { onChange, value, onBlur } }) => (
+                <TextInput
+                  style={[styles.input, errors.numPeople ? styles.inputError : null]}
+                  placeholder="5"
+                  value={value}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  keyboardType="numeric"
+                />
+              )}
             />
-            {touched.numPeople && errors.numPeople && (
-              <Text style={styles.errorText}>{errors.numPeople}</Text>
+            {errors.numPeople && (
+              <Text style={styles.errorText}>{errors.numPeople.message}</Text>
             )}
 
             <Text style={styles.label}>Deseja definir o nome?</Text>
             <View style={styles.radioGroup}>
               <TouchableOpacity
                 style={styles.radioOption}
-                onPress={() => setDefineNameOption('sim')}
+                onPress={() => setValue('defineNameOption', 'sim', { shouldValidate: true })}
               >
                 <View style={styles.radioCircle}>
                   {defineNameOption === 'sim' && <View style={styles.radioCircleFilled} />}
@@ -127,8 +115,8 @@ export default function NewBillScreen() {
               <TouchableOpacity
                 style={styles.radioOption}
                 onPress={() => {
-                  setDefineNameOption('nao');
-                  setBillName(''); // Clear name when switching to 'nao'
+                  setValue('defineNameOption', 'nao', { shouldValidate: true });
+                  setValue('billName', ''); // Clear name when switching to 'nao'
                 }}
               >
                 <View style={styles.radioCircle}>
@@ -140,19 +128,25 @@ export default function NewBillScreen() {
 
             {defineNameOption === 'sim' && (
               <View>
-                <TextInput
-                  style={[
-                    styles.input,
-                    styles.conditionalInput,
-                    touched.billName && errors.billName ? styles.inputError : null
-                  ]}
-                  placeholder="Nome da conta"
-                  value={billName}
-                  onChangeText={setBillName}
-                  onBlur={() => handleBlur('billName')}
+                <Controller
+                  control={control}
+                  name="billName"
+                  render={({ field: { onChange, value, onBlur } }) => (
+                    <TextInput
+                      style={[
+                        styles.input,
+                        styles.conditionalInput,
+                        errors.billName ? styles.inputError : null
+                      ]}
+                      placeholder="Nome da conta"
+                      value={value}
+                      onChangeText={onChange}
+                      onBlur={onBlur}
+                    />
+                  )}
                 />
-                {touched.billName && errors.billName && (
-                  <Text style={styles.errorText}>{errors.billName}</Text>
+                {errors.billName && (
+                  <Text style={styles.errorText}>{errors.billName.message}</Text>
                 )}
               </View>
             )}
@@ -163,16 +157,22 @@ export default function NewBillScreen() {
             <Text style={styles.sectionTitle}>Definir a taxa de serviço</Text>
 
             <Text style={styles.label}>Defina a porcentagem da taxa de serviço?</Text>
-            <TextInput
-              style={[styles.input, touched.serviceRate && errors.serviceRate ? styles.inputError : null]}
-              placeholder="10"
-              value={serviceRate}
-              onChangeText={setServiceRate}
-              onBlur={() => handleBlur('serviceRate')}
-              keyboardType="numeric"
+            <Controller
+              control={control}
+              name="serviceRate"
+              render={({ field: { onChange, value, onBlur } }) => (
+                <TextInput
+                  style={[styles.input, errors.serviceRate ? styles.inputError : null]}
+                  placeholder="10"
+                  value={value}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  keyboardType="numeric"
+                />
+              )}
             />
-            {touched.serviceRate && errors.serviceRate && (
-              <Text style={styles.errorText}>{errors.serviceRate}</Text>
+            {errors.serviceRate && (
+              <Text style={styles.errorText}>{errors.serviceRate.message}</Text>
             )}
           </View>
         </View>
@@ -181,9 +181,9 @@ export default function NewBillScreen() {
       {/* Botão Confirmar fixo no bottom */}
       <View style={styles.buttonContainer}>
         <TouchableOpacity
-          style={[styles.button, !isFormValid && styles.buttonDisabled]}
-          onPress={handleConfirm}
-          disabled={!isFormValid}
+          style={[styles.button, !isValid && styles.buttonDisabled]}
+          onPress={handleSubmit(onSubmit)}
+          disabled={!isValid}
         >
           <Text style={styles.buttonText}>Confirmar</Text>
         </TouchableOpacity>
