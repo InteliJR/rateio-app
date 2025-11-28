@@ -21,7 +21,7 @@ export default function Index() {
     // Só redireciona quando terminar de carregar
     if (!isLoading) {
       if (isAuthenticated) {
-        router.replace('/(tabs)');
+        router.replace('/(tabs)/camera');
       } else {
         router.replace('/(auth)/login');
       }

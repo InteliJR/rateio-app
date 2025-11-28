@@ -46,7 +46,7 @@ export default function LoginScreen() {
     setServerError(null);
     try {
       await login(data.email, data.password);
-      router.replace('/(tabs)');
+      router.replace('/(tabs)/camera');
     } catch (error: any) {
       const message = getApiErrorMessage(error);
       setServerError(message);
