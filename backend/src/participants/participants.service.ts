@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateParticipantDto } from './dto/create-participant.dto';
@@ -10,6 +11,19 @@ import { UpdateParticipantDto } from './dto/update-participant.dto';
 @Injectable()
 export class ParticipantsService {
   constructor(private prisma: PrismaService) {}
+
+  /**
+   * Validar que o nome do participante não está vazio
+   */
+  private validateParticipantName(name: string) {
+    const trimmedName = name?.trim();
+    if (!trimmedName || trimmedName.length === 0) {
+      throw new BadRequestException(
+        'O nome do participante não pode ser vazio',
+      );
+    }
+    return trimmedName;
+  }
 
   /**
    * Validar que a conta pertence ao usuário
@@ -60,10 +74,13 @@ export class ParticipantsService {
     // Validar que a conta pertence ao usuário
     await this.validateBillOwnership(createParticipantDto.billId, userId);
 
+    // Validar e sanitizar nome
+    const name = this.validateParticipantName(createParticipantDto.name);
+
     return this.prisma.participant.create({
       data: {
         billId: createParticipantDto.billId,
-        name: createParticipantDto.name,
+        name,
       },
     });
   }
@@ -124,11 +141,15 @@ export class ParticipantsService {
     // Validar que o participante pertence à conta do usuário
     await this.validateParticipantOwnership(id, userId);
 
+    // Validar e sanitizar nome se fornecido
+    const data: { name?: string } = {};
+    if (updateParticipantDto.name !== undefined) {
+      data.name = this.validateParticipantName(updateParticipantDto.name);
+    }
+
     return this.prisma.participant.update({
       where: { id },
-      data: {
-        name: updateParticipantDto.name,
-      },
+      data,
     });
   }
 

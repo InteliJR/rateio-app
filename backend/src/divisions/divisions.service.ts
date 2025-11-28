@@ -67,6 +67,13 @@ export class DivisionsService {
     newShareAmount: number,
     excludeDivisionId?: string,
   ) {
+    // Validar que o valor é positivo
+    if (newShareAmount <= 0) {
+      throw new BadRequestException(
+        'O valor da divisão deve ser maior que zero',
+      );
+    }
+
     const billItem = await this.prisma.billItem.findUnique({
       where: { id: billItemId },
       include: { divisions: true },

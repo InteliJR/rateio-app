@@ -70,16 +70,41 @@ export class FeesService {
    * Validar valor da taxa baseado no tipo
    */
   private validateFeeValue(type: FeeType, value: number) {
-    if (type === FeeType.SERVICE_PERCENTAGE) {
-      if (value <= 0 || value > 100) {
-        throw new BadRequestException(
-          'Para taxa percentual, o valor deve estar entre 0 e 100',
-        );
-      }
-    }
-
+    // Validação comum: valor não pode ser negativo
     if (value < 0) {
       throw new BadRequestException('O valor da taxa não pode ser negativo');
+    }
+
+    // Validação específica por tipo
+    switch (type) {
+      case FeeType.SERVICE_PERCENTAGE:
+        if (value <= 0 || value > 100) {
+          throw new BadRequestException(
+            'Para taxa percentual, o valor deve estar entre 0.01 e 100',
+          );
+        }
+        break;
+
+      case FeeType.SERVICE_FIXED:
+        if (value <= 0) {
+          throw new BadRequestException(
+            'Para taxa fixa de serviço, o valor deve ser positivo',
+          );
+        }
+        break;
+
+      case FeeType.COVER_CHARGE:
+        if (value <= 0) {
+          throw new BadRequestException(
+            'Para couvert, o valor deve ser positivo',
+          );
+        }
+        break;
+
+      default:
+        if (value <= 0) {
+          throw new BadRequestException('O valor da taxa deve ser positivo');
+        }
     }
   }
 
