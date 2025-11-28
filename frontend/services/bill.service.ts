@@ -19,6 +19,12 @@ export interface UploadBillError {
   statusCode?: number;
 }
 
+export interface CreateBillSetupConfig {
+  participantCount: number;
+  billName?: string;
+  serviceFeePercentage: number;
+}
+
 class BillService {
   /**
    * Faz upload de uma conta (imagem) para o servidor
@@ -65,6 +71,32 @@ class BillService {
       // Tratar erros
       const billError: UploadBillError = {
         message: "Erro ao fazer upload da conta",
+        statusCode: error.response?.status,
+      };
+
+      if (error.response?.data?.message) {
+        billError.message = error.response.data.message;
+      } else if (error.message) {
+        billError.message = error.message;
+      }
+
+      throw billError;
+    }
+  }
+
+  /**
+   * Cria a configuração inicial da conta
+   * @param config - Configuração inicial (participantes, nome, taxa)
+   * @returns ID da conta criada
+   */
+  async createBillSetup(config: CreateBillSetupConfig): Promise<string> {
+    try {
+      const api = apiService.getApi();
+      const response = await api.post<UploadBillResponse>("/bills", config);
+      return response.data.id;
+    } catch (error: any) {
+      const billError: UploadBillError = {
+        message: "Erro ao criar configuração da conta",
         statusCode: error.response?.status,
       };
 
