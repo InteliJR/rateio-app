@@ -12,6 +12,10 @@ export interface UploadBillResponse {
     amount: number;
   }>;
   createdAt: string;
+  _count?: {
+    items: number;
+    participants: number;
+  };
 }
 
 export interface UploadBillError {
@@ -89,11 +93,11 @@ class BillService {
    * @param config - Configuração inicial (participantes, nome, taxa)
    * @returns ID da conta criada
    */
-  async createBillSetup(config: CreateBillSetupConfig): Promise<string> {
+  async createBillSetup(config: CreateBillSetupConfig): Promise<UploadBillResponse> {
     try {
       const api = apiService.getApi();
       const response = await api.post<UploadBillResponse>("/bills", config);
-      return response.data.id;
+      return response.data;
     } catch (error: any) {
       console.error('[BillService] Error creating bill setup:', error.response?.status, error.response?.data);
       const billError: UploadBillError = {

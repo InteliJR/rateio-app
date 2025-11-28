@@ -16,6 +16,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import billService from '../../../services/bill.service';
+import { useBillStore } from '../../../store/billStore';
 
 interface INewBillFormData {
   numPeople: string;
@@ -48,6 +49,9 @@ export default function NewBillScreen() {
   const { id } = useLocalSearchParams();
   const [isLoading, setIsLoading] = useState(false);
 
+  // Get store actions
+  const { addBill } = useBillStore();
+
   const { control, handleSubmit, watch, setValue, formState: { errors, isValid } } = useForm<INewBillFormData>({
     resolver: zodResolver(newBillSchema),
     defaultValues: {
@@ -64,15 +68,18 @@ export default function NewBillScreen() {
   const onSubmit = async (data: INewBillFormData) => {
     setIsLoading(true);
     try {
-      const newBillId = await billService.createBillSetup({
+      const newBill = await billService.createBillSetup({
         participantCount: Number(data.numPeople),
         billName: data.defineNameOption === 'sim' ? data.billName : undefined,
         serviceFeePercentage: Number(data.serviceRate),
       });
 
+      // Add to global store
+      addBill(newBill);
+
       router.push({
         pathname: '/bills/[id]/participants',
-        params: { id: newBillId, participantCount: data.numPeople }
+        params: { id: newBill.id, participantCount: data.numPeople }
       });
     } catch (error: any) {
       Alert.alert('Erro', error.message || 'Não foi possível criar a conta. Tente novamente.');

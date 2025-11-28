@@ -101,3 +101,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 }));
+
+// Configurar callback de logout na API
+import { apiService } from "../services/api.service";
+apiService.setUnauthorizedCallback(() => {
+  useAuthStore.getState().logout();
+});
