@@ -95,6 +95,7 @@ class BillService {
       const response = await api.post<UploadBillResponse>("/bills", config);
       return response.data.id;
     } catch (error: any) {
+      console.error('[BillService] Error creating bill setup:', error.response?.status, error.response?.data);
       const billError: UploadBillError = {
         message: "Erro ao criar configuração da conta",
         statusCode: error.response?.status,

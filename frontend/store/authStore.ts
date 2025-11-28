@@ -18,8 +18,10 @@ export const useAuthStore = create<AuthState>((set) => ({
       const response = await authService.login({ email, password });
 
       // Salvar tokens no SecureStore
+      console.log('[AuthStore] Saving tokens to SecureStore...');
       await SecureStore.setItemAsync("accessToken", response.accessToken);
       await SecureStore.setItemAsync("refreshToken", response.refreshToken);
+      console.log('[AuthStore] Tokens saved successfully');
 
       set({
         user: response.user,
@@ -94,7 +96,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       try {
         await SecureStore.deleteItemAsync("accessToken");
         await SecureStore.deleteItemAsync("refreshToken");
-      } catch {}
+      } catch { }
       set({ isLoading: false, isAuthenticated: false });
     }
   },

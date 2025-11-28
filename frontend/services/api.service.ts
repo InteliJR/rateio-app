@@ -21,8 +21,12 @@ class ApiService {
     this.api.interceptors.request.use(
       async (config) => {
         const token = await SecureStore.getItemAsync('accessToken');
+        console.log('[API] Token from SecureStore:', token ? 'Found' : 'Missing');
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
+          console.log('[API] Authorization header set');
+        } else {
+          console.log('[API] No token found, request will be sent without Authorization header');
         }
         return config;
       },

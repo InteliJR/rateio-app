@@ -17,50 +17,87 @@ export class BillsService {
     private prisma: PrismaService,
     private storage: StorageService,
     private ocr: OcrService,
-  ) {}
+  ) { }
 
   /**
    * Criar conta com upload de imagem e OCR
    */
   async create(
-    file: Express.Multer.File,
+    file: Express.Multer.File | undefined,
     userId: string,
     createBillDto: CreateBillDto,
   ) {
-    // 1. Validar arquivo
-    if (!this.storage.validateFileType(file.mimetype)) {
-      throw new BadRequestException(
-        'Apenas imagens são permitidas (JPEG, PNG, WebP)',
-      );
+    // Se tiver arquivo, fluxo normal de OCR
+    if (file) {
+      // 1. Validar arquivo
+      if (!this.storage.validateFileType(file.mimetype)) {
+        throw new BadRequestException(
+          'Apenas imagens são permitidas (JPEG, PNG, WebP)',
+        );
+      }
+
+      if (!this.storage.validateFileSize(file.size)) {
+        throw new BadRequestException('Tamanho máximo: 10MB');
+      }
+
+      // 2. Upload da imagem para S3
+      const { key, url } = await this.storage.uploadFile(file, 'bills');
+
+      // 3. Criar registro da conta (status: PENDING_OCR)
+      const bill = await this.prisma.bill.create({
+        data: {
+          userId,
+          imageUrl: url,
+          imageKey: key,
+          status: BillStatus.PENDING_OCR,
+          establishmentName: createBillDto.establishmentName,
+        },
+      });
+
+      // 4. Processar OCR (assíncrono - não bloquear resposta)
+      this.processOcr(bill.id, url).catch((error) => {
+        console.error(`❌ Erro no OCR da conta ${bill.id}:`, error);
+      });
+
+      return {
+        ...bill,
+        message: 'Conta criada. Processando imagem...',
+      };
     }
 
-    if (!this.storage.validateFileSize(file.size)) {
-      throw new BadRequestException('Tamanho máximo: 10MB');
-    }
+    // Fluxo manual (sem imagem)
+    const establishmentName = createBillDto.billName || createBillDto.establishmentName;
 
-    // 2. Upload da imagem para S3
-    const { key, url } = await this.storage.uploadFile(file, 'bills');
-
-    // 3. Criar registro da conta (status: PENDING_OCR)
     const bill = await this.prisma.bill.create({
       data: {
         userId,
-        imageUrl: url,
-        imageKey: key,
-        status: BillStatus.PENDING_OCR,
-        establishmentName: createBillDto.establishmentName,
+        status: BillStatus.DIVIDING, // Vai direto para divisão
+        establishmentName,
+        // imageUrl e imageKey ficam null
       },
     });
 
-    // 4. Processar OCR (assíncrono - não bloquear resposta)
-    this.processOcr(bill.id, url).catch((error) => {
-      console.error(`❌ Erro no OCR da conta ${bill.id}:`, error);
-    });
+    // Adicionar taxa de serviço se houver
+    if (createBillDto.serviceFeePercentage !== undefined) {
+      await this.prisma.fee.create({
+        data: {
+          billId: bill.id,
+          type: 'SERVICE_PERCENTAGE',
+          value: createBillDto.serviceFeePercentage,
+        },
+      });
+    }
 
-    return {
-      ...bill,
-      message: 'Conta criada. Processando imagem...',
-    };
+    // Adicionar participantes iniciais
+    if (createBillDto.participantCount && createBillDto.participantCount > 0) {
+      const participants = Array.from({ length: createBillDto.participantCount }, (_, i) => ({
+        billId: bill.id,
+        name: `Pessoa ${i + 1}`,
+      }));
+      await this.prisma.participant.createMany({ data: participants });
+    }
+
+    return bill;
   }
 
   /**
@@ -171,7 +208,10 @@ export class BillsService {
     }
 
     // Gerar nova URL pré-assinada (caso a antiga tenha expirado)
-    const freshUrl = await this.storage.getSignedUrl(bill.imageKey);
+    let freshUrl = bill.imageUrl;
+    if (bill.imageKey) {
+      freshUrl = await this.storage.getSignedUrl(bill.imageKey);
+    }
 
     return {
       ...bill,
@@ -223,8 +263,10 @@ export class BillsService {
   async remove(id: string, userId: string) {
     const bill = await this.findOne(id, userId);
 
-    // Deletar imagem do S3
-    await this.storage.deleteFile(bill.imageKey);
+    // Deletar imagem do S3 se existir
+    if (bill.imageKey) {
+      await this.storage.deleteFile(bill.imageKey);
+    }
 
     // Deletar conta (cascade deleta itens, participantes, divisões)
     await this.prisma.bill.delete({
