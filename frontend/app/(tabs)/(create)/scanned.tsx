@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -26,6 +26,11 @@ export default function ScannedBillScreen() {
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
 
+  // Auto-save state
+  const [isSaving, setIsSaving] = useState(false);
+  const saveTimeoutRef = useRef<number | null>(null);
+  const isFirstLoad = useRef(true);
+
   useEffect(() => {
     // Parse participants from params
     if (participantsParam) {
@@ -52,6 +57,69 @@ export default function ScannedBillScreen() {
     }
   }, [id, participantsParam]);
 
+  // Debounced Auto-save
+  useEffect(() => {
+    if (isFirstLoad.current) {
+      isFirstLoad.current = false;
+      return;
+    }
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    if (id && items.length > 0) {
+      setIsSaving(true);
+      saveTimeoutRef.current = setTimeout(() => {
+        saveToBackend();
+      }, 1500); // 1.5s debounce
+    }
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [items, billName]);
+
+  const saveToBackend = async () => {
+    if (!id) return;
+
+    try {
+      // Prepare payload: split items based on quantity
+      const payloadItems: { description: string; amount: number }[] = [];
+
+      items.forEach(item => {
+        if (item.quantity > 1) {
+          const unitPrice = item.price / item.quantity;
+          for (let i = 0; i < item.quantity; i++) {
+            payloadItems.push({
+              description: item.name,
+              amount: Number(unitPrice.toFixed(2)) // Ensure 2 decimal places
+            });
+          }
+        } else {
+          payloadItems.push({
+            description: item.name,
+            amount: item.price
+          });
+        }
+      });
+
+      await billService.updateBill(id as string, {
+        items: payloadItems,
+        establishmentName: billName
+      });
+
+      // Artificial delay to show the "Saving" state for a bit longer if it was too fast
+      setTimeout(() => setIsSaving(false), 500);
+    } catch (error) {
+      console.error('Error auto-saving bill', error);
+      setIsSaving(false);
+      // Optional: Show error toast/alert, but maybe too intrusive for auto-save
+    }
+  };
+
   const loadBill = async (billId: string) => {
     setLoading(true);
     try {
@@ -62,19 +130,16 @@ export default function ScannedBillScreen() {
         const mappedItems = bill.items.map((item: { description: string; amount: number }, index: number) => ({
           id: index.toString(),
           name: item.description,
-          quantity: 1, // Backend doesn't store quantity, so we treat each entry as 1 item
+          quantity: 1, // Backend doesn't store quantity, so we treat each entry as 1 item initially
           price: item.amount,
           assignedParticipants: []
         }));
         setItems(mappedItems);
       } else {
-        setItems([
-          { id: '1', name: 'Suco de Laranja', quantity: 3, price: 36.00, assignedParticipants: [] },
-          { id: '2', name: 'Batata Frita', quantity: 4, price: 85.00, assignedParticipants: [] },
-          { id: '3', name: 'Sorvete', quantity: 4, price: 48.00, assignedParticipants: [] },
-          { id: '4', name: 'Cerveja', quantity: 2, price: 15.00, assignedParticipants: [] },
-        ]);
-        setBillName('Conta 1');
+        // Keep mock data if empty? Or just empty.
+        // For now, let's assume if it's empty we might want to show nothing or default
+        // But the original code had a fallback. Let's keep it empty if API returns empty.
+        setItems([]);
       }
     } catch (error) {
       console.error('Error loading bill', error);
@@ -104,6 +169,12 @@ export default function ScannedBillScreen() {
     }));
   };
 
+  const handleUpdateItem = (updatedItem: BillItem) => {
+    setItems(prevItems => prevItems.map(item =>
+      item.id === updatedItem.id ? updatedItem : item
+    ));
+  };
+
   const deleteItem = (itemId: string) => {
     Alert.alert(
       'Excluir item',
@@ -117,20 +188,7 @@ export default function ScannedBillScreen() {
             // Optimistic update
             const newItems = items.filter(i => i.id !== itemId);
             setItems(newItems);
-
-            if (id) {
-              try {
-                const payloadItems = newItems.map(i => ({
-                  description: i.name,
-                  amount: i.price
-                }));
-                await billService.updateBill(id as string, { items: payloadItems });
-              } catch (error) {
-                console.error('Error deleting item', error);
-                Alert.alert('Erro', 'Erro ao excluir item no servidor.');
-                loadBill(id as string); // Revert on error
-              }
-            }
+            // The useEffect will trigger the save
           }
         }
       ]
@@ -142,36 +200,10 @@ export default function ScannedBillScreen() {
   };
 
   const handleAddNewItem = async (newItem: Omit<BillItem, 'id' | 'assignedParticipants'>) => {
-    if (id) {
-      setLoading(true);
-      try {
-        // Prepare current items + new item
-        const payloadItems = items.map(i => ({
-          description: i.name,
-          amount: i.price
-        }));
-
-        payloadItems.push({
-          description: newItem.name,
-          amount: newItem.price
-        });
-
-        await billService.updateBill(id as string, {
-          items: payloadItems
-        });
-
-        // Reload to ensure sync
-        await loadBill(id as string);
-      } catch (error) {
-        console.error('Error updating bill with new item', error);
-        Alert.alert('Erro', 'Erro ao salvar novo item no servidor.');
-        setLoading(false);
-      }
-    } else {
-      // Mock mode
-      const tempId = Date.now().toString();
-      setItems(prev => [...prev, { ...newItem, id: tempId, assignedParticipants: [] }]);
-    }
+    // Optimistic add
+    const tempId = Date.now().toString();
+    setItems(prev => [...prev, { ...newItem, id: tempId, assignedParticipants: [] }]);
+    // The useEffect will trigger the save
   };
 
   const handleSummary = () => {
@@ -197,12 +229,20 @@ export default function ScannedBillScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TextInput
-          style={styles.billNameInput}
-          value={billName}
-          onChangeText={setBillName}
-          placeholder="Nome da conta"
-        />
+        <View style={styles.headerTitleContainer}>
+          <TextInput
+            style={styles.billNameInput}
+            value={billName}
+            onChangeText={setBillName}
+            placeholder="Nome da conta"
+          />
+          {isSaving && (
+            <View style={styles.savingIndicator}>
+              <ActivityIndicator size="small" color="#81007F" />
+              <Text style={styles.savingText}>Salvando...</Text>
+            </View>
+          )}
+        </View>
         <TouchableOpacity style={styles.addItemButton} onPress={handleAddItem}>
           <Text style={styles.addItemButtonText}>+ Item</Text>
         </TouchableOpacity>
@@ -217,6 +257,7 @@ export default function ScannedBillScreen() {
               <ItemCard
                 item={item}
                 onDelete={deleteItem}
+                onUpdate={handleUpdateItem}
                 onPress={() => toggleExpand(item.id)}
               />
 
@@ -292,15 +333,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     marginBottom: 24,
   },
+  headerTitleContainer: {
+    flex: 1,
+    marginRight: 16,
+  },
   billNameInput: {
     fontSize: 24,
     color: '#000',
     fontWeight: '400',
     borderBottomWidth: 1,
     borderBottomColor: '#ccc',
-    flex: 1,
-    marginRight: 16,
     paddingVertical: 4,
+  },
+  savingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  savingText: {
+    fontSize: 12,
+    color: '#81007F',
+    marginLeft: 4,
   },
   addItemButton: {
     paddingHorizontal: 16,
