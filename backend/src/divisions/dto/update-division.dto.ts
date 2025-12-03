@@ -1,4 +1,8 @@
-import { PartialType } from '@nestjs/mapped-types';
-import { CreateDivisionDto } from './create-division.dto';
+import { IsNotEmpty, IsNumber, IsPositive } from 'class-validator';
 
-export class UpdateDivisionDto extends PartialType(CreateDivisionDto) {}
+export class UpdateDivisionDto {
+  @IsNotEmpty({ message: 'O valor da divisão é obrigatório' })
+  @IsNumber({}, { message: 'O valor deve ser um número' })
+  @IsPositive({ message: 'O valor deve ser positivo' })
+  shareAmount: number;
+}
