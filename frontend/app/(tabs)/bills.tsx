@@ -85,7 +85,7 @@ export default function BillsScreen() {
             <Text style={styles.emptyText}>Nenhuma conta encontrada</Text>
             <TouchableOpacity
               style={styles.createButton}
-              onPress={() => router.push('/(tabs)/camera')} // Assuming camera is the start of creation flow
+              onPress={() => router.push('/(tabs)/(create)/new')}
             >
               <Text style={styles.createButtonText}>Criar nova conta</Text>
             </TouchableOpacity>

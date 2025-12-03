@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
 import {
   View,
   Text,
@@ -46,7 +46,7 @@ const newBillSchema = z.object({
 
 export default function NewBillScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams();
+  // const { id } = useLocalSearchParams();
   const [isLoading, setIsLoading] = useState(false);
 
   // Get store actions
@@ -78,7 +78,7 @@ export default function NewBillScreen() {
       addBill(newBill);
 
       router.push({
-        pathname: '/bills/[id]/participants',
+        pathname: '/(tabs)/(create)/participants',
         params: { id: newBill.id, participantCount: data.numPeople }
       });
     } catch (error: any) {
@@ -98,7 +98,6 @@ export default function NewBillScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.content}>
-          {/* Seção: Adicionar pessoas */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Adicionar pessoas</Text>
 
@@ -177,7 +176,6 @@ export default function NewBillScreen() {
             )}
           </View>
 
-          {/* Seção: Definir a taxa de serviço */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Definir a taxa de serviço</Text>
 
@@ -204,7 +202,6 @@ export default function NewBillScreen() {
         </View>
       </ScrollView>
 
-      {/* Botão Confirmar fixo no bottom */}
       <View style={styles.buttonContainer}>
         <TouchableOpacity
           style={[styles.button, (!isValid || isLoading) && styles.buttonDisabled]}
@@ -229,19 +226,19 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 100, // Space for fixed button
+    paddingBottom: 100,
+    paddingTop: 24
   },
   content: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 24,
   },
   section: {
     marginBottom: 32,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 24,
+    fontWeight: '500',
     color: '#333',
     marginBottom: 16,
   },
@@ -306,16 +303,14 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: 24,
-    paddingVertical: 16,
+    padding: 24,
     backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
   },
   button: {
     backgroundColor: '#81007F',
-    paddingVertical: 14,
-    borderRadius: 32,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   buttonDisabled: {
@@ -323,7 +318,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#FFFF00',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '500',
   },
 });
