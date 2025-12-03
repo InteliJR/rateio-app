@@ -62,7 +62,7 @@ export default function ScannedBillScreen() {
         const mappedItems = bill.items.map((item: { description: string; amount: number }, index: number) => ({
           id: index.toString(),
           name: item.description,
-          quantity: item.amount || 1,
+          quantity: 1, // Backend doesn't store quantity, so we treat each entry as 1 item
           price: item.amount,
           assignedParticipants: []
         }));
@@ -113,8 +113,24 @@ export default function ScannedBillScreen() {
         {
           text: 'Excluir',
           style: 'destructive',
-          onPress: () => {
-            setItems(prev => prev.filter(i => i.id !== itemId));
+          onPress: async () => {
+            // Optimistic update
+            const newItems = items.filter(i => i.id !== itemId);
+            setItems(newItems);
+
+            if (id) {
+              try {
+                const payloadItems = newItems.map(i => ({
+                  description: i.name,
+                  amount: i.price
+                }));
+                await billService.updateBill(id as string, { items: payloadItems });
+              } catch (error) {
+                console.error('Error deleting item', error);
+                Alert.alert('Erro', 'Erro ao excluir item no servidor.');
+                loadBill(id as string); // Revert on error
+              }
+            }
           }
         }
       ]
@@ -126,39 +142,35 @@ export default function ScannedBillScreen() {
   };
 
   const handleAddNewItem = async (newItem: Omit<BillItem, 'id' | 'assignedParticipants'>) => {
-    // Optimistic update
-    const tempId = Date.now().toString();
-    const itemToAdd: BillItem = {
-      ...newItem,
-      id: tempId,
-      assignedParticipants: []
-    };
-
-    setItems(prev => [...prev, itemToAdd]);
-
-    // If we have a real bill ID, we should update the backend
     if (id) {
+      setLoading(true);
       try {
-        // Prepare data for update - we need to send ALL items
-        // Map current items to backend format
-        const currentItemsForBackend = items.map(i => ({
+        // Prepare current items + new item
+        const payloadItems = items.map(i => ({
           description: i.name,
-          amount: i.price // Assuming backend takes total price
+          amount: i.price
         }));
 
-        // Add new item
-        currentItemsForBackend.push({
+        payloadItems.push({
           description: newItem.name,
           amount: newItem.price
         });
 
         await billService.updateBill(id as string, {
-          items: currentItemsForBackend
+          items: payloadItems
         });
+
+        // Reload to ensure sync
+        await loadBill(id as string);
       } catch (error) {
         console.error('Error updating bill with new item', error);
-        Alert.alert('Erro', 'Erro ao salvar novo item no servidor, mas ele foi adicionado localmente.');
+        Alert.alert('Erro', 'Erro ao salvar novo item no servidor.');
+        setLoading(false);
       }
+    } else {
+      // Mock mode
+      const tempId = Date.now().toString();
+      setItems(prev => [...prev, { ...newItem, id: tempId, assignedParticipants: [] }]);
     }
   };
 
