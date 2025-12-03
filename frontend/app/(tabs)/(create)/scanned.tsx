@@ -13,6 +13,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import billService, { UploadBillResponse } from '../../../services/bill.service';
 import { ItemCard, BillItem } from '../../../components/items/ItemCard';
+import { AddItemModal } from '../../../components/modals/AddItemModal';
 
 export default function ScannedBillScreen() {
   const router = useRouter();
@@ -23,6 +24,7 @@ export default function ScannedBillScreen() {
   const [items, setItems] = useState<BillItem[]>([]);
   const [participants, setParticipants] = useState<string[]>([]);
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+  const [isModalVisible, setIsModalVisible] = useState(false);
 
   useEffect(() => {
     // Parse participants from params
@@ -120,7 +122,44 @@ export default function ScannedBillScreen() {
   };
 
   const handleAddItem = () => {
-    Alert.alert('Adicionar Item', 'Funcionalidade de adicionar item manual será implementada em breve.');
+    setIsModalVisible(true);
+  };
+
+  const handleAddNewItem = async (newItem: Omit<BillItem, 'id' | 'assignedParticipants'>) => {
+    // Optimistic update
+    const tempId = Date.now().toString();
+    const itemToAdd: BillItem = {
+      ...newItem,
+      id: tempId,
+      assignedParticipants: []
+    };
+
+    setItems(prev => [...prev, itemToAdd]);
+
+    // If we have a real bill ID, we should update the backend
+    if (id) {
+      try {
+        // Prepare data for update - we need to send ALL items
+        // Map current items to backend format
+        const currentItemsForBackend = items.map(i => ({
+          description: i.name,
+          amount: i.price // Assuming backend takes total price
+        }));
+
+        // Add new item
+        currentItemsForBackend.push({
+          description: newItem.name,
+          amount: newItem.price
+        });
+
+        await billService.updateBill(id as string, {
+          items: currentItemsForBackend
+        });
+      } catch (error) {
+        console.error('Error updating bill with new item', error);
+        Alert.alert('Erro', 'Erro ao salvar novo item no servidor, mas ele foi adicionado localmente.');
+      }
+    }
   };
 
   const handleSummary = () => {
@@ -213,6 +252,12 @@ export default function ScannedBillScreen() {
           <Text style={styles.summaryButtonText}>Visualizar resumo</Text>
         </TouchableOpacity>
       </View>
+
+      <AddItemModal
+        visible={isModalVisible}
+        onClose={() => setIsModalVisible(false)}
+        onAdd={handleAddNewItem}
+      />
     </View>
   );
 }
