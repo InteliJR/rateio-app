@@ -117,10 +117,21 @@ export class BillsService {
   }
 
   /**
-   * Buscar todas as contas do usuário
+   * Buscar todas as contas do usuário com paginação
    */
-  async findAllByUser(userId: string) {
-    return this.prisma.bill.findMany({
+  async findAllByUser(userId: string, page: number = 1, limit: number = 10) {
+    // Garantir valores mínimos
+    const validPage = Math.max(1, page);
+    const validLimit = Math.max(1, Math.min(100, limit)); // Limitar máximo de 100
+    const skip = (validPage - 1) * validLimit;
+
+    // Buscar total de registros
+    const total = await this.prisma.bill.count({
+      where: { userId },
+    });
+
+    // Buscar dados paginados
+    const data = await this.prisma.bill.findMany({
       where: { userId },
       include: {
         items: true,
@@ -134,7 +145,22 @@ export class BillsService {
         },
       },
       orderBy: { createdAt: 'desc' },
+      skip,
+      take: validLimit,
     });
+
+    // Calcular total de páginas
+    const totalPages = Math.ceil(total / validLimit);
+
+    return {
+      data,
+      meta: {
+        total,
+        page: validPage,
+        limit: validLimit,
+        totalPages,
+      },
+    };
   }
 
   /**

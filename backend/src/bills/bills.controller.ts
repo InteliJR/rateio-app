@@ -11,6 +11,7 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { BillsService } from './bills.service';
@@ -41,11 +42,17 @@ export class BillsController {
   }
 
   /**
-   * Listar contas do usuário
+   * Listar contas do usuário com paginação
    */
   @Get()
-  findAll(@Request() req: any) {
-    return this.billsService.findAllByUser(req.user.id);
+  findAll(
+    @Request() req: any,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 10;
+    return this.billsService.findAllByUser(req.user.id, pageNum, limitNum);
   }
 
   /**
