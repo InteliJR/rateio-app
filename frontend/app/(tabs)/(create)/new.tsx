@@ -17,6 +17,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import billService from '../../../services/bill.service';
 import { useBillStore } from '../../../store/billStore';
+import { NumericInput } from '../../../components/common/NumericInput';
 
 interface INewBillFormData {
   numPeople: string;
@@ -101,25 +102,22 @@ export default function NewBillScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Adicionar pessoas</Text>
 
-            <Text style={styles.label}>Quantas pessoas irão participar dessa conta?</Text>
             <Controller
               control={control}
               name="numPeople"
               render={({ field: { onChange, value, onBlur } }) => (
-                <TextInput
-                  style={[styles.input, errors.numPeople ? styles.inputError : null]}
+                <NumericInput
+                  label="Quantas pessoas irão participar dessa conta?"
                   placeholder="5"
                   value={value}
-                  onChangeText={onChange}
+                  onChange={onChange}
                   onBlur={onBlur}
-                  keyboardType="numeric"
                   editable={!isLoading}
+                  error={errors.numPeople?.message}
+                  min={1}
                 />
               )}
             />
-            {errors.numPeople && (
-              <Text style={styles.errorText}>{errors.numPeople.message}</Text>
-            )}
 
             <Text style={styles.label}>Deseja definir o nome?</Text>
             <View style={styles.radioGroup}>
@@ -179,25 +177,23 @@ export default function NewBillScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Definir a taxa de serviço</Text>
 
-            <Text style={styles.label}>Defina a porcentagem da taxa de serviço?</Text>
             <Controller
               control={control}
               name="serviceRate"
               render={({ field: { onChange, value, onBlur } }) => (
-                <TextInput
-                  style={[styles.input, errors.serviceRate ? styles.inputError : null]}
+                <NumericInput
+                  label="Defina a porcentagem da taxa de serviço?"
                   placeholder="10"
                   value={value}
-                  onChangeText={onChange}
+                  onChange={onChange}
                   onBlur={onBlur}
-                  keyboardType="numeric"
                   editable={!isLoading}
+                  error={errors.serviceRate?.message}
+                  min={0}
+                  max={100}
                 />
               )}
             />
-            {errors.serviceRate && (
-              <Text style={styles.errorText}>{errors.serviceRate.message}</Text>
-            )}
           </View>
         </View>
       </ScrollView>
