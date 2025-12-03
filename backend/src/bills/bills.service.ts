@@ -11,11 +11,17 @@ import { CreateBillDto } from './dto/create-bill.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
 import { BillStatus, Prisma } from '@prisma/client';
 
+// Campos permitidos para ordenação
+export type BillSortField = 'createdAt' | 'totalAmount';
+export type SortOrder = 'asc' | 'desc';
+
 // Interface para filtros de busca
 export interface BillFilters {
   status?: BillStatus;
   startDate?: Date;
   endDate?: Date;
+  sortBy?: BillSortField;
+  sortOrder?: SortOrder;
 }
 
 @Injectable()
@@ -154,6 +160,13 @@ export class BillsService {
       }
     }
 
+    // Construir ordenação
+    const sortField = filters?.sortBy || 'createdAt';
+    const sortOrder = filters?.sortOrder || 'desc';
+    const orderBy: Prisma.BillOrderByWithRelationInput = {
+      [sortField]: sortOrder,
+    };
+
     // Buscar total de registros
     const total = await this.prisma.bill.count({ where });
 
@@ -171,7 +184,7 @@ export class BillsService {
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy,
       skip,
       take: validLimit,
     });

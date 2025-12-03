@@ -43,7 +43,7 @@ export class BillsController {
   }
 
   /**
-   * Listar contas do usuário com paginação e filtros
+   * Listar contas do usuário com paginação, filtros e ordenação
    */
   @Get()
   findAll(
@@ -53,15 +53,23 @@ export class BillsController {
     @Query('status') status?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 10;
+
+    // Campos válidos para ordenação
+    const validSortFields = ['createdAt', 'totalAmount'];
+    const validSortOrders = ['asc', 'desc'];
 
     // Construir objeto de filtros
     const filters: {
       status?: BillStatus;
       startDate?: Date;
       endDate?: Date;
+      sortBy?: 'createdAt' | 'totalAmount';
+      sortOrder?: 'asc' | 'desc';
     } = {};
 
     // Validar e aplicar filtro de status
@@ -83,6 +91,15 @@ export class BillsController {
       if (!isNaN(parsedEndDate.getTime())) {
         filters.endDate = parsedEndDate;
       }
+    }
+
+    // Validar e aplicar ordenação
+    if (sortBy && validSortFields.includes(sortBy)) {
+      filters.sortBy = sortBy as 'createdAt' | 'totalAmount';
+    }
+
+    if (sortOrder && validSortOrders.includes(sortOrder.toLowerCase())) {
+      filters.sortOrder = sortOrder.toLowerCase() as 'asc' | 'desc';
     }
 
     return this.billsService.findAllByUser(
