@@ -185,6 +185,9 @@ export default function CameraScreen() {
       // Otimizar imagem antes de processar
       const optimizedImageUri = await optimizeImage(capturedImage);
 
+      router.push('/(tabs)/(create)/scanned');
+      return
+
       // Fazer upload da imagem para o servidor
       const uploadedBill = await billService.uploadBill(optimizedImageUri);
 
@@ -194,7 +197,7 @@ export default function CameraScreen() {
           text: "OK",
           onPress: () => {
             // Voltar para a tela anterior e passar dados via params se necessário
-            router.back();
+            router.push('/(tabs)/(create)/scanned');
           },
         },
       ]);
