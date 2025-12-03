@@ -27,12 +27,14 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ visible, onClose, on
   const [name, setName] = useState('');
   const [quantity, setQuantity] = useState('');
   const [value, setValue] = useState('');
+  const [errors, setErrors] = useState({ name: '', quantity: '', value: '' });
 
   const resetForm = () => {
     setStep('selection');
     setName('');
     setQuantity('');
     setValue('');
+    setErrors({ name: '', quantity: '', value: '' });
   };
 
   const handleClose = () => {
@@ -40,15 +42,74 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ visible, onClose, on
     onClose();
   };
 
+  const formatCurrency = (text: string) => {
+    // Remove non-numeric characters
+    let numeric = text.replace(/[^0-9]/g, '');
+    if (!numeric) return '';
+
+    // Convert to decimal
+    const amount = parseInt(numeric) / 100;
+
+    // Format to BRL
+    return amount.toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    });
+  };
+
+  const handleValueChange = (text: string) => {
+    // If deleting everything, clear it
+    if (!text) {
+      setValue('');
+      return;
+    }
+
+    // If user is typing, we just take the numbers and reformat
+    const numeric = text.replace(/[^0-9]/g, '');
+    const formatted = formatCurrency(numeric);
+    setValue(formatted);
+    if (errors.value) setErrors(prev => ({ ...prev, value: '' }));
+  };
+
+  const parseCurrency = (text: string): number => {
+    const numeric = text.replace(/[^0-9]/g, '');
+    return parseInt(numeric) / 100;
+  };
+
+  const validate = () => {
+    const newErrors = { name: '', quantity: '', value: '' };
+    let isValid = true;
+
+    if (!name.trim()) {
+      newErrors.name = 'Nome é obrigatório';
+      isValid = false;
+    }
+
+    if (step === 'product' && !quantity.trim()) {
+      newErrors.quantity = 'Quantidade é obrigatória';
+      isValid = false;
+    } else if (step === 'product' && parseInt(quantity) <= 0) {
+      newErrors.quantity = 'Quantidade deve ser maior que 0';
+      isValid = false;
+    }
+
+    if (!value.trim()) {
+      newErrors.value = 'Valor é obrigatório';
+      isValid = false;
+    } else if (parseCurrency(value) <= 0) {
+      newErrors.value = 'Valor deve ser maior que 0';
+      isValid = false;
+    }
+
+    setErrors(newErrors);
+    return isValid;
+  };
+
   const handleAdd = () => {
-    if (!name.trim() || !value.trim()) return;
+    if (!validate()) return;
 
-    if (step === 'product' && !quantity.trim()) return;
-
-    const price = parseFloat(value.replace(',', '.'));
+    const price = parseCurrency(value);
     const qty = step === 'product' ? parseInt(quantity) : 1;
-
-    if (isNaN(price) || (step === 'product' && isNaN(qty))) return;
 
     onAdd({
       name: name.trim(),
@@ -97,22 +158,30 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ visible, onClose, on
 
       <Text style={styles.label}>Nome</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, errors.name ? styles.inputError : null]}
         placeholder="Ex: Coca-cola"
         value={name}
-        onChangeText={setName}
+        onChangeText={(text) => {
+          setName(text);
+          if (errors.name) setErrors(prev => ({ ...prev, name: '' }));
+        }}
       />
+      {errors.name ? <Text style={styles.errorText}>{errors.name}</Text> : null}
 
       {step === 'product' && (
         <>
           <Text style={styles.label}>Quantidade</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, errors.quantity ? styles.inputError : null]}
             placeholder="Ex: 2"
             value={quantity}
-            onChangeText={setQuantity}
+            onChangeText={(text) => {
+              setQuantity(text.replace(/[^0-9]/g, ''));
+              if (errors.quantity) setErrors(prev => ({ ...prev, quantity: '' }));
+            }}
             keyboardType="numeric"
           />
+          {errors.quantity ? <Text style={styles.errorText}>{errors.quantity}</Text> : null}
         </>
       )}
 
@@ -120,12 +189,13 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ visible, onClose, on
         {step === 'product' ? 'Preço Unitário' : 'Valor'}
       </Text>
       <TextInput
-        style={styles.input}
-        placeholder="Ex: 15,00"
+        style={[styles.input, errors.value ? styles.inputError : null]}
+        placeholder="R$ 0,00"
         value={value}
-        onChangeText={setValue}
+        onChangeText={handleValueChange}
         keyboardType="numeric"
       />
+      {errors.value ? <Text style={styles.errorText}>{errors.value}</Text> : null}
 
       <TouchableOpacity style={styles.addButton} onPress={handleAdd}>
         <Text style={styles.addButtonText}>Adicionar</Text>
@@ -227,6 +297,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     fontSize: 16,
+  },
+  inputError: {
+    borderColor: '#ff4444',
+  },
+  errorText: {
+    color: '#ff4444',
+    fontSize: 12,
+    marginTop: -8,
   },
   addButton: {
     backgroundColor: '#81007F',
