@@ -170,17 +170,30 @@ export class BillsService {
     // Buscar total de registros
     const total = await this.prisma.bill.count({ where });
 
-    // Buscar dados paginados
+    // Buscar dados paginados com campos seletivos
     const data = await this.prisma.bill.findMany({
       where,
-      include: {
-        items: true,
-        participants: true,
-        fees: true,
+      select: {
+        id: true,
+        status: true,
+        imageUrl: true,
+        totalAmount: true,
+        establishmentName: true,
+        createdAt: true,
+        updatedAt: true,
+        // Contagem de itens e participantes (leve)
         _count: {
           select: {
             items: true,
             participants: true,
+          },
+        },
+        // Apenas resumo das taxas
+        fees: {
+          select: {
+            id: true,
+            type: true,
+            value: true,
           },
         },
       },
@@ -209,22 +222,62 @@ export class BillsService {
   async findOne(id: string, userId: string) {
     const bill = await this.prisma.bill.findUnique({
       where: { id },
-      include: {
+      select: {
+        id: true,
+        userId: true,
+        status: true,
+        imageUrl: true,
+        imageKey: true,
+        totalAmount: true,
+        establishmentName: true,
+        ocrRawText: true,
+        createdAt: true,
+        updatedAt: true,
+        // Itens com divisões
         items: {
-          include: {
+          select: {
+            id: true,
+            name: true,
+            quantity: true,
+            unitPrice: true,
+            totalPrice: true,
             divisions: {
-              include: {
-                participant: true,
+              select: {
+                id: true,
+                shareAmount: true,
+                participant: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
               },
             },
           },
         },
+        // Participantes com divisões
         participants: {
-          include: {
-            divisions: true,
+          select: {
+            id: true,
+            name: true,
+            divisions: {
+              select: {
+                id: true,
+                shareAmount: true,
+                billItemId: true,
+              },
+            },
           },
         },
-        fees: true,
+        // Taxas
+        fees: {
+          select: {
+            id: true,
+            type: true,
+            description: true,
+            value: true,
+          },
+        },
       },
     });
 
@@ -275,10 +328,37 @@ export class BillsService {
         establishmentName: updateBillDto.establishmentName,
         totalAmount: updateBillDto.totalAmount,
       },
-      include: {
-        items: true,
-        participants: true,
-        fees: true,
+      select: {
+        id: true,
+        status: true,
+        imageUrl: true,
+        totalAmount: true,
+        establishmentName: true,
+        createdAt: true,
+        updatedAt: true,
+        items: {
+          select: {
+            id: true,
+            name: true,
+            quantity: true,
+            unitPrice: true,
+            totalPrice: true,
+          },
+        },
+        participants: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        fees: {
+          select: {
+            id: true,
+            type: true,
+            description: true,
+            value: true,
+          },
+        },
       },
     });
   }
