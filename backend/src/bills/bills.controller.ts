@@ -18,6 +18,7 @@ import { BillsService } from './bills.service';
 import { CreateBillDto } from './dto/create-bill.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { BillStatus } from '@prisma/client';
 
 @Controller('bills')
 @UseGuards(JwtAuthGuard)
@@ -42,17 +43,54 @@ export class BillsController {
   }
 
   /**
-   * Listar contas do usuário com paginação
+   * Listar contas do usuário com paginação e filtros
    */
   @Get()
   findAll(
     @Request() req: any,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('status') status?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 10;
-    return this.billsService.findAllByUser(req.user.id, pageNum, limitNum);
+
+    // Construir objeto de filtros
+    const filters: {
+      status?: BillStatus;
+      startDate?: Date;
+      endDate?: Date;
+    } = {};
+
+    // Validar e aplicar filtro de status
+    if (status && Object.values(BillStatus).includes(status as BillStatus)) {
+      filters.status = status as BillStatus;
+    }
+
+    // Validar e aplicar filtro de data inicial
+    if (startDate) {
+      const parsedStartDate = new Date(startDate);
+      if (!isNaN(parsedStartDate.getTime())) {
+        filters.startDate = parsedStartDate;
+      }
+    }
+
+    // Validar e aplicar filtro de data final
+    if (endDate) {
+      const parsedEndDate = new Date(endDate);
+      if (!isNaN(parsedEndDate.getTime())) {
+        filters.endDate = parsedEndDate;
+      }
+    }
+
+    return this.billsService.findAllByUser(
+      req.user.id,
+      pageNum,
+      limitNum,
+      Object.keys(filters).length > 0 ? filters : undefined,
+    );
   }
 
   /**

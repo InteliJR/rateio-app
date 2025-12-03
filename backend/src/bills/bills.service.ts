@@ -9,7 +9,14 @@ import { StorageService } from '../storage/storage.service';
 import { OcrService } from '../ocr/ocr.service';
 import { CreateBillDto } from './dto/create-bill.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
-import { BillStatus } from '@prisma/client';
+import { BillStatus, Prisma } from '@prisma/client';
+
+// Interface para filtros de busca
+export interface BillFilters {
+  status?: BillStatus;
+  startDate?: Date;
+  endDate?: Date;
+}
 
 @Injectable()
 export class BillsService {
@@ -117,22 +124,42 @@ export class BillsService {
   }
 
   /**
-   * Buscar todas as contas do usuário com paginação
+   * Buscar todas as contas do usuário com paginação e filtros
    */
-  async findAllByUser(userId: string, page: number = 1, limit: number = 10) {
+  async findAllByUser(
+    userId: string,
+    page: number = 1,
+    limit: number = 10,
+    filters?: BillFilters,
+  ) {
     // Garantir valores mínimos
     const validPage = Math.max(1, page);
     const validLimit = Math.max(1, Math.min(100, limit)); // Limitar máximo de 100
     const skip = (validPage - 1) * validLimit;
 
+    // Construir condições de filtro
+    const where: Prisma.BillWhereInput = { userId };
+
+    if (filters?.status) {
+      where.status = filters.status;
+    }
+
+    if (filters?.startDate || filters?.endDate) {
+      where.createdAt = {};
+      if (filters.startDate) {
+        where.createdAt.gte = filters.startDate;
+      }
+      if (filters.endDate) {
+        where.createdAt.lte = filters.endDate;
+      }
+    }
+
     // Buscar total de registros
-    const total = await this.prisma.bill.count({
-      where: { userId },
-    });
+    const total = await this.prisma.bill.count({ where });
 
     // Buscar dados paginados
     const data = await this.prisma.bill.findMany({
-      where: { userId },
+      where,
       include: {
         items: true,
         participants: true,
