@@ -16,6 +16,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useAuthStore } from '@/store/authStore';
 import Logo from '@/assets/images/logo.svg';
 import { z } from 'zod';
+import * as SecureStore from 'expo-secure-store';
 
 export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
@@ -45,8 +46,35 @@ export default function LoginScreen() {
   const onSubmit = async (data: LoginFormData) => {
     setServerError(null);
     try {
+      // Mock de login para desenvolvimento
+      if (data.email === 'teste@gmail.com' && data.password === 'teste123') {
+        const mockUser = {
+          id: 'mock-1',
+          email: 'teste@gmail.com',
+          name: 'Usuário Mock',
+          role: 'USER' as const,
+          createdAt: new Date().toISOString(),
+        };
+
+        const accessToken = 'mock-access-token';
+        const refreshToken = 'mock-refresh-token';
+
+        await SecureStore.setItemAsync('accessToken', accessToken);
+        await SecureStore.setItemAsync('refreshToken', refreshToken);
+
+        useAuthStore.setState({
+          user: mockUser,
+          accessToken,
+          refreshToken,
+          isAuthenticated: true,
+          isLoading: false,
+        });
+
+        router.replace('/(tabs)/camera');
+        return;
+      }
       await login(data.email, data.password);
-      router.replace('/(tabs)');
+      router.replace('/(tabs)/camera');
     } catch (error: any) {
       const message = getApiErrorMessage(error);
       setServerError(message);
