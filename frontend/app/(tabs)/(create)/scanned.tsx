@@ -6,20 +6,13 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  TextInput
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import billService, { UploadBillResponse } from '../../../services/bill.service';
-
-// Mock data for development if needed, or types
-interface BillItem {
-  id: string;
-  name: string;
-  quantity: number;
-  price: number;
-  assignedParticipants: string[]; // List of participant names
-}
+import { ItemCard, BillItem } from '../../../components/items/ItemCard';
 
 export default function ScannedBillScreen() {
   const router = useRouter();
@@ -43,12 +36,10 @@ export default function ScannedBillScreen() {
       }
     }
 
-    // Fetch bill details or use mock if just created
-    // For now, we'll simulate some items if none exist, matching the image
     if (id) {
       loadBill(id as string);
     } else {
-      // Fallback mock data matching the image
+      // Fallback mock data
       setItems([
         { id: '1', name: 'Suco de Laranja', quantity: 3, price: 36.00, assignedParticipants: [] },
         { id: '2', name: 'Batata Frita', quantity: 4, price: 85.00, assignedParticipants: [] },
@@ -67,15 +58,14 @@ export default function ScannedBillScreen() {
 
       if (bill.items && bill.items.length > 0) {
         const mappedItems = bill.items.map((item: { description: string; amount: number }, index: number) => ({
-          id: index.toString(), // API might not return ID for items yet
+          id: index.toString(),
           name: item.description,
-          quantity: item.amount || 1, // Assuming amount is quantity? Or price? The interface says 'amount', usually price.
+          quantity: item.amount || 1,
           price: item.amount,
           assignedParticipants: []
         }));
         setItems(mappedItems);
       } else {
-        // Use mock data if API returns empty (for testing UI)
         setItems([
           { id: '1', name: 'Suco de Laranja', quantity: 3, price: 36.00, assignedParticipants: [] },
           { id: '2', name: 'Batata Frita', quantity: 4, price: 85.00, assignedParticipants: [] },
@@ -130,18 +120,19 @@ export default function ScannedBillScreen() {
   };
 
   const handleAddItem = () => {
-    // Logic to add a new manual item
     Alert.alert('Adicionar Item', 'Funcionalidade de adicionar item manual será implementada em breve.');
   };
 
   const handleSummary = () => {
-    // Navigate to summary screen
-    // router.push('/(tabs)/(create)/summary');
     Alert.alert('Resumo', 'Navegar para tela de resumo');
   };
 
   const formatCurrency = (value: number) => {
     return `R$ ${value.toFixed(2).replace('.', ',')}`;
+  };
+
+  const calculateTotal = () => {
+    return items.reduce((sum, item) => sum + item.price, 0);
   };
 
   if (loading) {
@@ -155,7 +146,12 @@ export default function ScannedBillScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.billName}>{billName}</Text>
+        <TextInput
+          style={styles.billNameInput}
+          value={billName}
+          onChangeText={setBillName}
+          placeholder="Nome da conta"
+        />
         <TouchableOpacity style={styles.addItemButton} onPress={handleAddItem}>
           <Text style={styles.addItemButtonText}>+ Item</Text>
         </TouchableOpacity>
@@ -166,24 +162,12 @@ export default function ScannedBillScreen() {
           const isExpanded = expandedItemId === item.id;
 
           return (
-            <View key={item.id} style={styles.cardContainer}>
-              <TouchableOpacity
-                style={[styles.cardHeader, isExpanded && styles.cardHeaderExpanded]}
+            <View key={item.id} style={styles.itemWrapper}>
+              <ItemCard
+                item={item}
+                onDelete={deleteItem}
                 onPress={() => toggleExpand(item.id)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.itemName}>{item.name}</Text>
-                <View style={styles.itemDetails}>
-                  <Text style={styles.itemQuantity}>{item.quantity}x</Text>
-                  <Text style={styles.itemPrice}>{formatCurrency(item.price)}</Text>
-                  <Ionicons
-                    name={isExpanded ? "caret-up" : "caret-down"} // Changed to caret to match standard accordion, or could use chevron-forward
-                    size={16}
-                    color="#666"
-                    style={{ marginLeft: 8 }}
-                  />
-                </View>
-              </TouchableOpacity>
+              />
 
               {isExpanded && (
                 <View style={styles.cardBody}>
@@ -206,13 +190,9 @@ export default function ScannedBillScreen() {
                   </ScrollView>
 
                   <View style={styles.cardActions}>
-                    <TouchableOpacity onPress={() => deleteItem(item.id)}>
-                      <Ionicons name="trash-outline" size={20} color="#666" />
-                    </TouchableOpacity>
-
                     <TouchableOpacity
                       style={styles.addButton}
-                      onPress={() => toggleExpand(item.id)} // Close on "Adicionar" (Confirm)
+                      onPress={() => toggleExpand(item.id)}
                     >
                       <Text style={styles.addButtonText}>Adicionar</Text>
                     </TouchableOpacity>
@@ -225,6 +205,10 @@ export default function ScannedBillScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
+        <View style={styles.totalContainer}>
+          <Text style={styles.totalLabel}>Total:</Text>
+          <Text style={styles.totalValue}>{formatCurrency(calculateTotal())}</Text>
+        </View>
         <TouchableOpacity style={styles.summaryButton} onPress={handleSummary}>
           <Text style={styles.summaryButtonText}>Visualizar resumo</Text>
         </TouchableOpacity>
@@ -251,10 +235,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     marginBottom: 24,
   },
-  billName: {
+  billNameInput: {
     fontSize: 24,
     color: '#000',
     fontWeight: '400',
+    borderBottomWidth: 1,
+    borderBottomColor: '#ccc',
+    flex: 1,
+    marginRight: 16,
+    paddingVertical: 4,
   },
   addItemButton: {
     paddingHorizontal: 16,
@@ -270,50 +259,25 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 24,
-    paddingBottom: 100,
+    paddingBottom: 160,
   },
-  cardContainer: {
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#fff',
-  },
-  cardHeaderExpanded: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  itemName: {
-    fontSize: 16,
-    color: '#000',
-    flex: 1,
-  },
-  itemDetails: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  itemQuantity: {
-    fontSize: 16,
-    color: '#000',
-  },
-  itemPrice: {
-    fontSize: 16,
-    color: '#000',
+  itemWrapper: {
+    marginBottom: 8,
   },
   cardBody: {
     padding: 16,
     backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
+    marginTop: -12, // Overlap with card
+    paddingTop: 24, // Space for overlap
+    marginBottom: 16,
   },
   participantsList: {
-    maxHeight: 200, // Limit height if many participants
+    maxHeight: 200,
   },
   participantRow: {
     flexDirection: 'row',
@@ -339,7 +303,7 @@ const styles = StyleSheet.create({
   },
   cardActions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     marginTop: 16,
     paddingTop: 16,
@@ -367,6 +331,27 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: '#eee',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  totalContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  totalLabel: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  totalValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#81007F',
   },
   summaryButton: {
     backgroundColor: '#81007F',
