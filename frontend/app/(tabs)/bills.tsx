@@ -1,17 +1,461 @@
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useState, useCallback, useEffect } from 'react';
+import {
+  StyleSheet,
+  Text,
+  View,
+  FlatList,
+  TouchableOpacity,
+  RefreshControl,
+  ActivityIndicator,
+  SafeAreaView,
+  ScrollView,
+  TextInput,
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import billService, { UploadBillResponse } from '../../services/bill.service';
 
-export default function AccountsScreen() {
-  return (
-    <View style={styles.container}>
-      <Text>AccountsScreen</Text>
+interface BillWithStatus extends UploadBillResponse {
+  status?: 'pending' | 'completed' | 'cancelled';
+}
+
+// Dados mockados para demonstração
+const MOCK_BILLS: BillWithStatus[] = [
+  {
+    id: '1',
+    establishmentName: 'Conta 1',
+    totalAmount: 287.50,
+    createdAt: '2025-09-12T18:30:00Z',
+    imageUrl: '',
+    status: 'pending',
+    items: [],
+  },
+  {
+    id: '2',
+    establishmentName: 'Conta 2',
+    totalAmount: 156.00,
+    createdAt: '2025-09-18T20:15:00Z',
+    imageUrl: '',
+    status: 'completed',
+    items: [],
+  },
+  {
+    id: '3',
+    establishmentName: 'Conta 3',
+    totalAmount: 425.80,
+    createdAt: '2025-09-20T19:45:00Z',
+    imageUrl: '',
+    status: 'completed',
+    items: [],
+  },
+  {
+    id: '4',
+    establishmentName: 'Conta 4',
+    totalAmount: 89.50,
+    createdAt: '2025-09-27T10:30:00Z',
+    imageUrl: '',
+    status: 'pending',
+    items: [],
+  },
+  {
+    id: '5',
+    establishmentName: 'Conta 5',
+    totalAmount: 234.90,
+    createdAt: '2025-09-28T22:00:00Z',
+    imageUrl: '',
+    status: 'completed',
+    items: [],
+  },
+  {
+    id: '6',
+    establishmentName: 'Conta 6',
+    totalAmount: 312.40,
+    createdAt: '2025-09-30T19:20:00Z',
+    imageUrl: '',
+    status: 'completed',
+    items: [],
+  },
+  {
+    id: '7',
+    establishmentName: 'Conta 7',
+    totalAmount: 165.30,
+    createdAt: '2025-10-10T18:10:00Z',
+    imageUrl: '',
+    status: 'pending',
+    items: [],
+  },
+  {
+    id: '8',
+    establishmentName: 'Conta 8',
+    totalAmount: 95.00,
+    createdAt: '2025-10-15T15:45:00Z',
+    imageUrl: '',
+    status: 'completed',
+    items: [],
+  },
+];
+
+const DATE_FILTERS = [
+  { id: 'all', label: 'Todos' },
+  { id: 'week', label: 'Última semana' },
+  { id: 'month', label: 'Último mês' },
+];
+
+export default function BillsScreen() {
+  const router = useRouter();
+  const [allBills, setAllBills] = useState<BillWithStatus[]>([]);
+  const [displayedBills, setDisplayedBills] = useState<BillWithStatus[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedDateFilter, setSelectedDateFilter] = useState<string>('all');
+  const [showFilters, setShowFilters] = useState(false);
+  const [searchText, setSearchText] = useState<string>('');
+
+  // Carrega contas mockadas
+  const loadBills = useCallback(async () => {
+    try {
+      setLoading(true);
+      // Simula delay de carregamento
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setAllBills(MOCK_BILLS);
+      applyDateFilter('all', MOCK_BILLS);
+    } catch (error) {
+      console.error('Erro ao carregar contas:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadBills();
+  }, [loadBills]);
+
+  // Formatar data
+  const formatDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('pt-BR');
+  };
+
+  // Aplicar filtro de data
+  const applyDateFilter = useCallback((filterId: string, bills: BillWithStatus[]) => {
+    let filtered = bills;
+
+    // Aplicar filtro de data
+    if (filterId !== 'all') {
+      const now = new Date();
+      filtered = bills.filter(bill => {
+        const billDate = new Date(bill.createdAt);
+        const daysDiff = Math.floor((now.getTime() - billDate.getTime()) / (1000 * 60 * 60 * 24));
+
+        switch (filterId) {
+          case 'week':
+            return daysDiff <= 7;
+          case 'month':
+            return daysDiff <= 30;
+          default:
+            return true;
+        }
+      });
+    }
+
+    // Aplicar filtro de busca
+    if (searchText.trim()) {
+      filtered = filtered.filter(bill =>
+        bill.establishmentName?.toLowerCase().includes(searchText.toLowerCase())
+      );
+    }
+
+    setDisplayedBills(filtered);
+  }, [searchText]);
+
+  // Mudar filtro
+  const handleFilterChange = useCallback((filterId: string) => {
+    setSelectedDateFilter(filterId);
+    applyDateFilter(filterId, allBills);
+  }, [allBills, applyDateFilter]);
+
+  // Mudar busca
+  const handleSearchChange = useCallback((text: string) => {
+    setSearchText(text);
+    applyDateFilter(selectedDateFilter, allBills);
+  }, [selectedDateFilter, allBills, applyDateFilter]);
+
+  // Renderizar card de conta
+  const renderBillCard = ({ item }: { item: BillWithStatus }) => (
+    <TouchableOpacity
+      style={styles.card}
+      onPress={() => router.push(`/bills/${item.id}`)}
+      activeOpacity={0.7}
+    >
+      <View style={styles.cardContent}>
+        <Text style={styles.cardTitle}>{item.establishmentName}</Text>
+        <Text style={styles.cardDate}>{formatDate(item.createdAt)}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+
+  // Pull-to-refresh
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadBills();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadBills]);
+
+  // Renderizar filtros
+  const renderFilters = () => (
+    <View style={styles.filtersContainer}>
+      <View style={styles.filterHeader}>
+        <Text style={styles.filterTitle}>Filtrar por data</Text>
+        <TouchableOpacity onPress={() => setShowFilters(false)}>
+          <MaterialCommunityIcons name="close" size={24} color="#000" />
+        </TouchableOpacity>
+      </View>
+      <ScrollView style={styles.filterOptions}>
+        {DATE_FILTERS.map(filter => (
+          <TouchableOpacity
+            key={filter.id}
+            style={[
+              styles.filterOption,
+              selectedDateFilter === filter.id && styles.filterOptionActive,
+            ]}
+            onPress={() => {
+              handleFilterChange(filter.id);
+              setShowFilters(false);
+            }}
+          >
+            <View style={styles.filterCheckbox}>
+              {selectedDateFilter === filter.id && (
+                <MaterialCommunityIcons name="check" size={16} color="#C91F7A" />
+              )}
+            </View>
+            <Text style={styles.filterOptionText}>{filter.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
     </View>
+  );
+
+  // Renderizar cabeçalho (será implementado em outra task)
+  const renderHeader = () => null;
+
+  // Lista vazia
+  const renderEmpty = () => {
+    if (loading) {
+      return (
+        <View style={styles.emptyContainer}>
+          <ActivityIndicator size="large" color="#C91F7A" />
+          <Text style={styles.emptyText}>Carregando contas...</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyText}>Nenhuma conta encontrada</Text>
+      </View>
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Contas</Text>
+      </View>
+
+      <View style={styles.searchFilterRow}>
+        <View style={styles.searchContainer}>
+          <MaterialCommunityIcons
+            name="magnify"
+            size={20}
+            color="#999"
+            style={styles.searchIcon}
+          />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Buscar...."
+            placeholderTextColor="#999"
+            value={searchText}
+            onChangeText={handleSearchChange}
+          />
+        </View>
+
+        <TouchableOpacity
+          style={styles.filterButton}
+          onPress={() => setShowFilters(!showFilters)}
+        >
+          <MaterialCommunityIcons name="filter-outline" size={20} color="#C91F7A" />
+          <Text style={styles.filterButtonText}>Filtro</Text>
+        </TouchableOpacity>
+      </View>
+
+      {showFilters && renderFilters()}
+
+      <FlatList
+        data={displayedBills}
+        keyExtractor={(item) => item.id}
+        renderItem={renderBillCard}
+        ListHeaderComponent={renderHeader}
+        ListEmptyComponent={renderEmpty}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor="#C91F7A"
+          />
+        }
+        scrollEventThrottle={16}
+      />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  header: {
+    paddingHorizontal: 35,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#000',
+  },
+  searchFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 35,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  searchContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F8F8',
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    height: 44,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#000',
+    padding: 0,
+  },
+  filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#C91F7A',
+    borderRadius: 20,
+    gap: 6,
+    height: 44,
+    justifyContent: 'center',
+  },
+  filterButtonText: {
+    color: '#C91F7A',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  filtersContainer: {
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#D0D0D0',
+    paddingBottom: 16,
+  },
+  filterHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 35,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  filterTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+  },
+  filterOptions: {
+    paddingHorizontal: 35,
+    paddingVertical: 12,
+    maxHeight: 250,
+  },
+  filterOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    gap: 12,
+  },
+  filterOptionActive: {
+    backgroundColor: '#F5F5F5',
+    marginHorizontal: -10,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+  },
+  filterCheckbox: {
+    width: 20,
+    height: 20,
+    borderWidth: 2,
+    borderColor: '#C91F7A',
+    borderRadius: 4,
     justifyContent: 'center',
     alignItems: 'center',
-  }
+  },
+  filterOptionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+  },
+  card: {
+    paddingHorizontal: 35,
+    paddingVertical: 16,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#D0D0D0',
+  },
+  cardContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '400',
+    color: '#333333',
+  },
+  cardDate: {
+    fontSize: 14,
+    color: '#999999',
+    fontWeight: '400',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#666',
+    marginTop: 16,
+    textAlign: 'center',
+  },
 });
