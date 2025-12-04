@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import billService, { UploadBillResponse } from '../../services/bill.service';
+import billService, { UploadBillResponse } from '../../../services/bill.service';
 
 interface BillWithStatus extends UploadBillResponse {
   status?: 'pending' | 'completed' | 'cancelled';
@@ -111,33 +111,8 @@ export default function BillsScreen() {
   const [showFilters, setShowFilters] = useState(false);
   const [searchText, setSearchText] = useState<string>('');
 
-  // Carrega contas mockadas
-  const loadBills = useCallback(async () => {
-    try {
-      setLoading(true);
-      // Simula delay de carregamento
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setAllBills(MOCK_BILLS);
-      applyDateFilter('all', MOCK_BILLS);
-    } catch (error) {
-      console.error('Erro ao carregar contas:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadBills();
-  }, [loadBills]);
-
-  // Formatar data
-  const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('pt-BR');
-  };
-
   // Aplicar filtro de data
-  const applyDateFilter = useCallback((filterId: string, bills: BillWithStatus[]) => {
+  const applyDateFilter = useCallback((filterId: string, bills: BillWithStatus[], search: string = '') => {
     let filtered = bills;
 
     // Aplicar filtro de data
@@ -159,32 +134,62 @@ export default function BillsScreen() {
     }
 
     // Aplicar filtro de busca
-    if (searchText.trim()) {
+    if (search.trim()) {
       filtered = filtered.filter(bill =>
-        bill.establishmentName?.toLowerCase().includes(searchText.toLowerCase())
+        bill.establishmentName?.toLowerCase().includes(search.toLowerCase())
       );
     }
 
     setDisplayedBills(filtered);
-  }, [searchText]);
+  }, []);
+
+  // Carrega contas do servidor
+  const loadBills = useCallback(async () => {
+    try {
+      setLoading(true);
+      const bills = await billService.listBills();
+      setAllBills(bills);
+      applyDateFilter('all', bills, searchText);
+    } catch (error) {
+      console.error('Erro ao carregar contas:', error);
+      // Fallback para dados mockados em caso de erro
+      setAllBills(MOCK_BILLS);
+      applyDateFilter('all', MOCK_BILLS, searchText);
+    } finally {
+      setLoading(false);
+    }
+  }, [applyDateFilter, searchText]);
+
+  useEffect(() => {
+    loadBills();
+  }, [loadBills]);
+
+  // Aplicar filtros quando os filtros mudarem
+  useEffect(() => {
+    applyDateFilter(selectedDateFilter, allBills, searchText);
+  }, [selectedDateFilter, searchText, allBills, applyDateFilter]);
+
+  // Formatar data
+  const formatDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('pt-BR');
+  };
 
   // Mudar filtro
   const handleFilterChange = useCallback((filterId: string) => {
     setSelectedDateFilter(filterId);
-    applyDateFilter(filterId, allBills);
-  }, [allBills, applyDateFilter]);
+  }, []);
 
   // Mudar busca
   const handleSearchChange = useCallback((text: string) => {
     setSearchText(text);
-    applyDateFilter(selectedDateFilter, allBills);
-  }, [selectedDateFilter, allBills, applyDateFilter]);
+  }, []);
 
   // Renderizar card de conta
   const renderBillCard = ({ item }: { item: BillWithStatus }) => (
     <TouchableOpacity
       style={styles.card}
-      onPress={() => router.push(`/bills/${item.id}`)}
+      onPress={() => router.push(`/(tabs)/bills/${item.id}`)}
       activeOpacity={0.7}
     >
       <View style={styles.cardContent}>
@@ -318,10 +323,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   header: {
-    paddingHorizontal: 35,
+    paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
   },
   title: {
     fontSize: 24,
@@ -331,17 +334,32 @@ const styles = StyleSheet.create({
   searchFilterRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 35,
+    paddingHorizontal: 20,
     paddingVertical: 12,
-    gap: 12,
+    gap: 10,
+  },
+  filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth: 1.5,
+    borderColor: '#A01D66',
+    borderRadius: 20,
+    gap: 6,
+  },
+  filterButtonText: {
+    color: '#A01D66',
+    fontSize: 12,
+    fontWeight: '600',
   },
   searchContainer: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F8F8F8',
     borderRadius: 24,
     paddingHorizontal: 16,
+    flex: 1,
     borderWidth: 1,
     borderColor: '#E0E0E0',
     height: 44,
@@ -355,23 +373,6 @@ const styles = StyleSheet.create({
     color: '#000',
     padding: 0,
   },
-  filterButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: '#C91F7A',
-    borderRadius: 20,
-    gap: 6,
-    height: 44,
-    justifyContent: 'center',
-  },
-  filterButtonText: {
-    color: '#C91F7A',
-    fontSize: 12,
-    fontWeight: '600',
-  },
   filtersContainer: {
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
@@ -382,7 +383,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 35,
+    paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
@@ -393,7 +394,7 @@ const styles = StyleSheet.create({
     color: '#000',
   },
   filterOptions: {
-    paddingHorizontal: 35,
+    paddingHorizontal: 20,
     paddingVertical: 12,
     maxHeight: 250,
   },
@@ -424,11 +425,11 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   card: {
-    paddingHorizontal: 35,
-    paddingVertical: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#D0D0D0',
+    borderBottomColor: '#E8E8E8',
   },
   cardContent: {
     flexDirection: 'row',
