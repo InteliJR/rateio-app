@@ -119,6 +119,11 @@ export class FeesService {
    * Criar taxa
    */
   async create(userId: string, createFeeDto: CreateFeeDto) {
+    // Validar que billId foi fornecido
+    if (!createFeeDto.billId) {
+      throw new BadRequestException('O ID da conta é obrigatório');
+    }
+
     // Validar ownership da conta
     await this.validateBillOwnership(createFeeDto.billId, userId);
 

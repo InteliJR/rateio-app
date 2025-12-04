@@ -11,9 +11,9 @@ import {
 import { FeeType } from '@prisma/client';
 
 export class CreateFeeDto {
-  @IsNotEmpty({ message: 'O ID da conta é obrigatório' })
+  @IsOptional()
   @IsUUID('4', { message: 'ID da conta inválido' })
-  billId: string;
+  billId?: string;
 
   @IsNotEmpty({ message: 'O tipo de taxa é obrigatório' })
   @IsEnum(FeeType, {

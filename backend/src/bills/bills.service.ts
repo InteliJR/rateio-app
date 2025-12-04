@@ -12,6 +12,11 @@ import { CreateBillDto } from './dto/create-bill.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
 import { BillStatus } from '@prisma/client';
 import { FinalizeBillDto } from './dto/finalize-bill.dto';
+import { CreateBillItemDto } from '../bill-items/dto/create-bill-item.dto';
+import { UpdateBillItemDto } from '../bill-items/dto/update-bill-item.dto';
+import { BatchUpdateBillItemsDto } from './dto/update-bill.dto';
+import { FeesService } from '../fees/fees.service';
+import { CreateFeeDto } from '../fees/dto/create-fee.dto';
 
 @Injectable()
 export class BillsService {
@@ -19,6 +24,7 @@ export class BillsService {
     private prisma: PrismaService,
     private storage: StorageService,
     private ocr: OcrService,
+    private feesService: FeesService,
   ) {}
 
   /**
@@ -540,5 +546,293 @@ export class BillsService {
       participantTotals: participantTotalsWithFees,
       fees: persistedFees,
     };
+  }
+
+  /**
+   * Validar que a conta pertence ao usuário
+   */
+  private async validateBillOwnership(billId: string, userId: string) {
+    const bill = await this.prisma.bill.findUnique({
+      where: { id: billId },
+    });
+
+    if (!bill) {
+      throw new NotFoundException('Conta não encontrada');
+    }
+
+    if (bill.userId !== userId) {
+      throw new ForbiddenException('Você não tem acesso a esta conta');
+    }
+
+    return bill;
+  }
+
+  /**
+   * Validar que a soma dos itens não ultrapassa o totalAmount da conta
+   * Permite que a soma seja menor (pode haver taxas/descontos), mas não maior
+   */
+  private async validateItemsTotal(billId: string) {
+    const bill = await this.prisma.bill.findUnique({
+      where: { id: billId },
+      include: { items: true },
+    });
+
+    if (!bill) {
+      throw new NotFoundException('Conta não encontrada');
+    }
+
+    // Se não tem totalAmount definido, não valida
+    if (!bill.totalAmount) {
+      return;
+    }
+
+    // Calcular soma dos itens
+    const itemsSum = bill.items.reduce(
+      (acc, item) => acc + Number(item.totalPrice),
+      0,
+    );
+
+    const totalAmount = Number(bill.totalAmount);
+
+    // Permitir que a soma seja menor ou igual ao total (pode haver taxas)
+    // Mas não permitir que seja maior (tolerância de 0.01 para ponto flutuante)
+    if (itemsSum > totalAmount + 0.01) {
+      throw new BadRequestException(
+        `A soma dos itens (${itemsSum.toFixed(2)}) ultrapassa o total da conta (${totalAmount.toFixed(2)})`,
+      );
+    }
+  }
+
+  /**
+   * Criar item individual
+   */
+  async createItem(
+    billId: string,
+    userId: string,
+    createBillItemDto: CreateBillItemDto,
+  ) {
+    // Validar ownership
+    await this.validateBillOwnership(billId, userId);
+
+    // Validar que totalPrice = unitPrice * quantity (com tolerância)
+    const expectedTotal = createBillItemDto.unitPrice * createBillItemDto.quantity;
+    const difference = Math.abs(createBillItemDto.totalPrice - expectedTotal);
+    if (difference > 0.01) {
+      throw new BadRequestException(
+        `O preço total (${createBillItemDto.totalPrice}) deve ser igual a quantidade × preço unitário (${expectedTotal})`,
+      );
+    }
+
+    // Criar item
+    const item = await this.prisma.billItem.create({
+      data: {
+        billId,
+        name: createBillItemDto.name,
+        quantity: createBillItemDto.quantity,
+        unitPrice: createBillItemDto.unitPrice,
+        totalPrice: createBillItemDto.totalPrice,
+      },
+    });
+
+    // Validar soma dos itens vs totalAmount
+    await this.validateItemsTotal(billId);
+
+    return item;
+  }
+
+  /**
+   * Atualizar item individual
+   */
+  async updateItem(
+    billId: string,
+    itemId: string,
+    userId: string,
+    updateBillItemDto: UpdateBillItemDto,
+  ) {
+    // Validar ownership da conta
+    await this.validateBillOwnership(billId, userId);
+
+    // Validar que o item pertence à conta
+    const item = await this.prisma.billItem.findUnique({
+      where: { id: itemId },
+    });
+
+    if (!item) {
+      throw new NotFoundException('Item não encontrado');
+    }
+
+    if (item.billId !== billId) {
+      throw new BadRequestException('Item não pertence a esta conta');
+    }
+
+    // Preparar dados para atualização
+    const updateData: {
+      name?: string;
+      quantity?: number;
+      unitPrice?: number;
+      totalPrice?: number;
+    } = {};
+
+    if (updateBillItemDto.name !== undefined) {
+      updateData.name = updateBillItemDto.name;
+    }
+
+    if (updateBillItemDto.quantity !== undefined) {
+      updateData.quantity = updateBillItemDto.quantity;
+    }
+
+    if (updateBillItemDto.unitPrice !== undefined) {
+      updateData.unitPrice = updateBillItemDto.unitPrice;
+    }
+
+    if (updateBillItemDto.totalPrice !== undefined) {
+      updateData.totalPrice = updateBillItemDto.totalPrice;
+    }
+
+    // Se atualizou quantity ou unitPrice, recalcular totalPrice se não foi fornecido
+    if (
+      (updateBillItemDto.quantity !== undefined ||
+        updateBillItemDto.unitPrice !== undefined) &&
+      updateBillItemDto.totalPrice === undefined
+    ) {
+      const finalQuantity =
+        updateBillItemDto.quantity ?? item.quantity;
+      const finalUnitPrice =
+        updateBillItemDto.unitPrice ?? Number(item.unitPrice);
+      updateData.totalPrice = finalQuantity * finalUnitPrice;
+    }
+
+    // Validar que totalPrice = unitPrice * quantity (com tolerância)
+    const finalQuantity = updateData.quantity ?? item.quantity;
+    const finalUnitPrice =
+      updateData.unitPrice ?? Number(item.unitPrice);
+    const finalTotalPrice = updateData.totalPrice ?? Number(item.totalPrice);
+    const expectedTotal = finalQuantity * finalUnitPrice;
+    const difference = Math.abs(finalTotalPrice - expectedTotal);
+
+    if (difference > 0.01) {
+      throw new BadRequestException(
+        `O preço total (${finalTotalPrice}) deve ser igual a quantidade × preço unitário (${expectedTotal})`,
+      );
+    }
+
+    // Atualizar item
+    const updatedItem = await this.prisma.billItem.update({
+      where: { id: itemId },
+      data: updateData,
+    });
+
+    // Validar soma dos itens vs totalAmount
+    await this.validateItemsTotal(billId);
+
+    return updatedItem;
+  }
+
+  /**
+   * Deletar item individual
+   */
+  async deleteItem(billId: string, itemId: string, userId: string) {
+    // Validar ownership da conta
+    await this.validateBillOwnership(billId, userId);
+
+    // Validar que o item pertence à conta
+    const item = await this.prisma.billItem.findUnique({
+      where: { id: itemId },
+    });
+
+    if (!item) {
+      throw new NotFoundException('Item não encontrado');
+    }
+
+    if (item.billId !== billId) {
+      throw new BadRequestException('Item não pertence a esta conta');
+    }
+
+    // Deletar item
+    await this.prisma.billItem.delete({
+      where: { id: itemId },
+    });
+
+    // Validar soma dos itens vs totalAmount (após deletar)
+    await this.validateItemsTotal(billId);
+
+    return { message: 'Item removido com sucesso' };
+  }
+
+  /**
+   * Atualizar itens em lote
+   * Substitui todos os itens existentes pelos itens fornecidos
+   */
+  async batchUpdateItems(
+    billId: string,
+    userId: string,
+    batchUpdateDto: BatchUpdateBillItemsDto,
+  ) {
+    // Validar ownership
+    await this.validateBillOwnership(billId, userId);
+
+    // Validar cada item
+    for (const itemDto of batchUpdateDto.items) {
+      // Validar que totalPrice = unitPrice * quantity (com tolerância)
+      const expectedTotal = itemDto.unitPrice * itemDto.quantity;
+      const difference = Math.abs(itemDto.totalPrice - expectedTotal);
+      if (difference > 0.01) {
+        throw new BadRequestException(
+          `Item "${itemDto.name}": o preço total (${itemDto.totalPrice}) deve ser igual a quantidade × preço unitário (${expectedTotal})`,
+        );
+      }
+    }
+
+    // Deletar todos os itens existentes
+    await this.prisma.billItem.deleteMany({
+      where: { billId },
+    });
+
+    // Criar novos itens
+    const items = batchUpdateDto.items.map((item) => ({
+      billId,
+      name: item.name,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      totalPrice: item.totalPrice,
+    }));
+
+    await this.prisma.billItem.createMany({ data: items });
+
+    // Validar soma dos itens vs totalAmount
+    await this.validateItemsTotal(billId);
+
+    // Retornar todos os itens criados
+    const allItems = await this.prisma.billItem.findMany({
+      where: { billId },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return {
+      message: `${items.length} item(ns) atualizado(s)`,
+      items: allItems,
+    };
+  }
+
+  /**
+   * Criar taxa/couvert
+   */
+  async createFee(
+    billId: string,
+    userId: string,
+    createFeeDto: CreateFeeDto,
+  ) {
+    // Validar ownership
+    await this.validateBillOwnership(billId, userId);
+
+    // Garantir que o billId do DTO corresponde ao parâmetro
+    if (createFeeDto.billId !== billId) {
+      throw new BadRequestException(
+        'O ID da conta no body deve corresponder ao ID na URL',
+      );
+    }
+
+    // Reutilizar FeesService
+    return this.feesService.create(userId, createFeeDto);
   }
 }
