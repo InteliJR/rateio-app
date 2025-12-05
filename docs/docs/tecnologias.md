@@ -56,13 +56,13 @@
 - **Framework:** NestJS 11
 - **ORM:** Prisma 6
 - **Estratégia de autenticação/autorização:** JWT (JSON Web Tokens) com Passport.js
-- **IA para OCR:** Google Cloud Vision API
+- **IA para OCR:** OpenAI GPT-4o
 - **Processamento de imagens:** Sharp
 - **Justificativa da escolha:**
   - NestJS oferece arquitetura modular e escalável
   - TypeScript garante consistência entre mobile e backend
   - Prisma proporciona type-safety no banco e migrations automáticas
-  - Google Cloud Vision API oferece OCR robusto para reconhecimento de texto em contas
+  - OpenAI GPT-4o oferece OCR robusto para reconhecimento de texto em contas
   - Estrutura orientada a injeção de dependências facilita testes e manutenção
 
 ### Banco de Dados
@@ -125,7 +125,7 @@ A arquitetura foi projetada para **desenvolvimento local simplificado** e **depl
 #### Backend (NestJS)
 - **Controllers:** Endpoints REST que recebem requisições HTTP
 - **Services:** Lógica de negócio e orquestração
-- **OCR Service:** Integração com Google Cloud Vision API
+- **OCR Service:** Integração com OpenAI API (GPT-4o)
 - **Image Processing Service:** Otimização e manipulação de imagens (Sharp)
 - **Prisma Service:** Camada de acesso a dados (ORM)
 - **Guards/Interceptors:** Autenticação JWT, autorização e validação
@@ -179,7 +179,7 @@ A arquitetura foi projetada para **desenvolvimento local simplificado** e **depl
 │                                              │              │
 │  ┌──────────────┐  ┌──────────────┐         │              │
 │  │  OCR Service │  │Image Process │         │              │
-│  │(Vision API)  │  │   (Sharp)    │         │              │
+│  │(OpenAI GPT-4o)│  │   (Sharp)    │         │              │
 │  └──────────────┘  └──────────────┘         │              │
 └──────────────────────────────────────────────┼──────────────┘
                                                │
@@ -280,7 +280,8 @@ JWT_REFRESH_SECRET=outro-secret-aqui
 PASSWORD_PEPPER=pepper-para-senha
 
 # OCR API
-GOOGLE_VISION_API_KEY=sua-key-aqui
+OPENAI_API_KEY=sua-key-aqui
+OPENAI_MODEL=gpt-4o-mini
 
 # Storage de imagens
 AWS_S3_BUCKET=rateio-contas-dev
@@ -365,7 +366,7 @@ DB_PORT=5432
 - **Backend:** AWS App Runner ou Render
 - **Banco de Dados:** AWS RDS PostgreSQL ou Supabase
 - **Storage:** AWS S3 + CloudFront
-- **OCR:** Google Cloud Vision API
+- **OCR:** OpenAI API (GPT-4o)
 - **Monitoramento:** 
   - Sentry (erros backend + mobile)
   - Expo Analytics (eventos e métricas do app)
@@ -432,7 +433,7 @@ DB_PORT=5432
 │  (Storage Imagens)   │      │  (Backend NestJS)           │
 │                      │      │                             │
 │  • Fotos contas      │      │  • Container Docker         │
-│  • CDN CloudFront    │◄─────│  • OCR Service (Vision API) │
+│  • CDN CloudFront    │◄─────│  • OCR Service (OpenAI GPT-4o) │
 │  • Lifecycle policy  │      │  • Auto-scaling             │
 └──────────────────────┘      └──────────┬──────────────────┘
                                          │
@@ -792,10 +793,10 @@ Mobile App → Tira foto → Comprime imagem → Envia para API
 ### 2. Processamento OCR
 
 ```
-Backend → Gera URL pré-assinada do S3 → Envia para Google Vision API
+Backend → Gera URL pré-assinada do S3 → Envia para OpenAI API (GPT-4o)
                                                 │
                                                 ▼
-                                        Vision API retorna texto
+                                        OpenAI API retorna texto extraído
                                                 │
                                                 ▼
                                         Backend processa texto:
@@ -883,17 +884,17 @@ Usuário confirma → Envia divisão para API
 - API stateless permite horizontal scaling
 - S3 escala automaticamente
 - Banco de dados pode ser escalado verticalmente ou com read replicas
-- OCR API (Google Vision) tem limites de quota - monitorar uso
+- OpenAI API (GPT-4o) tem limites de quota - monitorar uso
 - **EAS Build** escala automaticamente para múltiplos builds simultâneos
 
 ### Custos:
 - **EAS:**
   - Free tier: 30 builds/mês
   - Production: $29/mês para builds ilimitados
-- **Google Vision API:** ~$1.50 por 1000 imagens
+- **OpenAI API (GPT-4o):** Preço varia por modelo (gpt-4o-mini é mais econômico)
 - **AWS S3:** Storage + requests (baixo custo)
 - **RDS:** Instância t3.micro elegível para free tier (12 meses)
-- **Monitorar:** Usage do Vision API para evitar custos excessivos
+- **Monitorar:** Usage da OpenAI API para evitar custos excessivos
 
 ### Roadmap Técnico:
 - **Fase 1:** MVP - Android com funcionalidades core via Expo

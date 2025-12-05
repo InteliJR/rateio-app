@@ -119,6 +119,14 @@ export class BillsController {
   }
 
   /**
+   * Retornar resumo da conta com valores por participante
+   */
+  @Get(':id/summary')
+  getSummary(@Param('id') id: string, @Request() req: any) {
+    return this.billsService.getSummary(id, req.user.id);
+  }
+
+  /**
    * Atualizar conta (status, itens, etc)
    */
   @Patch(':id')
@@ -136,5 +144,17 @@ export class BillsController {
   @Delete(':id')
   remove(@Param('id') id: string, @Request() req: any) {
     return this.billsService.remove(id, req.user.id);
+  }
+
+  /**
+   * Finalizar divisão da conta
+   */
+  @Post(':id/finalize')
+  finalize(
+    @Param('id') id: string,
+    @Body() finalizeBillDto: FinalizeBillDto,
+    @Request() req: any,
+  ) {
+    return this.billsService.finalize(id, req.user.id, finalizeBillDto);
   }
 }
