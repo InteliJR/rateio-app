@@ -10,8 +10,20 @@ import { OcrService } from '../ocr/ocr.service';
 import { OcrResultDto } from '../ocr/dto/ocr-result.dto';
 import { CreateBillDto } from './dto/create-bill.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
-import { BillStatus } from '@prisma/client';
-import { FinalizeBillDto } from './dto/finalize-bill.dto';
+import { BillStatus, Prisma } from '@prisma/client';
+
+// Campos permitidos para ordenação
+export type BillSortField = 'createdAt' | 'totalAmount';
+export type SortOrder = 'asc' | 'desc';
+
+// Interface para filtros de busca
+export interface BillFilters {
+  status?: BillStatus;
+  startDate?: Date;
+  endDate?: Date;
+  sortBy?: BillSortField;
+  sortOrder?: SortOrder;
+}
 
 @Injectable()
 export class BillsService {
@@ -119,24 +131,90 @@ export class BillsService {
   }
 
   /**
-   * Buscar todas as contas do usuário
+   * Buscar todas as contas do usuário com paginação e filtros
    */
-  async findAllByUser(userId: string) {
-    return this.prisma.bill.findMany({
-      where: { userId },
-      include: {
-        items: true,
-        participants: true,
-        fees: true,
+  async findAllByUser(
+    userId: string,
+    page: number = 1,
+    limit: number = 10,
+    filters?: BillFilters,
+  ) {
+    // Garantir valores mínimos
+    const validPage = Math.max(1, page);
+    const validLimit = Math.max(1, Math.min(100, limit)); // Limitar máximo de 100
+    const skip = (validPage - 1) * validLimit;
+
+    // Construir condições de filtro
+    const where: Prisma.BillWhereInput = { userId };
+
+    if (filters?.status) {
+      where.status = filters.status;
+    }
+
+    if (filters?.startDate || filters?.endDate) {
+      where.createdAt = {};
+      if (filters.startDate) {
+        where.createdAt.gte = filters.startDate;
+      }
+      if (filters.endDate) {
+        where.createdAt.lte = filters.endDate;
+      }
+    }
+
+    // Construir ordenação
+    const sortField = filters?.sortBy || 'createdAt';
+    const sortOrder = filters?.sortOrder || 'desc';
+    const orderBy: Prisma.BillOrderByWithRelationInput = {
+      [sortField]: sortOrder,
+    };
+
+    // Buscar total de registros
+    const total = await this.prisma.bill.count({ where });
+
+    // Buscar dados paginados com campos seletivos
+    const data = await this.prisma.bill.findMany({
+      where,
+      select: {
+        id: true,
+        status: true,
+        imageUrl: true,
+        totalAmount: true,
+        establishmentName: true,
+        createdAt: true,
+        updatedAt: true,
+        // Contagem de itens e participantes (leve)
         _count: {
           select: {
             items: true,
             participants: true,
           },
         },
+        // Apenas resumo das taxas
+        fees: {
+          select: {
+            id: true,
+            type: true,
+            value: true,
+          },
+        },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy,
+      skip,
+      take: validLimit,
     });
+
+    // Calcular total de páginas
+    const totalPages = Math.ceil(total / validLimit);
+
+    return {
+      data,
+      meta: {
+        total,
+        page: validPage,
+        limit: validLimit,
+        totalPages,
+      },
+    };
   }
 
   /**
@@ -145,22 +223,62 @@ export class BillsService {
   async findOne(id: string, userId: string) {
     const bill = await this.prisma.bill.findUnique({
       where: { id },
-      include: {
+      select: {
+        id: true,
+        userId: true,
+        status: true,
+        imageUrl: true,
+        imageKey: true,
+        totalAmount: true,
+        establishmentName: true,
+        ocrRawText: true,
+        createdAt: true,
+        updatedAt: true,
+        // Itens com divisões
         items: {
-          include: {
+          select: {
+            id: true,
+            name: true,
+            quantity: true,
+            unitPrice: true,
+            totalPrice: true,
             divisions: {
-              include: {
-                participant: true,
+              select: {
+                id: true,
+                shareAmount: true,
+                participant: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
               },
             },
           },
         },
+        // Participantes com divisões
         participants: {
-          include: {
-            divisions: true,
+          select: {
+            id: true,
+            name: true,
+            divisions: {
+              select: {
+                id: true,
+                shareAmount: true,
+                billItemId: true,
+              },
+            },
           },
         },
-        fees: true,
+        // Taxas
+        fees: {
+          select: {
+            id: true,
+            type: true,
+            description: true,
+            value: true,
+          },
+        },
       },
     });
 
@@ -345,10 +463,37 @@ export class BillsService {
         establishmentName: updateBillDto.establishmentName,
         totalAmount: updateBillDto.totalAmount,
       },
-      include: {
-        items: true,
-        participants: true,
-        fees: true,
+      select: {
+        id: true,
+        status: true,
+        imageUrl: true,
+        totalAmount: true,
+        establishmentName: true,
+        createdAt: true,
+        updatedAt: true,
+        items: {
+          select: {
+            id: true,
+            name: true,
+            quantity: true,
+            unitPrice: true,
+            totalPrice: true,
+          },
+        },
+        participants: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        fees: {
+          select: {
+            id: true,
+            type: true,
+            description: true,
+            value: true,
+          },
+        },
       },
     });
   }
