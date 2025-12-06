@@ -136,7 +136,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({
                 ref={quantityInputRef}
                 style={[styles.input, styles.quantityInput]}
                 value={tempValue}
-                onChangeText={setTempValue}
+                onChangeText={(text) => setTempValue(text.replace(/[^0-9]/g, ''))}
                 onBlur={handleFinishEditing}
                 onSubmitEditing={handleFinishEditing}
                 keyboardType="number-pad"
@@ -157,7 +157,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({
                 ref={priceInputRef}
                 style={[styles.input, styles.priceInput]}
                 value={tempValue}
-                onChangeText={setTempValue}
+                onChangeText={(text) => setTempValue(text.replace(/[^0-9,.]/g, ''))}
                 onBlur={handleFinishEditing}
                 onSubmitEditing={handleFinishEditing}
                 keyboardType="numeric"

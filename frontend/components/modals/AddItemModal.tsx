@@ -80,7 +80,8 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ visible, onClose, on
     const newErrors = { name: '', quantity: '', value: '' };
     let isValid = true;
 
-    if (!name.trim()) {
+    // Name is mandatory only for products, optional for fees
+    if (step === 'product' && !name.trim()) {
       newErrors.name = 'Nome é obrigatório';
       isValid = false;
     }
@@ -111,8 +112,14 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ visible, onClose, on
     const price = parseCurrency(value);
     const qty = step === 'product' ? parseInt(quantity) : 1;
 
+    // Default name for fees if empty
+    let finalName = name.trim();
+    if (step === 'fee' && !finalName) {
+      finalName = 'Taxa/Couvert';
+    }
+
     onAdd({
-      name: name.trim(),
+      name: finalName,
       quantity: qty,
       price: step === 'product' ? price * qty : price, // If fee, price is total value
     });
