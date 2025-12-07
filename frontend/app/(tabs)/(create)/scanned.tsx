@@ -232,6 +232,7 @@ export default function ScannedBillScreen() {
                 item={item}
                 onDelete={deleteItem}
                 onUpdate={handleUpdateItem}
+                isActive={isExpanded}
                 onPress={() => toggleExpand(item.id)}
               />
 

@@ -14,6 +14,7 @@ interface ItemCardProps {
   item: BillItem;
   onDelete: (id: string) => void;
   onUpdate?: (item: BillItem) => void;
+  isActive?: boolean;
   onPress?: () => void;
 }
 
@@ -21,6 +22,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({
   item,
   onDelete,
   onUpdate,
+  isActive = false,
   onPress
 }) => {
   const [name, setName] = useState(item.name);
@@ -125,6 +127,15 @@ export const ItemCard: React.FC<ItemCardProps> = ({
               keyboardType="numeric"
             />
           </View>
+
+          {/* Botão de Expandir */}
+          <TouchableOpacity
+            style={styles.expandButton}
+            onPress={onPress}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name={isActive ? "caret-down" : "caret-forward"} size={20} color="#666" />
+          </TouchableOpacity>
         </View>
       </View>
     </View>
@@ -197,5 +208,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginRight: 2,
+  },
+  expandButton: {
+    padding: 4,
+    marginLeft: 4,
   }
 });
