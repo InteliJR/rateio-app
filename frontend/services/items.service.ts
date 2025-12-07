@@ -17,12 +17,13 @@ class ItemsService {
 
     try {
       const bill = await billService.getBill(billId);
-      // Map backend items to frontend BillItems
+      // Backend returns items as { name, quantity, unitPrice, totalPrice }
+      // We map to BillItem: { id, name, quantity, price (total), assignedParticipants }
       const items: BillItem[] = (bill.items || []).map((item: any, index: number) => ({
-        id: item._id || index.toString(), // Use _id if available, else index
-        name: item.description,
-        quantity: 1, // Default to 1 if not provided by backend structure
-        price: item.amount,
+        id: item.id || index.toString(), // Prefer ID from backend if available
+        name: item.name,
+        quantity: item.quantity,
+        price: item.totalPrice,
         assignedParticipants: []
       }));
 
@@ -81,26 +82,13 @@ class ItemsService {
 
   // Helper to sync changes via updateBill
   private async syncWithBackend(billId: string, items: BillItem[]) {
-    // Convert back to backend format
-    // Logic from scanned.tsx: split items by quantity if > 1
-    const payloadItems: { description: string; amount: number }[] = [];
-
-    items.forEach(item => {
-      if (item.quantity > 1) {
-        const unitPrice = item.price / item.quantity;
-        for (let i = 0; i < item.quantity; i++) {
-          payloadItems.push({
-            description: item.name,
-            amount: Number(unitPrice.toFixed(2))
-          });
-        }
-      } else {
-        payloadItems.push({
-          description: item.name,
-          amount: item.price
-        });
-      }
-    });
+    // Convert back to backend format: { name, quantity, unitPrice, totalPrice }
+    const payloadItems = items.map(item => ({
+      name: item.name,
+      quantity: item.quantity,
+      unitPrice: Number((item.price / item.quantity).toFixed(2)),
+      totalPrice: item.price
+    }));
 
     try {
       await billService.updateBill(billId, {
@@ -108,7 +96,7 @@ class ItemsService {
       });
     } catch (error) {
       console.error('Sync failed:', error);
-      // Should we revert cache? For now, let's keep optimistic UI but log error
+      // Revert cache logic could go here
       throw error;
     }
   }
