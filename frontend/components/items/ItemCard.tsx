@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Keyboard } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 export interface BillItem {
@@ -23,87 +23,57 @@ export const ItemCard: React.FC<ItemCardProps> = ({
   onUpdate,
   onPress
 }) => {
-  const [editingField, setEditingField] = useState<'name' | 'quantity' | 'price' | null>(null);
-  const [tempValue, setTempValue] = useState('');
+  const [name, setName] = useState(item.name);
+  const [quantity, setQuantity] = useState(item.quantity.toString());
+  const [price, setPrice] = useState(item.price.toFixed(2));
 
-  // Refs for inputs to focus automatically
-  const nameInputRef = useRef<TextInput>(null);
-  const quantityInputRef = useRef<TextInput>(null);
-  const priceInputRef = useRef<TextInput>(null);
-
+  // Update local state when props change
   useEffect(() => {
-    if (editingField === 'name' && nameInputRef.current) {
-      nameInputRef.current.focus();
-    } else if (editingField === 'quantity' && quantityInputRef.current) {
-      quantityInputRef.current.focus();
-    } else if (editingField === 'price' && priceInputRef.current) {
-      priceInputRef.current.focus();
-    }
-  }, [editingField]);
+    setName(item.name);
+    setQuantity(item.quantity.toString());
+    setPrice(item.price.toFixed(2));
+  }, [item]);
 
-  const formatCurrency = (value: number) => {
-    return `R$ ${value.toFixed(2).replace('.', ',')}`;
-  };
-
-  const handleStartEditing = (field: 'name' | 'quantity' | 'price') => {
-    setEditingField(field);
-    if (field === 'name') {
-      setTempValue(item.name);
-    } else if (field === 'quantity') {
-      setTempValue(item.quantity.toString());
-    } else if (field === 'price') {
-      setTempValue(item.price.toFixed(2));
-    }
-  };
-
-  const handleFinishEditing = () => {
-    if (!editingField || !onUpdate) {
-      setEditingField(null);
-      return;
-    }
+  const handleBlur = (field: 'name' | 'quantity' | 'price') => {
+    if (!onUpdate) return;
 
     let newItem = { ...item };
     let hasChanges = false;
 
-    if (editingField === 'name') {
-      const trimmed = tempValue.trim();
+    if (field === 'name') {
+      const trimmed = name.trim();
       if (trimmed && trimmed !== item.name) {
         newItem.name = trimmed;
         hasChanges = true;
       }
-    } else if (editingField === 'quantity') {
-      const qty = parseInt(tempValue, 10);
+    } else if (field === 'quantity') {
+      const qty = parseInt(quantity, 10);
       if (!isNaN(qty) && qty >= 1 && qty !== item.quantity) {
         newItem.quantity = qty;
         hasChanges = true;
+      } else {
+        // Revert invalid
+        setQuantity(item.quantity.toString());
       }
-    } else if (editingField === 'price') {
-      // Replace comma with dot for parsing
-      const normalized = tempValue.replace(',', '.');
-      const price = parseFloat(normalized);
-      if (!isNaN(price) && price >= 0 && price !== item.price) {
-        newItem.price = price;
+    } else if (field === 'price') {
+      const normalized = price.replace(',', '.');
+      const val = parseFloat(normalized);
+      if (!isNaN(val) && val >= 0 && val !== item.price) {
+        newItem.price = val;
         hasChanges = true;
+      } else {
+        // Revert invalid
+        setPrice(item.price.toFixed(2));
       }
     }
 
     if (hasChanges) {
       onUpdate(newItem);
     }
-
-    setEditingField(null);
-  };
-
-  const handleCancelEditing = () => {
-    setEditingField(null);
   };
 
   return (
-    <TouchableOpacity
-      style={styles.container}
-      onPress={editingField ? undefined : onPress}
-      activeOpacity={editingField ? 1 : 0.7}
-    >
+    <View style={styles.container}>
       <TouchableOpacity
         style={styles.deleteButton}
         onPress={() => onDelete(item.id)}
@@ -113,65 +83,51 @@ export const ItemCard: React.FC<ItemCardProps> = ({
       </TouchableOpacity>
 
       <View style={styles.contentContainer}>
-        {editingField === 'name' ? (
+        {/* Espaço clicável para expandir participants, exceto nos inputs */}
+        <TouchableOpacity
+          style={styles.expandArea}
+          onPress={onPress}
+          activeOpacity={0.7}
+        >
+          {/* Nome */}
           <TextInput
-            ref={nameInputRef}
             style={[styles.input, styles.nameInput]}
-            value={tempValue}
-            onChangeText={setTempValue}
-            onBlur={handleFinishEditing}
-            onSubmitEditing={handleFinishEditing}
-            returnKeyType="done"
+            value={name}
+            onChangeText={setName}
+            onBlur={() => handleBlur('name')}
+            placeholder="Nome do item"
+            placeholderTextColor="#999"
           />
-        ) : (
-          <TouchableOpacity onPress={() => handleStartEditing('name')} style={styles.nameContainer}>
-            <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-          </TouchableOpacity>
-        )}
+        </TouchableOpacity>
 
         <View style={styles.detailsContainer}>
-          {editingField === 'quantity' ? (
-            <View style={styles.editWrapper}>
-              <TextInput
-                ref={quantityInputRef}
-                style={[styles.input, styles.quantityInput]}
-                value={tempValue}
-                onChangeText={(text) => setTempValue(text.replace(/[^0-9]/g, ''))}
-                onBlur={handleFinishEditing}
-                onSubmitEditing={handleFinishEditing}
-                keyboardType="number-pad"
-                returnKeyType="done"
-              />
-              <Text style={styles.suffix}>x</Text>
-            </View>
-          ) : (
-            <TouchableOpacity onPress={() => handleStartEditing('quantity')}>
-              <Text style={styles.quantity}>{item.quantity}x</Text>
-            </TouchableOpacity>
-          )}
+          {/* Quantidade */}
+          <View style={styles.inputWrapper}>
+            <TextInput
+              style={[styles.input, styles.quantityInput]}
+              value={quantity}
+              onChangeText={(text) => setQuantity(text.replace(/[^0-9]/g, ''))}
+              onBlur={() => handleBlur('quantity')}
+              keyboardType="number-pad"
+              maxLength={3}
+            />
+            <Text style={styles.suffix}>x</Text>
+          </View>
 
-          {editingField === 'price' ? (
-            <View style={styles.editWrapper}>
-              <Text style={styles.prefix}>R$</Text>
-              <TextInput
-                ref={priceInputRef}
-                style={[styles.input, styles.priceInput]}
-                value={tempValue}
-                onChangeText={(text) => setTempValue(text.replace(/[^0-9,.]/g, ''))}
-                onBlur={handleFinishEditing}
-                onSubmitEditing={handleFinishEditing}
-                keyboardType="numeric"
-                returnKeyType="done"
-              />
-            </View>
-          ) : (
-            <TouchableOpacity onPress={() => handleStartEditing('price')}>
-              <Text style={styles.price}>{formatCurrency(item.price)}</Text>
-            </TouchableOpacity>
-          )}
+          {/* Preço */}
+          <View style={styles.inputWrapper}>
+            <Text style={styles.prefix}>R$</Text>
+            <TextInput
+              style={[styles.input, styles.priceInput]}
+              value={price}
+              onChangeText={(text) => setPrice(text.replace(/[^0-9,.]/g, ''))}
+              onBlur={() => handleBlur('price')}
+              keyboardType="numeric"
+            />
+          </View>
         </View>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 };
 
@@ -180,75 +136,66 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fff',
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#ccc',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   deleteButton: {
-    marginRight: 16,
+    marginRight: 12,
     padding: 4,
   },
   contentContainer: {
     flex: 1,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  nameContainer: {
+  expandArea: {
     flex: 1,
     marginRight: 8,
-  },
-  name: {
-    fontSize: 16,
-    color: '#000',
   },
   detailsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
-  },
-  quantity: {
-    fontSize: 16,
-    color: '#000',
-  },
-  price: {
-    fontSize: 16,
-    color: '#000',
-    fontWeight: '500',
+    gap: 12,
   },
   input: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#81007F',
-    padding: 0,
     fontSize: 16,
     color: '#000',
+    padding: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: 'transparent', // Looks cleaner, can add color on focus if needed
   },
   nameInput: {
-    flex: 1,
-    marginRight: 8,
+    width: '100%',
   },
   quantityInput: {
-    width: 30,
     textAlign: 'center',
+    width: 30,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
   },
   priceInput: {
-    width: 60,
     textAlign: 'right',
+    minWidth: 60,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
   },
-  editWrapper: {
+  inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   suffix: {
     fontSize: 16,
-    color: '#000',
+    color: '#666',
     marginLeft: 2,
   },
   prefix: {
-    fontSize: 16,
-    color: '#000',
+    fontSize: 14,
+    color: '#666',
     marginRight: 2,
   }
 });
