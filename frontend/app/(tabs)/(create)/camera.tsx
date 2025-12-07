@@ -193,7 +193,6 @@ export default function CameraScreen() {
           participants: participants as string
         }
       });
-      return;
 
       // Fazer upload da imagem para o servidor
       const uploadedBill = await billService.uploadBill(optimizedImageUri);
