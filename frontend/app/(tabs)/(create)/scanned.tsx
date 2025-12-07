@@ -161,12 +161,19 @@ export default function ScannedBillScreen() {
   };
 
   const handleAddNewItem = async (newItem: Omit<BillItem, 'id' | 'assignedParticipants'>) => {
-    if (!id) return;
+    console.log('[Scanned] handleAddNewItem called with:', newItem);
+    if (!id) {
+      console.error('[Scanned] ID is missing in handleAddNewItem');
+      return;
+    }
     setIsSaving(true);
     try {
+      console.log('[Scanned] Calling itemsService.createItem with id:', id);
       const updatedList = await itemsService.createItem(id as string, newItem);
+      console.log('[Scanned] itemsService returned, updating state. New count:', updatedList.length);
       setItems(updatedList);
     } catch (error) {
+      console.error('[Scanned] Error in handleAddNewItem:', error);
       Alert.alert('Erro', 'Falha ao criar item');
     } finally {
       setIsSaving(false);

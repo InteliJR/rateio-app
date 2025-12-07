@@ -36,6 +36,7 @@ class ItemsService {
   }
 
   async createItem(billId: string, item: Omit<BillItem, 'id' | 'assignedParticipants'>): Promise<BillItem[]> {
+    console.log('[ItemsService] createItem called for billId:', billId, 'Item:', item);
     const currentItems = this.cache.get(billId) || await this.getItems(billId);
 
     // Create optimistic item
@@ -44,12 +45,15 @@ class ItemsService {
       id: Date.now().toString(),
       assignedParticipants: []
     };
+    console.log('[ItemsService] Optimistic item created:', newItem);
 
     const newItems = [...currentItems, newItem];
     this.cache.set(billId, newItems);
 
     // Sync with backend
+    console.log('[ItemsService] Syncing with backend...');
     await this.syncWithBackend(billId, newItems);
+    console.log('[ItemsService] Sync complete');
 
     return newItems;
   }
@@ -90,10 +94,13 @@ class ItemsService {
       totalPrice: item.price
     }));
 
+    console.log('[ItemsService] Sending payload to updateBill:', JSON.stringify(payloadItems, null, 2));
+
     try {
       await billService.updateBill(billId, {
         items: payloadItems
       });
+      console.log('[ItemsService] updateBill success');
     } catch (error) {
       console.error('Sync failed:', error);
       // Revert cache logic could go here
