@@ -12,6 +12,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import billService, { UploadBillResponse } from '../../../services/bill.service';
+import itemsService from '../../../services/items.service';
 import { ItemCard, BillItem } from '../../../components/items/ItemCard';
 import { AddItemModal } from '../../../components/modals/AddItemModal';
 
@@ -19,20 +20,17 @@ export default function ScannedBillScreen() {
   const router = useRouter();
   const { id, participants: participantsParam } = useLocalSearchParams();
 
+  // State management
   const [loading, setLoading] = useState(false);
   const [billName, setBillName] = useState('Conta');
   const [items, setItems] = useState<BillItem[]>([]);
   const [participants, setParticipants] = useState<string[]>([]);
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
-
-  // Auto-save state
   const [isSaving, setIsSaving] = useState(false);
-  const saveTimeoutRef = useRef<number | null>(null);
-  const isFirstLoad = useRef(true);
 
   useEffect(() => {
-    // Parse participants from params
+    // Parse participants
     if (participantsParam) {
       try {
         const parsed = JSON.parse(participantsParam as string);
@@ -44,110 +42,50 @@ export default function ScannedBillScreen() {
     }
 
     if (id) {
-      loadBill(id as string);
-    } else {
-      // Fallback mock data
-      setItems([
-        { id: '1', name: 'Suco de Laranja', quantity: 3, price: 36.00, assignedParticipants: [] },
-        { id: '2', name: 'Batata Frita', quantity: 4, price: 85.00, assignedParticipants: [] },
-        { id: '3', name: 'Sorvete', quantity: 4, price: 48.00, assignedParticipants: [] },
-        { id: '4', name: 'Cerveja', quantity: 2, price: 15.00, assignedParticipants: [] },
-      ]);
-      setBillName('Conta 1');
+      loadBillData();
     }
   }, [id, participantsParam]);
 
-  // Debounced Auto-save
-  useEffect(() => {
-    if (isFirstLoad.current) {
-      isFirstLoad.current = false;
-      return;
-    }
-
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-
-    if (id && items.length > 0) {
-      setIsSaving(true);
-      saveTimeoutRef.current = setTimeout(() => {
-        saveToBackend();
-      }, 1500); // 1.5s debounce
-    }
-
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, [items, billName]);
-
-  const saveToBackend = async () => {
+  const loadBillData = async () => {
     if (!id) return;
-
-    try {
-      // Prepare payload: split items based on quantity
-      const payloadItems: { description: string; amount: number }[] = [];
-
-      items.forEach(item => {
-        if (item.quantity > 1) {
-          const unitPrice = item.price / item.quantity;
-          for (let i = 0; i < item.quantity; i++) {
-            payloadItems.push({
-              description: item.name,
-              amount: Number(unitPrice.toFixed(2)) // Ensure 2 decimal places
-            });
-          }
-        } else {
-          payloadItems.push({
-            description: item.name,
-            amount: item.price
-          });
-        }
-      });
-
-      await billService.updateBill(id as string, {
-        items: payloadItems,
-        establishmentName: billName
-      });
-
-      // Artificial delay to show the "Saving" state for a bit longer if it was too fast
-      setTimeout(() => setIsSaving(false), 500);
-    } catch (error) {
-      console.error('Error auto-saving bill', error);
-      setIsSaving(false);
-      // Optional: Show error toast/alert, but maybe too intrusive for auto-save
-    }
-  };
-
-  const loadBill = async (billId: string) => {
     setLoading(true);
     try {
-      const bill = await billService.getBill(billId);
+      // Load bill details for name
+      const bill = await billService.getBill(id as string);
       setBillName(bill.establishmentName || 'Conta');
 
-      if (bill.items && bill.items.length > 0) {
-        const mappedItems = bill.items.map((item: { description: string; amount: number }, index: number) => ({
-          id: index.toString(),
-          name: item.description,
-          quantity: 1, // Backend doesn't store quantity, so we treat each entry as 1 item initially
-          price: item.amount,
-          assignedParticipants: []
-        }));
-        setItems(mappedItems);
-      } else {
-        // Keep mock data if empty? Or just empty.
-        // For now, let's assume if it's empty we might want to show nothing or default
-        // But the original code had a fallback. Let's keep it empty if API returns empty.
-        setItems([]);
-      }
+      // Load items via service
+      const fetchedItems = await itemsService.getItems(id as string);
+      setItems(fetchedItems);
     } catch (error) {
       console.error('Error loading bill', error);
-      Alert.alert('Erro', 'Não foi possível carregar os itens da conta.');
+      Alert.alert('Erro', 'Não foi possível carregar os dados.');
     } finally {
       setLoading(false);
     }
   };
+
+  const saveBillName = async (name: string) => {
+    if (!id) return;
+    setIsSaving(true);
+    try {
+      await billService.updateBill(id as string, { establishmentName: name });
+    } catch (error) {
+      console.error('Error saving name', error);
+    } finally {
+      setTimeout(() => setIsSaving(false), 500);
+    }
+  };
+
+  // Debounce bill name save
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (id && billName) {
+        saveBillName(billName);
+      }
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [billName]);
 
   const toggleExpand = (itemId: string) => {
     setExpandedItemId(expandedItemId === itemId ? null : itemId);
@@ -167,12 +105,27 @@ export default function ScannedBillScreen() {
       }
       return item;
     }));
+    // Note: participant assignment might need persistent storage logic too, 
+    // but the task focused on CRUD Items. Assuming local state for now or needs updateItem.
+    // For now, let's keep it local as per original code, or adding it to service?
+    // The original code didn't save participant assignment to backend in the `updateBill` payload shown!
   };
 
-  const handleUpdateItem = (updatedItem: BillItem) => {
-    setItems(prevItems => prevItems.map(item =>
-      item.id === updatedItem.id ? updatedItem : item
-    ));
+  const handleUpdateItem = async (updatedItem: BillItem) => {
+    if (!id) return;
+
+    // Optimistic update
+    setItems(prev => prev.map(item => item.id === updatedItem.id ? updatedItem : item));
+    setIsSaving(true);
+
+    try {
+      await itemsService.updateItem(id as string, updatedItem.id, updatedItem);
+    } catch (error) {
+      Alert.alert('Erro', 'Falha ao atualizar item');
+      // Revert? itemsService.getItems(id)
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const deleteItem = (itemId: string) => {
@@ -185,10 +138,18 @@ export default function ScannedBillScreen() {
           text: 'Excluir',
           style: 'destructive',
           onPress: async () => {
-            // Optimistic update
-            const newItems = items.filter(i => i.id !== itemId);
-            setItems(newItems);
-            // The useEffect will trigger the save
+            if (!id) return;
+            // Optimistic
+            setItems(prev => prev.filter(i => i.id !== itemId));
+            setIsSaving(true);
+            try {
+              await itemsService.deleteItem(id as string, itemId);
+            } catch (error) {
+              Alert.alert('Erro', 'Falha ao excluir item');
+              loadBillData(); // Revert
+            } finally {
+              setIsSaving(false);
+            }
           }
         }
       ]
@@ -200,10 +161,16 @@ export default function ScannedBillScreen() {
   };
 
   const handleAddNewItem = async (newItem: Omit<BillItem, 'id' | 'assignedParticipants'>) => {
-    // Optimistic add
-    const tempId = Date.now().toString();
-    setItems(prev => [...prev, { ...newItem, id: tempId, assignedParticipants: [] }]);
-    // The useEffect will trigger the save
+    if (!id) return;
+    setIsSaving(true);
+    try {
+      const updatedList = await itemsService.createItem(id as string, newItem);
+      setItems(updatedList);
+    } catch (error) {
+      Alert.alert('Erro', 'Falha ao criar item');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleSummary = () => {
