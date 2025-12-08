@@ -11,12 +11,14 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { BillsService } from './bills.service';
 import { CreateBillDto } from './dto/create-bill.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { BillStatus } from '@prisma/client';
 
 @Controller('bills')
 @UseGuards(JwtAuthGuard)
@@ -38,11 +40,71 @@ export class BillsController {
   }
 
   /**
-   * Listar contas do usuário
+   * Listar contas do usuário com paginação, filtros e ordenação
    */
   @Get()
-  findAll(@Request() req: any) {
-    return this.billsService.findAllByUser(req.user.id);
+  findAll(
+    @Request() req: any,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('status') status?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 10;
+
+    // Campos válidos para ordenação
+    const validSortFields = ['createdAt', 'totalAmount'];
+    const validSortOrders = ['asc', 'desc'];
+
+    // Construir objeto de filtros
+    const filters: {
+      status?: BillStatus;
+      startDate?: Date;
+      endDate?: Date;
+      sortBy?: 'createdAt' | 'totalAmount';
+      sortOrder?: 'asc' | 'desc';
+    } = {};
+
+    // Validar e aplicar filtro de status
+    if (status && Object.values(BillStatus).includes(status as BillStatus)) {
+      filters.status = status as BillStatus;
+    }
+
+    // Validar e aplicar filtro de data inicial
+    if (startDate) {
+      const parsedStartDate = new Date(startDate);
+      if (!isNaN(parsedStartDate.getTime())) {
+        filters.startDate = parsedStartDate;
+      }
+    }
+
+    // Validar e aplicar filtro de data final
+    if (endDate) {
+      const parsedEndDate = new Date(endDate);
+      if (!isNaN(parsedEndDate.getTime())) {
+        filters.endDate = parsedEndDate;
+      }
+    }
+
+    // Validar e aplicar ordenação
+    if (sortBy && validSortFields.includes(sortBy)) {
+      filters.sortBy = sortBy as 'createdAt' | 'totalAmount';
+    }
+
+    if (sortOrder && validSortOrders.includes(sortOrder.toLowerCase())) {
+      filters.sortOrder = sortOrder.toLowerCase() as 'asc' | 'desc';
+    }
+
+    return this.billsService.findAllByUser(
+      req.user.id,
+      pageNum,
+      limitNum,
+      Object.keys(filters).length > 0 ? filters : undefined,
+    );
   }
 
   /**
@@ -51,6 +113,14 @@ export class BillsController {
   @Get(':id')
   findOne(@Param('id') id: string, @Request() req: any) {
     return this.billsService.findOne(id, req.user.id);
+  }
+
+  /**
+   * Retornar resumo da conta com valores por participante
+   */
+  @Get(':id/summary')
+  getSummary(@Param('id') id: string, @Request() req: any) {
+    return this.billsService.getSummary(id, req.user.id);
   }
 
   /**
@@ -71,5 +141,17 @@ export class BillsController {
   @Delete(':id')
   remove(@Param('id') id: string, @Request() req: any) {
     return this.billsService.remove(id, req.user.id);
+  }
+
+  /**
+   * Finalizar divisão da conta
+   */
+  @Post(':id/finalize')
+  finalize(
+    @Param('id') id: string,
+    @Body() finalizeBillDto: FinalizeBillDto,
+    @Request() req: any,
+  ) {
+    return this.billsService.finalize(id, req.user.id, finalizeBillDto);
   }
 }
