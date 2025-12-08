@@ -2,27 +2,39 @@
 
 import { apiService } from "./api.service";
 
+export interface BillItem {
+  id: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+}
+
 export interface UploadBillResponse {
   id: string;
+  userId: string;
   imageUrl: string;
-  establishmentName?: string;
+  imageKey: string;
+  status: "PENDING_OCR" | "OCR_FAILED" | "REVIEWING" | "DIVIDING" | "COMPLETED";
+  ocrRawText?: string;
   totalAmount?: number;
-  items?: Array<{
-    description: string;
-    amount: number;
-  }>;
+  establishmentName?: string;
+  items?: BillItem[];
   createdAt: string;
+  updatedAt: string;
+  message?: string;
 }
 
 export interface UploadBillError {
   message: string;
   statusCode?: number;
+  errors?: string[];
 }
 
 class BillService {
   /**
    * Faz upload de uma conta (imagem) para o servidor
-   * @param imageUri - URI local da imagem
+   * @param imageUri - URI local da imagem otimizada
    * @param establishmentName - Nome do estabelecimento (opcional)
    * @returns Dados da conta processada
    */
@@ -31,49 +43,105 @@ class BillService {
     establishmentName?: string
   ): Promise<UploadBillResponse> {
     try {
+      console.log('[BillService] Iniciando upload da conta:', {
+        imageUri: imageUri.substring(0, 50) + '...',
+        establishmentName,
+      });
+
+      // Validar URI da imagem
+      if (!imageUri || imageUri.trim().length === 0) {
+        throw new Error('URI da imagem é obrigatória');
+      }
+
       // Criar FormData
       const formData = new FormData();
 
       // Extrair nome do arquivo da URI
-      const filename = imageUri.split("/").pop() || "photo.jpg";
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : "image/jpeg";
+      const uriParts = imageUri.split('/');
+      const filename = uriParts[uriParts.length - 1] || `bill-${Date.now()}.jpg`;
+      
+      // Detectar tipo MIME correto
+      let mimeType = 'image/jpeg'; // padrão
+      if (filename.toLowerCase().endsWith('.png')) {
+        mimeType = 'image/png';
+      } else if (filename.toLowerCase().endsWith('.webp')) {
+        mimeType = 'image/webp';
+      } else if (filename.toLowerCase().endsWith('.heic')) {
+        mimeType = 'image/heic';
+      }
 
-      // Adicionar imagem ao FormData
-      formData.append("image", {
+      console.log('[BillService] Preparando FormData:', {
+        filename,
+        mimeType,
+      });
+
+      // Adicionar imagem ao FormData com estrutura correta para React Native
+      // O Expo/React Native espera um objeto com uri, name e type
+      formData.append('image', {
         uri: imageUri,
         name: filename,
-        type: type,
+        type: mimeType,
       } as any);
 
       // Adicionar nome do estabelecimento se fornecido
-      if (establishmentName) {
-        formData.append("establishmentName", establishmentName);
+      if (establishmentName && establishmentName.trim().length > 0) {
+        formData.append('establishmentName', establishmentName.trim());
+        console.log('[BillService] Nome do estabelecimento adicionado:', establishmentName);
       }
 
-      // Fazer requisição
+      // Fazer requisição com configurações otimizadas
       const api = apiService.getApi();
-      const response = await api.post<UploadBillResponse>("/bills", formData, {
+      
+      console.log('[BillService] Enviando requisição para /bills...');
+      
+      const response = await api.post<UploadBillResponse>('/bills', formData, {
         headers: {
-          "Content-Type": "multipart/form-data",
+          'Content-Type': 'multipart/form-data',
+          // Permitir que o Axios defina o boundary automaticamente
         },
-        timeout: 30000, // 30 segundos para upload
+        timeout: 60000, // 60 segundos - aumentado para dar tempo para OCR
+        transformRequest: (data, headers) => {
+          // Não transformar FormData - deixar o Axios gerenciar
+          return data;
+        },
+      });
+
+      console.log('[BillService] Upload concluído com sucesso:', {
+        billId: response.data.id,
+        status: response.data.status,
+        message: response.data.message,
       });
 
       return response.data;
     } catch (error: any) {
-      // Tratar erros
+      console.error('[BillService] Erro ao fazer upload:', error);
+
+      // Tratar erros de forma detalhada
       const billError: UploadBillError = {
-        message: "Erro ao fazer upload da conta",
+        message: 'Erro ao fazer upload da conta',
         statusCode: error.response?.status,
       };
 
+      // Extrair mensagem de erro do backend
       if (error.response?.data?.message) {
-        billError.message = error.response.data.message;
+        if (typeof error.response.data.message === 'string') {
+          billError.message = error.response.data.message;
+        } else if (Array.isArray(error.response.data.message)) {
+          billError.message = error.response.data.message[0];
+          billError.errors = error.response.data.message;
+        }
       } else if (error.message) {
-        billError.message = error.message;
+        // Erros de rede ou timeout
+        if (error.code === 'ECONNABORTED') {
+          billError.message = 'Tempo limite excedido. Verifique sua conexão e tente novamente.';
+        } else if (error.message.includes('Network')) {
+          billError.message = 'Erro de conexão. Verifique sua internet e tente novamente.';
+        } else {
+          billError.message = error.message;
+        }
       }
 
+      console.error('[BillService] Erro processado:', billError);
       throw billError;
     }
   }
