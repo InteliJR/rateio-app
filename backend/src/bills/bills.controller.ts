@@ -23,7 +23,7 @@ import { BillStatus } from '@prisma/client';
 @Controller('bills')
 @UseGuards(JwtAuthGuard)
 export class BillsController {
-  constructor(private readonly billsService: BillsService) {}
+  constructor(private readonly billsService: BillsService) { }
 
   /**
    * Upload de foto da conta + OCR automático
@@ -31,14 +31,11 @@ export class BillsController {
   @Post()
   @UseInterceptors(FileInterceptor('image'))
   async create(
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: Express.Multer.File | undefined,
     @Body() createBillDto: CreateBillDto,
     @Request() req: any,
   ) {
-    if (!file) {
-      throw new BadRequestException('Imagem da conta é obrigatória');
-    }
-
+    // if (!file) check removed to allow manual creation
     return this.billsService.create(file, req.user.id, createBillDto);
   }
 
