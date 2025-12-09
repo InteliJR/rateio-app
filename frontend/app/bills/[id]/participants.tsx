@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import React, { useState, useRef } from "react";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import {
   View,
   Text,
@@ -13,13 +13,16 @@ import {
   UIManager,
   ActivityIndicator,
   Alert,
-} from 'react-native';
-import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
-import Logo from '@/assets/images/logo.svg';
-import participantsService from '@/services/participants.service';
+} from "react-native";
+import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
+import Logo from "@/assets/images/logo.svg";
+import participantsService from "@/services/participants.service";
 
 // Habilitar LayoutAnimation no Android
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
@@ -27,18 +30,20 @@ export default function ParticipantsNamesScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const billId = params.id as string;
-  
+
   // participantCount pode vir dos params ou usar um valor padrão
-  const participantCount = params.participantCount 
-    ? parseInt(params.participantCount as string, 10) 
+  const participantCount = params.participantCount
+    ? parseInt(params.participantCount as string, 10)
     : 5;
 
   // Estado para o input de adicionar novo nome
-  const [newName, setNewName] = useState('');
+  const [newName, setNewName] = useState("");
 
   // Estado para a lista de participantes pré-gerados
   const [participants, setParticipants] = useState<string[]>(
-    Array(participantCount).fill('').map((_, index) => `Nome Sobrenome ${index + 1}`)
+    Array(participantCount)
+      .fill("")
+      .map((_, index) => `Nome Sobrenome ${index + 1}`)
   );
 
   // Refs para auto-foco nos inputs
@@ -51,7 +56,7 @@ export default function ParticipantsNamesScreen() {
   // Função para adicionar novo participante
   const handleAddParticipant = () => {
     const trimmedName = newName.trim();
-    
+
     // Validação: não adicionar nomes vazios
     if (!trimmedName) {
       return;
@@ -59,7 +64,8 @@ export default function ParticipantsNamesScreen() {
 
     // Procurar o primeiro campo vazio na lista
     const emptyIndex = participants.findIndex(
-      (participant) => !participant.trim() || participant.startsWith('Nome Sobrenome')
+      (participant) =>
+        !participant.trim() || participant.startsWith("Nome Sobrenome")
     );
 
     if (emptyIndex !== -1) {
@@ -73,7 +79,7 @@ export default function ParticipantsNamesScreen() {
     }
 
     // Limpar input superior após adicionar
-    setNewName('');
+    setNewName("");
   };
 
   // Função para remover participante
@@ -115,19 +121,19 @@ export default function ParticipantsNamesScreen() {
   // Função para navegar para a tela de escanear
   const handleScan = async () => {
     if (!billId) {
-      Alert.alert('Erro', 'ID da conta não encontrado');
+      Alert.alert("Erro", "ID da conta não encontrado");
       return;
     }
 
     // Validar que existe pelo menos 1 participante com nome
     const participantsWithNames = participants.filter(
-      (p) => p.trim() && !p.startsWith('Nome Sobrenome')
+      (p) => p.trim() && !p.startsWith("Nome Sobrenome")
     );
-    
+
     if (participantsWithNames.length === 0) {
       Alert.alert(
-        'Atenção',
-        'É necessário ter pelo menos 1 participante com nome preenchido.'
+        "Atenção",
+        "É necessário ter pelo menos 1 participante com nome preenchido."
       );
       return;
     }
@@ -142,13 +148,13 @@ export default function ParticipantsNamesScreen() {
       // Navegar para próxima etapa do fluxo passando billId
       // Se a tela /bills/[id]/scanner existir, usar ela, senão usar camera com billId
       router.push({
-        pathname: '/(tabs)/camera',
+        pathname: "/(tabs)/camera",
         params: { billId },
       });
     } catch (err: any) {
-      const errorMessage = err.message || 'Erro ao salvar participantes';
+      const errorMessage = err.message || "Erro ao salvar participantes";
       setError(errorMessage);
-      Alert.alert('Erro', errorMessage);
+      Alert.alert("Erro", errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -156,10 +162,10 @@ export default function ParticipantsNamesScreen() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.container}
     >
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
@@ -220,11 +226,12 @@ export default function ParticipantsNamesScreen() {
 
       {/* Botão Escanear no bottom */}
       <View style={styles.bottomContainer}>
-        {error && (
-          <Text style={styles.errorText}>{error}</Text>
-        )}
+        {error && <Text style={styles.errorText}>{error}</Text>}
         <TouchableOpacity
-          style={[styles.scanButton, (isLoading || !billId) && styles.scanButtonDisabled]}
+          style={[
+            styles.scanButton,
+            (isLoading || !billId) && styles.scanButtonDisabled,
+          ]}
           onPress={handleScan}
           disabled={isLoading || !billId}
         >
@@ -240,23 +247,35 @@ export default function ParticipantsNamesScreen() {
       <View style={styles.bottomNavigation}>
         <TouchableOpacity
           style={styles.navItem}
-          onPress={() => router.push('/(tabs)/camera')}
+          onPress={() => router.push("/(tabs)/(create)")}
         >
-          <MaterialCommunityIcons name="camera-outline" size={24} color="#81007F" />
+          <MaterialCommunityIcons
+            name="camera-outline"
+            size={24}
+            color="#81007F"
+          />
           <Text style={[styles.navLabel, styles.navLabelActive]}>Scanner</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.navItem}
-          onPress={() => router.push('/(tabs)/bills')}
+          onPress={() => router.push("/(tabs)/bills")}
         >
-          <MaterialCommunityIcons name="invoice-text-clock-outline" size={24} color="#0009" />
+          <MaterialCommunityIcons
+            name="invoice-text-clock-outline"
+            size={24}
+            color="#0009"
+          />
           <Text style={styles.navLabel}>Contas</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.navItem}
-          onPress={() => router.push('/(tabs)/profile')}
+          onPress={() => router.push("/(tabs)/profile")}
         >
-          <MaterialCommunityIcons name="account-outline" size={24} color="#0009" />
+          <MaterialCommunityIcons
+            name="account-outline"
+            size={24}
+            color="#0009"
+          />
           <Text style={styles.navLabel}>Perfil</Text>
         </TouchableOpacity>
       </View>
@@ -267,7 +286,7 @@ export default function ParticipantsNamesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
   scrollView: {
     flex: 1,
@@ -278,8 +297,8 @@ const styles = StyleSheet.create({
     paddingBottom: 180, // Espaço para o botão fixo e bottom navigation
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 24,
   },
   logo: {
@@ -289,17 +308,17 @@ const styles = StyleSheet.create({
   },
   logoText: {
     fontSize: 18,
-    color: '#81007F',
+    color: "#81007F",
   },
   title: {
     fontSize: 24,
-    fontWeight: '400',
-    color: '#333',
+    fontWeight: "400",
+    color: "#333",
     marginBottom: 24,
   },
   addContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 24,
     gap: 12,
   },
@@ -307,117 +326,116 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 32,
     borderWidth: 0.5,
-    borderColor: '#000',
-    backgroundColor: '#fff',
+    borderColor: "#000",
+    backgroundColor: "#fff",
   },
   input: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 32,
     fontSize: 16,
   },
   okButton: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
-    borderColor: '#81007F',
+    borderColor: "#81007F",
   },
   okButtonText: {
-    color: '#81007F',
+    color: "#81007F",
     fontSize: 16,
-    fontWeight: '600',
-    textTransform: 'uppercase',
+    fontWeight: "600",
+    textTransform: "uppercase",
   },
   participantsList: {
     gap: 12,
   },
   participantItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
+    borderBottomColor: "#ddd",
     paddingBottom: 12,
     gap: 12,
   },
   participantInput: {
     flex: 1,
     fontSize: 16,
-    color: '#333',
+    color: "#333",
     paddingVertical: 8,
   },
   removeButton: {
     padding: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   bottomContainer: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 80, // Espaço para a bottom navigation
     left: 0,
     right: 0,
     paddingHorizontal: 24,
     paddingBottom: 12,
     paddingTop: 12,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderTopWidth: 1,
-    borderTopColor: '#eee',
+    borderTopColor: "#eee",
   },
   scanButton: {
-    backgroundColor: '#81007F',
+    backgroundColor: "#81007F",
     paddingVertical: 10,
     borderRadius: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
   },
   scanButtonText: {
-    color: '#FFFF00',
+    color: "#FFFF00",
     fontSize: 24,
     lineHeight: 24,
-    textAlignVertical: 'center',
+    textAlignVertical: "center",
   },
   scanButtonDisabled: {
     opacity: 0.6,
   },
   errorText: {
-    color: '#d00',
+    color: "#d00",
     fontSize: 14,
     marginBottom: 8,
-    textAlign: 'center',
+    textAlign: "center",
   },
   bottomNavigation: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-around",
+    alignItems: "center",
     paddingVertical: 12,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
-    backgroundColor: '#fff',
+    paddingBottom: Platform.OS === "ios" ? 24 : 12,
+    backgroundColor: "#fff",
     borderTopWidth: 1,
-    borderTopColor: '#eee',
+    borderTopColor: "#eee",
   },
   navItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     flex: 1,
   },
   navLabel: {
     fontSize: 12,
     marginTop: 4,
-    color: '#0009',
+    color: "#0009",
   },
   navLabelActive: {
-    color: '#81007F',
-    fontWeight: '600',
+    color: "#81007F",
+    fontWeight: "600",
   },
 });
-
