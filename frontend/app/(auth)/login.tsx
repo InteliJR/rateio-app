@@ -16,12 +16,13 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useAuthStore } from '@/store/authStore';
 import Logo from '@/assets/images/logo.svg';
 import { z } from 'zod';
-import * as SecureStore from 'expo-secure-store';
+import { storageService } from '@/services/storage.service';
 
 export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
-  const { login, isLoading } = useAuthStore();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { login } = useAuthStore();
   const router = useRouter();
 
   const loginSchema = z.object({
@@ -45,6 +46,7 @@ export default function LoginScreen() {
 
   const onSubmit = async (data: LoginFormData) => {
     setServerError(null);
+    setIsSubmitting(true);
     try {
       // Mock de login para desenvolvimento
       if (data.email === 'teste@gmail.com' && data.password === 'teste123') {
@@ -59,8 +61,8 @@ export default function LoginScreen() {
         const accessToken = 'mock-access-token';
         const refreshToken = 'mock-refresh-token';
 
-        await SecureStore.setItemAsync('accessToken', accessToken);
-        await SecureStore.setItemAsync('refreshToken', refreshToken);
+        await storageService.setItem('accessToken', accessToken);
+        await storageService.setItem('refreshToken', refreshToken);
 
         useAuthStore.setState({
           user: mockUser,
@@ -78,6 +80,8 @@ export default function LoginScreen() {
     } catch (error: any) {
       const message = getApiErrorMessage(error);
       setServerError(message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -139,7 +143,7 @@ export default function LoginScreen() {
                 onChangeText={onChange}
                 autoCapitalize="none"
                 keyboardType="email-address"
-                editable={!isLoading}
+                editable={!isSubmitting}
               />
             )}
           />
@@ -156,14 +160,14 @@ export default function LoginScreen() {
                   value={value}
                   onChangeText={onChange}
                   secureTextEntry={!showPassword}
-                  editable={!isLoading}
+                  editable={!isSubmitting}
                 />
               )}
             />
             <TouchableOpacity
               style={styles.eyeButton}
               onPress={() => setShowPassword(!showPassword)}
-              disabled={isLoading}
+              disabled={isSubmitting}
             >
               <MaterialIcons
                 name={showPassword ? 'visibility' : 'visibility-off'}
@@ -175,11 +179,11 @@ export default function LoginScreen() {
           {errors.password && <Text style={styles.errorText}>{errors.password.message}</Text>}
 
           <TouchableOpacity
-            style={[styles.button, (isLoading || !isValid) && styles.buttonDisabled]}
+            style={[styles.button, (isSubmitting || !isValid) && styles.buttonDisabled]}
             onPress={handleSubmit(onSubmit)}
-            disabled={isLoading || !isValid}
+            disabled={isSubmitting || !isValid}
           >
-            {isLoading ? (
+            {isSubmitting ? (
               <ActivityIndicator color="#FFFF00" />
             ) : (
               <Text style={styles.buttonText}>Entrar</Text>
@@ -189,7 +193,7 @@ export default function LoginScreen() {
 
         <View style={styles.linkRow}>
           <Text style={{ color: '#333' }}>Não possui uma conta? </Text>
-          <TouchableOpacity onPress={() => router.push('/(auth)/register')} disabled={isLoading}>
+          <TouchableOpacity onPress={() => router.push('/(auth)/register')} disabled={isSubmitting}>
             <Text style={{ color: '#81007F', fontWeight: 'bold' }}>Cadastre-se</Text>
           </TouchableOpacity>
         </View>
