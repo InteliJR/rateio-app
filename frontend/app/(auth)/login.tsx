@@ -76,11 +76,11 @@ export default function LoginScreen() {
           isLoading: false,
         });
 
-        router.replace("/(tabs)/(create)");
+        router.replace("/(tabs)/(create)/new");
         return;
       }
       await login(data.email, data.password);
-      router.replace("/(tabs)/(create)");
+      router.replace("/(tabs)/(create)/new");
     } catch (error: any) {
       const message = getApiErrorMessage(error);
       setServerError(message);
