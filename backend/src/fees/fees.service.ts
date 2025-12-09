@@ -25,7 +25,7 @@ const FEE_TYPE_DESCRIPTIONS: Record<FeeType, string> = {
 
 @Injectable()
 export class FeesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   /**
    * Validar que a conta pertence ao usuário
@@ -118,7 +118,52 @@ export class FeesService {
   /**
    * Criar taxa
    */
+  /**
+   * Recalcular o totalAmount da conta baseado nos itens + taxas
+   */
+  private async recalculateBillTotal(billId: string) {
+    const bill = await this.prisma.bill.findUnique({
+      where: { id: billId },
+      include: {
+        items: true,
+        fees: true,
+      },
+    });
+
+    if (!bill) {
+      throw new NotFoundException('Conta não encontrada');
+    }
+
+    // Calcular soma dos itens
+    const itemsSum = bill.items.reduce(
+      (acc, item) => acc + Number(item.totalPrice),
+      0,
+    );
+
+    // Calcular soma das taxas
+    const feesSum = bill.fees.reduce(
+      (acc, fee) => acc + Number(fee.value),
+      0,
+    );
+
+    // Total = itens + taxas
+    const newTotal = itemsSum + feesSum;
+
+    // Atualizar totalAmount
+    await this.prisma.bill.update({
+      where: { id: billId },
+      data: { totalAmount: newTotal },
+    });
+
+    return newTotal;
+  }
+
   async create(userId: string, createFeeDto: CreateFeeDto) {
+    // Validar que billId foi fornecido
+    if (!createFeeDto.billId) {
+      throw new BadRequestException('O ID da conta é obrigatório');
+    }
+
     // Validar ownership da conta
     await this.validateBillOwnership(createFeeDto.billId, userId);
 
@@ -129,7 +174,7 @@ export class FeesService {
     const description =
       createFeeDto.description || this.getDefaultDescription(createFeeDto.type);
 
-    return this.prisma.fee.create({
+    const fee = await this.prisma.fee.create({
       data: {
         billId: createFeeDto.billId,
         type: createFeeDto.type,
@@ -146,6 +191,11 @@ export class FeesService {
         },
       },
     });
+
+    // Recalcular total da conta
+    await this.recalculateBillTotal(createFeeDto.billId);
+
+    return fee;
   }
 
   /**
@@ -255,6 +305,9 @@ export class FeesService {
       },
     });
 
+    // Recalcular total da conta
+    await this.recalculateBillTotal(existingFee.billId);
+
     return {
       ...updated,
       value: Number(updated.value),
@@ -267,11 +320,14 @@ export class FeesService {
    */
   async remove(id: string, userId: string) {
     // Validar ownership
-    await this.validateFeeOwnership(id, userId);
+    const fee = await this.validateFeeOwnership(id, userId);
 
     await this.prisma.fee.delete({
       where: { id },
     });
+
+    // Recalcular total da conta
+    await this.recalculateBillTotal(fee.billId);
 
     return { message: 'Taxa removida com sucesso' };
   }
