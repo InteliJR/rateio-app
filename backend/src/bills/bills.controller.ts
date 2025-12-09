@@ -11,6 +11,7 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { BillsService } from './bills.service';
@@ -22,11 +23,12 @@ import { CreateBillItemDto } from '../bill-items/dto/create-bill-item.dto';
 import { UpdateBillItemDto } from '../bill-items/dto/update-bill-item.dto';
 import { BatchUpdateBillItemsDto } from './dto/update-bill.dto';
 import { CreateFeeDto } from '../fees/dto/create-fee.dto';
+import { BillStatus } from '@prisma/client';
 
 @Controller('bills')
 @UseGuards(JwtAuthGuard)
 export class BillsController {
-  constructor(private readonly billsService: BillsService) {}
+  constructor(private readonly billsService: BillsService) { }
 
   /**
    * Upload de foto da conta + OCR automático
@@ -34,23 +36,80 @@ export class BillsController {
   @Post()
   @UseInterceptors(FileInterceptor('image'))
   async create(
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: Express.Multer.File | undefined,
     @Body() createBillDto: CreateBillDto,
     @Request() req: any,
   ) {
-    if (!file) {
-      throw new BadRequestException('Imagem da conta é obrigatória');
-    }
-
+    // if (!file) check removed to allow manual creation
     return this.billsService.create(file, req.user.id, createBillDto);
   }
 
   /**
-   * Listar contas do usuário
+   * Listar contas do usuário com paginação, filtros e ordenação
    */
   @Get()
-  findAll(@Request() req: any) {
-    return this.billsService.findAllByUser(req.user.id);
+  findAll(
+    @Request() req: any,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('status') status?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 10;
+
+    // Campos válidos para ordenação
+    const validSortFields = ['createdAt', 'totalAmount'];
+    const validSortOrders = ['asc', 'desc'];
+
+    // Construir objeto de filtros
+    const filters: {
+      status?: BillStatus;
+      startDate?: Date;
+      endDate?: Date;
+      sortBy?: 'createdAt' | 'totalAmount';
+      sortOrder?: 'asc' | 'desc';
+    } = {};
+
+    // Validar e aplicar filtro de status
+    if (status && Object.values(BillStatus).includes(status as BillStatus)) {
+      filters.status = status as BillStatus;
+    }
+
+    // Validar e aplicar filtro de data inicial
+    if (startDate) {
+      const parsedStartDate = new Date(startDate);
+      if (!isNaN(parsedStartDate.getTime())) {
+        filters.startDate = parsedStartDate;
+      }
+    }
+
+    // Validar e aplicar filtro de data final
+    if (endDate) {
+      const parsedEndDate = new Date(endDate);
+      if (!isNaN(parsedEndDate.getTime())) {
+        filters.endDate = parsedEndDate;
+      }
+    }
+
+    // Validar e aplicar ordenação
+    if (sortBy && validSortFields.includes(sortBy)) {
+      filters.sortBy = sortBy as 'createdAt' | 'totalAmount';
+    }
+
+    if (sortOrder && validSortOrders.includes(sortOrder.toLowerCase())) {
+      filters.sortOrder = sortOrder.toLowerCase() as 'asc' | 'desc';
+    }
+
+    return this.billsService.findAllByUser(
+      req.user.id,
+      pageNum,
+      limitNum,
+      Object.keys(filters).length > 0 ? filters : undefined,
+    );
   }
 
   /**
