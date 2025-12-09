@@ -25,7 +25,7 @@ export class BillsService {
     private storage: StorageService,
     private ocr: OcrService,
     private feesService: FeesService,
-  ) {}
+  ) { }
 
   /**
    * Criar conta com upload de imagem e OCR
@@ -273,7 +273,7 @@ export class BillsService {
           feeValue =
             subtotal > 0
               ? (itemsSubtotal / subtotal) *
-                (subtotal * (Number(fee.value) / 100))
+              (subtotal * (Number(fee.value) / 100))
               : 0;
         } else {
           feeValue =
@@ -568,22 +568,28 @@ export class BillsService {
   }
 
   /**
-   * Validar que a soma dos itens não ultrapassa o totalAmount da conta
-   * Permite que a soma seja menor (pode haver taxas/descontos), mas não maior
+   * Recalcular o totalAmount da conta baseado nos itens + taxas
+   * Permite edição livre durante REVIEWING e DIVIDING
+   * Bloqueia apenas COMPLETED
    */
-  private async validateItemsTotal(billId: string) {
+  private async recalculateBillTotal(billId: string) {
     const bill = await this.prisma.bill.findUnique({
       where: { id: billId },
-      include: { items: true },
+      include: {
+        items: true,
+        fees: true,
+      },
     });
 
     if (!bill) {
       throw new NotFoundException('Conta não encontrada');
     }
 
-    // Se não tem totalAmount definido, não valida
-    if (!bill.totalAmount) {
-      return;
+    // Bloquear edição de contas finalizadas
+    if (bill.status === 'COMPLETED') {
+      throw new BadRequestException(
+        'Não é possível modificar uma conta finalizada.'
+      );
     }
 
     // Calcular soma dos itens
@@ -592,15 +598,30 @@ export class BillsService {
       0,
     );
 
-    const totalAmount = Number(bill.totalAmount);
+    // Calcular soma das taxas
+    const feesSum = bill.fees.reduce(
+      (acc, fee) => acc + Number(fee.value),
+      0,
+    );
 
-    // Permitir que a soma seja menor ou igual ao total (pode haver taxas)
-    // Mas não permitir que seja maior (tolerância de 0.01 para ponto flutuante)
-    if (itemsSum > totalAmount + 0.01) {
-      throw new BadRequestException(
-        `A soma dos itens (${itemsSum.toFixed(2)}) ultrapassa o total da conta (${totalAmount.toFixed(2)})`,
-      );
-    }
+    const calculatedTotal = itemsSum + feesSum;
+
+    // Durante REVIEWING e DIVIDING: recalcular total automaticamente
+    // Isso permite que o usuário adicione/corrija itens que o OCR não detectou
+    await this.prisma.bill.update({
+      where: { id: billId },
+      data: { totalAmount: calculatedTotal },
+    });
+
+    return calculatedTotal;
+  }
+
+  /**
+   * Validar que a soma dos itens não ultrapassa o totalAmount da conta
+   * Chama recalculateBillTotal que decide entre validar ou recalcular
+   */
+  private async validateItemsTotal(billId: string) {
+    await this.recalculateBillTotal(billId);
   }
 
   /**
