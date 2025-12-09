@@ -54,25 +54,25 @@ model RevokedToken {
 // ============================================
 
 enum BillStatus {
-  PENDING_OCR    // Aguardando processamento OCR
-  OCR_FAILED     // Falha no OCR
-  REVIEWING      // Usuário revisando itens
-  DIVIDING       // Usuário dividindo conta
-  COMPLETED      // Divisão finalizada
+  PENDING_OCR // Aguardando processamento OCR
+  OCR_FAILED // Falha no OCR
+  REVIEWING // Usuário revisando itens
+  DIVIDING // Usuário dividindo conta
+  COMPLETED // Divisão finalizada
 }
 
 model Bill {
-  id              String     @id @default(uuid())
-  userId          String
-  imageUrl        String     // URL da imagem no S3
-  imageKey        String     // Chave do S3 para deletar
-  status          BillStatus @default(PENDING_OCR)
-  ocrRawText      String?    @db.Text // Texto bruto do OCR
-  totalAmount     Decimal?   @db.Decimal(10, 2)
+  id                String     @id @default(uuid())
+  userId            String
+  imageUrl          String? // URL da imagem no S3
+  imageKey          String? // Chave do S3 para deletar
+  status            BillStatus @default(PENDING_OCR)
+  ocrRawText        String?    @db.Text // Texto bruto do OCR
+  totalAmount       Decimal?   @db.Decimal(10, 2)
   establishmentName String?
-  
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   items        BillItem[]
@@ -90,15 +90,15 @@ model Bill {
 // ============================================
 
 model BillItem {
-  id          String  @id @default(uuid())
-  billId      String
-  name        String
-  quantity    Int     @default(1)
-  unitPrice   Decimal @db.Decimal(10, 2)
-  totalPrice  Decimal @db.Decimal(10, 2)
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String  @id @default(uuid())
+  billId     String
+  name       String
+  quantity   Int     @default(1)
+  unitPrice  Decimal @db.Decimal(10, 2)
+  totalPrice Decimal @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   bill      Bill       @relation(fields: [billId], references: [id], onDelete: Cascade)
   divisions Division[]
@@ -112,10 +112,10 @@ model BillItem {
 // ============================================
 
 model Participant {
-  id        String   @id @default(uuid())
-  billId    String
-  name      String
-  
+  id     String @id @default(uuid())
+  billId String
+  name   String
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -135,9 +135,9 @@ model Division {
   billItemId    String
   participantId String
   shareAmount   Decimal @db.Decimal(10, 2) // Valor que essa pessoa paga deste item
-  
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   billItem    BillItem    @relation(fields: [billItemId], references: [id], onDelete: Cascade)
   participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
@@ -154,19 +154,19 @@ model Division {
 
 enum FeeType {
   SERVICE_PERCENTAGE // Taxa de serviço (% sobre total)
-  SERVICE_FIXED      // Taxa fixa de serviço
-  COVER_CHARGE       // Couvert fixo
+  SERVICE_FIXED // Taxa fixa de serviço
+  COVER_CHARGE // Couvert fixo
 }
 
 model Fee {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   billId      String
   type        FeeType
   description String?
-  value       Decimal  @db.Decimal(10, 2) // Valor ou percentual
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  value       Decimal @db.Decimal(10, 2) // Valor ou percentual
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   bill Bill @relation(fields: [billId], references: [id], onDelete: Cascade)
 
