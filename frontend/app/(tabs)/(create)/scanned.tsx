@@ -5,10 +5,9 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Alert,
   SafeAreaView,
 } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { BillItem } from '../../../components/items/ItemCard';
 import { AddItemModal } from '../../../components/modals/AddItemModal';
@@ -25,6 +24,7 @@ const MOCK_PARTICIPANTS = ['Nome Sobrenome 1', 'Nome Sobrenome 2', 'Nome Sobreno
 
 export default function ScannedBillScreen() {
   const { id, participants: participantsParam } = useLocalSearchParams();
+  const router = useRouter();
 
   const [billName] = useState('Conta 1');
   const [items, setItems] = useState<BillItem[]>(MOCK_ITEMS);
@@ -67,7 +67,14 @@ export default function ScannedBillScreen() {
   };
 
   const handleSummary = () => {
-    Alert.alert('Resumo', 'Navegar para tela de resumo');
+    router.push({
+      pathname: '/(tabs)/(create)/summary',
+      params: {
+        billName: billName,
+        items: JSON.stringify(items),
+        participants: JSON.stringify(participants),
+      },
+    });
   };
 
   const formatCurrency = (value: number) => {
@@ -300,10 +307,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF',
     marginTop: 6,
   },
   totalCardLabel: {
