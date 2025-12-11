@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,178 +6,64 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
-  ActivityIndicator,
-  TextInput
+  SafeAreaView,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import billService, { UploadBillResponse } from '../../../services/bill.service';
-import itemsService from '../../../services/items.service';
-import { ItemCard, BillItem } from '../../../components/items/ItemCard';
+import { BillItem } from '../../../components/items/ItemCard';
 import { AddItemModal } from '../../../components/modals/AddItemModal';
 
+// Dados mockados como no Figma
+const MOCK_ITEMS: BillItem[] = [
+  { id: '1', name: 'Suco de Laranja', price: 36.00, quantity: 3, assignedParticipants: [] },
+  { id: '2', name: 'Batata Frita', price: 85.00, quantity: 4, assignedParticipants: [] },
+  { id: '3', name: 'Sorvete', price: 48.00, quantity: 4, assignedParticipants: [] },
+  { id: '4', name: 'Cerveja', price: 15.00, quantity: 2, assignedParticipants: [] },
+];
+
+const MOCK_PARTICIPANTS = ['Nome Sobrenome 1', 'Nome Sobrenome 2', 'Nome Sobrenome 3', 'Nome Sobrenome 4', 'Nome Sobrenome 5'];
+
 export default function ScannedBillScreen() {
-  const router = useRouter();
   const { id, participants: participantsParam } = useLocalSearchParams();
 
-  // State management
-  const [loading, setLoading] = useState(false);
-  const [billName, setBillName] = useState('Conta');
-  const [items, setItems] = useState<BillItem[]>([]);
-  const [participants, setParticipants] = useState<string[]>([]);
-  const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+  const [billName] = useState('Conta 1');
+  const [items, setItems] = useState<BillItem[]>(MOCK_ITEMS);
+  const [participants, setParticipants] = useState<string[]>(MOCK_PARTICIPANTS);
+  const [expandedItemId, setExpandedItemId] = useState<string>('1');
   const [isModalVisible, setIsModalVisible] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    // Parse participants
     if (participantsParam) {
       try {
         const parsed = JSON.parse(participantsParam as string);
         setParticipants(parsed);
       } catch (e) {
-        console.error('Error parsing participants', e);
-        setParticipants([]);
+        setParticipants(MOCK_PARTICIPANTS);
       }
     }
-
-    if (id) {
-      loadBillData();
-    }
-  }, [id, participantsParam]);
-
-  const loadBillData = async () => {
-    if (!id) return;
-    setLoading(true);
-    try {
-      // Load bill details for name
-      const bill = await billService.getBill(id as string);
-      setBillName(bill.establishmentName || 'Conta');
-
-      // Load items via service
-      const fetchedItems = await itemsService.getItems(id as string);
-      setItems(fetchedItems);
-    } catch (error) {
-      console.error('Error loading bill', error);
-      Alert.alert('Erro', 'Não foi possível carregar os dados.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const saveBillName = async (name: string) => {
-    if (!id) return;
-    setIsSaving(true);
-    try {
-      await billService.updateBill(id as string, { establishmentName: name });
-    } catch (error) {
-      console.error('Error saving name', error);
-    } finally {
-      setTimeout(() => setIsSaving(false), 500);
-    }
-  };
-
-  // Debounce bill name save
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (id && billName) {
-        saveBillName(billName);
-      }
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, [billName]);
-
-  const toggleExpand = (itemId: string) => {
-    setExpandedItemId(expandedItemId === itemId ? null : itemId);
-  };
+  }, [participantsParam]);
 
   const toggleParticipant = (itemId: string, participant: string) => {
-    setItems(prevItems => prevItems.map(item => {
-      if (item.id === itemId) {
-        const isAssigned = item.assignedParticipants.includes(participant);
-        let newAssigned;
-        if (isAssigned) {
-          newAssigned = item.assignedParticipants.filter(p => p !== participant);
-        } else {
-          newAssigned = [...item.assignedParticipants, participant];
+    setItems(prevItems =>
+      prevItems.map(item => {
+        if (item.id === itemId) {
+          const isAssigned = item.assignedParticipants.includes(participant);
+          return {
+            ...item,
+            assignedParticipants: isAssigned
+              ? item.assignedParticipants.filter(p => p !== participant)
+              : [...item.assignedParticipants, participant],
+          };
         }
-        return { ...item, assignedParticipants: newAssigned };
-      }
-      return item;
-    }));
-    // Note: participant assignment might need persistent storage logic too, 
-    // but the task focused on CRUD Items. Assuming local state for now or needs updateItem.
-    // For now, let's keep it local as per original code, or adding it to service?
-    // The original code didn't save participant assignment to backend in the `updateBill` payload shown!
-  };
-
-  const handleUpdateItem = async (updatedItem: BillItem) => {
-    if (!id) return;
-
-    // Optimistic update
-    setItems(prev => prev.map(item => item.id === updatedItem.id ? updatedItem : item));
-    setIsSaving(true);
-
-    try {
-      await itemsService.updateItem(id as string, updatedItem.id, updatedItem);
-    } catch (error) {
-      Alert.alert('Erro', 'Falha ao atualizar item');
-      // Revert? itemsService.getItems(id)
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const deleteItem = (itemId: string) => {
-    Alert.alert(
-      'Excluir item',
-      'Tem certeza que deseja excluir este item?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Excluir',
-          style: 'destructive',
-          onPress: async () => {
-            if (!id) return;
-            // Optimistic
-            setItems(prev => prev.filter(i => i.id !== itemId));
-            setIsSaving(true);
-            try {
-              await itemsService.deleteItem(id as string, itemId);
-            } catch (error) {
-              Alert.alert('Erro', 'Falha ao excluir item');
-              loadBillData(); // Revert
-            } finally {
-              setIsSaving(false);
-            }
-          }
-        }
-      ]
+        return item;
+      })
     );
   };
 
-  const handleAddItem = () => {
-    setIsModalVisible(true);
-  };
-
-  const handleAddNewItem = async (newItem: Omit<BillItem, 'id' | 'assignedParticipants'>) => {
-    console.log('[Scanned] handleAddNewItem called with:', newItem);
-    if (!id) {
-      console.error('[Scanned] ID is missing in handleAddNewItem');
-      return;
-    }
-    setIsSaving(true);
-    try {
-      console.log('[Scanned] Calling itemsService.createItem with id:', id);
-      const updatedList = await itemsService.createItem(id as string, newItem);
-      console.log('[Scanned] itemsService returned, updating state. New count:', updatedList.length);
-      setItems(updatedList);
-    } catch (error) {
-      console.error('[Scanned] Error in handleAddNewItem:', error);
-      Alert.alert('Erro', 'Falha ao criar item');
-    } finally {
-      setIsSaving(false);
-    }
+  const handleAddNewItem = (newItem: Omit<BillItem, 'id' | 'assignedParticipants'>) => {
+    const newId = Date.now().toString();
+    setItems([...items, { ...newItem, id: newId, assignedParticipants: [] }]);
+    setIsModalVisible(false);
   };
 
   const handleSummary = () => {
@@ -189,104 +75,104 @@ export default function ScannedBillScreen() {
   };
 
   const calculateTotal = () => {
-    return items.reduce((sum, item) => sum + item.price, 0);
+    return items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   };
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#81007F" />
-      </View>
-    );
-  }
-
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerTitleContainer}>
-          <TextInput
-            style={styles.billNameInput}
-            value={billName}
-            onChangeText={setBillName}
-            placeholder="Nome da conta"
-          />
-          {isSaving && (
-            <View style={styles.savingIndicator}>
-              <ActivityIndicator size="small" color="#81007F" />
-              <Text style={styles.savingText}>Salvando...</Text>
-            </View>
-          )}
-        </View>
-        <TouchableOpacity style={styles.addItemButton} onPress={handleAddItem}>
-          <Text style={styles.addItemButtonText}>+ Item</Text>
-        </TouchableOpacity>
-      </View>
+    <SafeAreaView style={styles.container}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        <View style={styles.contentContainer}>
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>{billName}</Text>
+            <TouchableOpacity
+              style={styles.addItemBtn}
+              onPress={() => setIsModalVisible(true)}
+            >
+              <Text style={styles.addItemBtnText}>+ Item</Text>
+            </TouchableOpacity>
+          </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {items.map((item) => {
-          const isExpanded = expandedItemId === item.id;
+          {/* Lista de items */}
+          {items.map((item, index) => (
+            <View key={item.id} style={styles.itemCardWrapper}>
+              <TouchableOpacity
+                style={styles.itemCardMain}
+                onPress={() => setExpandedItemId(expandedItemId === item.id ? '' : item.id)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.itemCardLeft}>
+                  <Text style={styles.itemCardName}>{item.name}</Text>
+                </View>
+                <View style={styles.itemCardRight}>
+                  <Text style={styles.itemCardQty}>{item.quantity}x</Text>
+                  <Text style={styles.itemCardAmount}>
+                    {formatCurrency(item.price)}
+                  </Text>
+                  <Ionicons
+                    name={expandedItemId === item.id ? 'chevron-up' : 'chevron-down'}
+                    size={20}
+                    color="#666"
+                  />
+                </View>
+              </TouchableOpacity>
 
-          return (
-            <View key={item.id} style={styles.itemWrapper}>
-              <ItemCard
-                item={item}
-                onDelete={deleteItem}
-                onUpdate={handleUpdateItem}
-                isActive={isExpanded}
-                onPress={() => toggleExpand(item.id)}
-              />
-
-              {isExpanded && (
-                <View style={styles.cardBody}>
-                  <ScrollView style={styles.participantsList} nestedScrollEnabled={true}>
-                    {participants.map((participant, index) => {
-                      const isSelected = item.assignedParticipants.includes(participant);
-                      return (
-                        <TouchableOpacity
-                          key={index}
-                          style={styles.participantRow}
-                          onPress={() => toggleParticipant(item.id, participant)}
-                        >
-                          <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                            {isSelected && <Ionicons name="checkmark" size={14} color="#81007F" />}
-                          </View>
-                          <Text style={styles.participantName}>{participant}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
+              {/* Dropdown com checkboxes */}
+              {expandedItemId === item.id && (
+                <View style={styles.dropdownWrapper}>
+                  <ScrollView
+                    style={styles.checkboxesScroll}
+                    scrollEnabled={true}
+                    showsVerticalScrollIndicator={true}
+                  >
+                    <View style={styles.checkboxesList}>
+                      {participants.map((participant, idx) => {
+                        const isAssigned = item.assignedParticipants.includes(participant);
+                        return (
+                          <TouchableOpacity
+                            key={idx}
+                            style={styles.checkboxRow}
+                            onPress={() => toggleParticipant(item.id, participant)}
+                            activeOpacity={0.6}
+                          >
+                            <View style={[styles.checkbox, isAssigned && styles.checkboxActive]}>
+                              {isAssigned && (
+                                <Ionicons name="checkmark" size={10} color="#8B2E8F" />
+                              )}
+                            </View>
+                            <Text style={styles.participantName}>{participant}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
                   </ScrollView>
-
-                  <View style={styles.cardActions}>
-                    <TouchableOpacity
-                      style={styles.addButton}
-                      onPress={() => toggleExpand(item.id)}
-                    >
-                      <Text style={styles.addButtonText}>Adicionar</Text>
-                    </TouchableOpacity>
-                  </View>
                 </View>
               )}
             </View>
-          );
-        })}
-      </ScrollView>
+          ))}
 
-      <View style={styles.footer}>
-        <View style={styles.totalContainer}>
-          <Text style={styles.totalLabel}>Total:</Text>
-          <Text style={styles.totalValue}>{formatCurrency(calculateTotal())}</Text>
+          {/* Card do Total */}
+          <View style={styles.totalCardWrapper}>
+            <Text style={styles.totalCardLabel}>Total:</Text>
+            <Text style={styles.totalCardAmount}>{formatCurrency(calculateTotal())}</Text>
+          </View>
+
+          {/* Botão Visualizar Resumo */}
+          <TouchableOpacity style={styles.summaryBtn} onPress={handleSummary}>
+            <Text style={styles.summaryBtnText}>Visualizar resumo</Text>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity style={styles.summaryButton} onPress={handleSummary}>
-          <Text style={styles.summaryButtonText}>Visualizar resumo</Text>
-        </TouchableOpacity>
-      </View>
+      </ScrollView>
 
       <AddItemModal
         visible={isModalVisible}
         onClose={() => setIsModalVisible(false)}
         onAdd={handleAddNewItem}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -294,160 +180,156 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
-    paddingTop: 24,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  scrollContent: {
+    paddingBottom: 20,
+  },
+  contentContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 0,
+    paddingBottom: 8,
+    gap: 10,
+    backgroundColor: '#fff',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    marginBottom: 24,
-  },
-  headerTitleContainer: {
-    flex: 1,
-    marginRight: 16,
-  },
-  billNameInput: {
-    fontSize: 24,
-    color: '#000',
-    fontWeight: '400',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ccc',
-    paddingVertical: 4,
-  },
-  savingIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  savingText: {
-    fontSize: 12,
-    color: '#81007F',
-    marginLeft: 4,
-  },
-  addItemButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#81007F',
-  },
-  addItemButtonText: {
-    color: '#81007F',
-    fontWeight: '500',
-    fontSize: 14,
-  },
-  scrollContent: {
-    paddingHorizontal: 24,
-    paddingBottom: 160,
-  },
-  itemWrapper: {
-    marginBottom: 8,
-  },
-  cardBody: {
-    padding: 16,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderTopWidth: 0,
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
-    marginTop: -12, // Overlap with card
-    paddingTop: 24, // Space for overlap
-    marginBottom: 16,
-  },
-  participantsList: {
-    maxHeight: 200,
-  },
-  participantRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    paddingVertical: 12,
     marginBottom: 12,
   },
-  checkbox: {
-    width: 20,
-    height: 20,
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000',
+  },
+  addItemBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1.5,
+    borderColor: '#8B2E8F',
+    borderRadius: 16,
+  },
+  addItemBtnText: {
+    color: '#8B2E8F',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  itemCardWrapper: {
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 4,
-    marginRight: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkboxSelected: {
-    borderColor: '#81007F',
-  },
-  participantName: {
-    fontSize: 14,
-    color: '#666',
-  },
-  cardActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-  },
-  addButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#81007F',
-  },
-  addButtonText: {
-    color: '#81007F',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 24,
+    borderColor: '#E0E0E0',
+    borderRadius: 10,
+    overflow: 'hidden',
     backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
   },
-  totalContainer: {
+  itemCardMain: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#fff',
   },
-  totalLabel: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+  itemCardLeft: {
+    flex: 1,
+    marginRight: 12,
   },
-  totalValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#81007F',
+  itemCardName: {
+    fontSize: 15,
+    fontWeight: '400',
+    color: '#000',
   },
-  summaryButton: {
-    backgroundColor: '#81007F',
-    height: 56,
-    borderRadius: 28,
+  itemCardRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  itemCardQty: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#000',
+  },
+  itemCardAmount: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#000',
+    minWidth: 75,
+    textAlign: 'right',
+  },
+  dropdownWrapper: {
+    backgroundColor: '#F8F8F8',
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+    maxHeight: 200,
+  },
+  checkboxesScroll: {
+    maxHeight: 160,
+  },
+  checkboxesList: {
+    paddingRight: 8,
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderWidth: 1.3,
+    borderColor: '#ccc',
+    borderRadius: 3,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#fff',
   },
-  summaryButtonText: {
-    color: '#FFFF00',
-    fontSize: 18,
-    fontWeight: '500',
+  checkboxActive: {
+    borderColor: '#8B2E8F',
+    backgroundColor: '#fff',
+  },
+  participantName: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: '#555',
+  },
+  totalCardWrapper: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    marginTop: 6,
+  },
+  totalCardLabel: {
+    fontSize: 15,
+    fontWeight: '400',
+    color: '#000',
+  },
+  totalCardAmount: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#000',
+  },
+  summaryBtn: {
+    marginHorizontal: 0,
+    marginTop: 24,
+    marginBottom: 0,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: '#8B2E8F',
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summaryBtnText: {
+    color: '#ffff00',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

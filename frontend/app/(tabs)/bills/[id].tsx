@@ -119,7 +119,7 @@ export default function BillDetail() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#7B2D8E" />
+          <ActivityIndicator size="large" color="#8B2E8F" />
           <Text style={styles.loadingText}>Carregando conta...</Text>
         </View>
       </SafeAreaView>
@@ -266,13 +266,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderWidth: 1.5,
-    borderColor: '#A01D66',
+    borderColor: '#8B2E8F',
     borderRadius: 18,
   },
   editButtonText: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#A01D66',
+    color: '#8B2E8F',
   },
   contentContainer: {
     paddingHorizontal: 20,
@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
   dropdownItemAmount: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#A01D66',
+    color: '#8B2E8F',
     minWidth: 70,
     textAlign: 'right',
   },
@@ -386,7 +386,7 @@ const styles = StyleSheet.create({
   reuseButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFD700',
+    color: '#ffff00',
   },
   loadingContainer: {
     flex: 1,
