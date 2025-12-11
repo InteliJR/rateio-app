@@ -460,7 +460,7 @@ export class BillsService {
     });
 
     // Gerar nova URL pré-assinada (caso a antiga tenha expirado)
-    const freshUrl = await this.storage.getSignedUrl(bill.imageKey);
+    const freshUrl = bill.imageKey ? await this.storage.getSignedUrl(bill.imageKey) : null;
 
     return {
       bill: {

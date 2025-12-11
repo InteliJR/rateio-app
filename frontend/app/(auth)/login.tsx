@@ -52,33 +52,6 @@ export default function LoginScreen() {
     setServerError(null);
     setIsSubmitting(true);
     try {
-      // Mock de login para desenvolvimento
-      if (data.email === "teste@gmail.com" && data.password === "teste123") {
-        const mockUser = {
-          id: "mock-1",
-          email: "teste@gmail.com",
-          name: "Usuário Mock",
-          role: "USER" as const,
-          createdAt: new Date().toISOString(),
-        };
-
-        const accessToken = "mock-access-token";
-        const refreshToken = "mock-refresh-token";
-
-        await storageService.setItem("accessToken", accessToken);
-        await storageService.setItem("refreshToken", refreshToken);
-
-        useAuthStore.setState({
-          user: mockUser,
-          accessToken,
-          refreshToken,
-          isAuthenticated: true,
-          isLoading: false,
-        });
-
-        router.replace("/(tabs)/(create)/new");
-        return;
-      }
       await login(data.email, data.password);
       router.replace("/(tabs)/(create)/new");
     } catch (error: any) {

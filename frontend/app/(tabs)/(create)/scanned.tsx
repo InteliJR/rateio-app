@@ -6,12 +6,18 @@ import {
   TouchableOpacity,
   ScrollView,
   SafeAreaView,
+  TextInput,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { BillItem } from '../../../components/items/ItemCard';
 import { AddItemModal } from '../../../components/modals/AddItemModal';
+import billService from '../../../services/bill.service';
+import itemsService from '../../../services/items.service';
+import participantsService, { Participant } from '../../../services/participants.service';
 
 // Dados mockados como no Figma
 const MOCK_ITEMS: BillItem[] = [
@@ -27,11 +33,73 @@ export default function ScannedBillScreen() {
   const { id, participants: participantsParam } = useLocalSearchParams();
   const router = useRouter();
 
-  const [billName] = useState('Conta 1');
-  const [items, setItems] = useState<BillItem[]>(MOCK_ITEMS);
-  const [participants, setParticipants] = useState<string[]>(MOCK_PARTICIPANTS);
-  const [expandedItemId, setExpandedItemId] = useState<string>('1');
+  const [billName, setBillName] = useState('');
+  const [items, setItems] = useState<BillItem[]>([]);
+  const [participants, setParticipants] = useState<string[]>([]);
+  const [expandedItemId, setExpandedItemId] = useState<string>('');
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [savingName, setSavingName] = useState(false);
+
+  useEffect(() => {
+    loadBillData();
+  }, [id]);
+
+  const loadBillData = async () => {
+    try {
+      setLoading(true);
+      
+      // TODO: Remover mock quando OCR estiver funcionando
+      // MOCK DATA para visualizar o design
+      setBillName('Conta 1');
+      setItems([
+        { id: '1', name: 'Suco de Laranja', price: 36.00, quantity: 3, assignedParticipants: [] },
+        { id: '2', name: 'Batata Frita', price: 85.00, quantity: 4, assignedParticipants: [] },
+        { id: '3', name: 'Sorvete', price: 48.00, quantity: 4, assignedParticipants: [] },
+        { id: '4', name: 'Cerveja', price: 15.00, quantity: 2, assignedParticipants: [] },
+      ]);
+      setParticipants(['Nome Sobrenome 1', 'Nome Sobrenome 2', 'Nome Sobrenome 3', 'Nome Sobrenome 4', 'Nome Sobrenome 5']);
+      
+      /* CÓDIGO REAL - Load participants from backend
+      const participantsData = await participantsService.getParticipantsByBill(id as string);
+      setParticipants(participantsData.map((p: Participant) => p.name));
+      */
+      
+      /* CÓDIGO REAL (comentado temporariamente):
+      // Load bill details
+      const billData = await billService.getBill(id as string);
+      setBillName(billData.establishmentName || '');
+      
+      // Load items
+      const itemsData = await itemsService.getItems(id as string);
+      setItems(itemsData);
+      
+      // Load participants
+      const participantsData = await participantsService.getParticipantsByBill(id as string);
+      setParticipants(participantsData.map((p: Participant) => p.name));
+      */
+      
+    } catch (error) {
+      console.error('Error loading bill data:', error);
+      Alert.alert('Erro', 'Não foi possível carregar os dados da conta');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveBillName = async () => {
+    if (!billName.trim()) return;
+    
+    try {
+      setSavingName(true);
+      await billService.updateBill(id as string, { establishmentName: billName.trim() });
+    } catch (error) {
+      console.error('Error saving bill name:', error);
+      Alert.alert('Erro', 'Não foi possível salvar o nome da conta');
+    } finally {
+      setSavingName(false);
+    }
+  };
 
   useEffect(() => {
     if (participantsParam) {
@@ -95,21 +163,37 @@ export default function ScannedBillScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView 
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        <View style={styles.contentContainer}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>{billName}</Text>
-            <TouchableOpacity
-              style={styles.addItemBtn}
-              onPress={() => setIsModalVisible(true)}
-            >
-              <Text style={styles.addItemBtnText}>+ Item</Text>
-            </TouchableOpacity>
-          </View>
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#81007F" />
+        </View>
+      ) : (
+        <ScrollView 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          <View style={styles.contentContainer}>
+            {/* Header */}
+            <View style={styles.header}>
+              <View style={styles.billNameContainer}>
+                <TextInput
+                  style={styles.billNameInput}
+                  value={billName}
+                  onChangeText={setBillName}
+                  onBlur={saveBillName}
+                  placeholder="Nome da conta"
+                />
+                {savingName && (
+                  <ActivityIndicator size="small" color="#81007F" style={styles.savingIndicator} />
+                )}
+              </View>
+              <TouchableOpacity
+                style={styles.addItemBtn}
+                onPress={() => setIsModalVisible(true)}
+              >
+                <Text style={styles.addItemBtnText}>+ Item</Text>
+              </TouchableOpacity>
+            </View>
 
           {/* Lista de items */}
           {items.map((item, index) => (
@@ -197,6 +281,7 @@ export default function ScannedBillScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+      )}
 
       <AddItemModal
         visible={isModalVisible}
@@ -211,6 +296,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   scrollContent: {
     paddingBottom: 20,
@@ -228,6 +318,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     marginBottom: 12,
+  },
+  billNameContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  billNameInput: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000',
+    paddingVertical: 4,
+  },
+  savingIndicator: {
+    marginLeft: 8,
   },
   headerTitle: {
     fontSize: 18,
