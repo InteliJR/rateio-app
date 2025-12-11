@@ -430,7 +430,7 @@ export default function BillsScreen() {
           >
             <View style={styles.filterCheckbox}>
               {selectedDateFilter === filter.id && (
-                <MaterialCommunityIcons name="check" size={16} color="#C91F7A" />
+                <MaterialCommunityIcons name="check" size={16} color="#8B2E8F" />
               )}
             </View>
             <Text style={styles.filterOptionText}>{filter.label}</Text>
@@ -518,7 +518,7 @@ export default function BillsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="#C91F7A"
+            tintColor="#8B2E8F"
           />
         }
         scrollEventThrottle={16}
@@ -554,12 +554,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderWidth: 1.5,
-    borderColor: '#A01D66',
+    borderColor: '#8B2E8F',
     borderRadius: 20,
     gap: 6,
   },
   filterButtonText: {
-    color: '#A01D66',
+    color: '#8B2E8F',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -624,7 +624,7 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderWidth: 2,
-    borderColor: '#C91F7A',
+    borderColor: '#8B2E8F',
     borderRadius: 4,
     justifyContent: 'center',
     alignItems: 'center',
