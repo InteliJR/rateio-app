@@ -233,7 +233,7 @@ export default function SummaryScreen() {
         contentContainerStyle={styles.scrollContent}
       >
         <View style={styles.contentContainer}>
-          {/* Título com Seta de Voltar e Botão Editar */}
+          {/* Título com Seta de Voltar */}
           <View style={styles.titleSection}>
             <TouchableOpacity
               style={styles.backButton}
@@ -244,9 +244,6 @@ export default function SummaryScreen() {
             <Text style={styles.titleText}>
               {billName || summary.establishmentName}
             </Text>
-            <TouchableOpacity style={styles.editButton}>
-              <Text style={styles.editButtonText}>Editar</Text>
-            </TouchableOpacity>
           </View>
 
           {/* Lista de Participantes */}
@@ -384,6 +381,18 @@ const styles = StyleSheet.create({
     borderRadius: 18,
   },
   editButtonText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#8B2E8F',
+  },
+  addItemButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderWidth: 1.5,
+    borderColor: '#8B2E8F',
+    borderRadius: 18,
+  },
+  addItemButtonText: {
     fontSize: 13,
     fontWeight: '500',
     color: '#8B2E8F',

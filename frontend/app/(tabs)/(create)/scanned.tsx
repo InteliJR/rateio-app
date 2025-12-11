@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { BillItem } from '../../../components/items/ItemCard';
 import { AddItemModal } from '../../../components/modals/AddItemModal';
 
@@ -64,6 +65,13 @@ export default function ScannedBillScreen() {
     const newId = Date.now().toString();
     setItems([...items, { ...newItem, id: newId, assignedParticipants: [] }]);
     setIsModalVisible(false);
+  };
+
+  const deleteItem = (itemId: string) => {
+    setItems(items.filter(item => item.id !== itemId));
+    if (expandedItemId === itemId) {
+      setExpandedItemId('');
+    }
   };
 
   const handleSummary = () => {
@@ -156,6 +164,22 @@ export default function ScannedBillScreen() {
                       })}
                     </View>
                   </ScrollView>
+
+                  {/* Buttons Footer Row */}
+                  <View style={styles.footerRow}>
+                    <TouchableOpacity
+                      style={styles.deleteIconButton}
+                      onPress={() => deleteItem(item.id)}
+                    >
+                      <MaterialCommunityIcons name="trash-can-outline" size={20} color="#999" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.addItemButton}
+                      onPress={() => setIsModalVisible(true)}
+                    >
+                      <Text style={styles.addItemButtonLabel}>Adicionar</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               )}
             </View>
@@ -267,7 +291,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F8F8',
     borderTopWidth: 1,
     borderTopColor: '#E0E0E0',
-    maxHeight: 200,
   },
   checkboxesScroll: {
     maxHeight: 160,
@@ -300,6 +323,36 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '400',
     color: '#555',
+  },
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E8E8E8',
+    gap: 12,
+  },
+  deleteIconButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addItemButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderWidth: 1.5,
+    borderColor: '#8B2E8F',
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addItemButtonLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#8B2E8F',
   },
   totalCardWrapper: {
     borderWidth: 1,
