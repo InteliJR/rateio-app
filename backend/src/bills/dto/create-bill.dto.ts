@@ -1,5 +1,5 @@
-import { IsOptional, IsString, IsNumber, Min, Max } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { IsOptional, IsString, IsNumber, Min, Max, IsInt } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 
 export class CreateBillDto {
   @IsOptional()
@@ -11,13 +11,13 @@ export class CreateBillDto {
   billName?: string;
 
   @IsOptional()
-  @Transform(({ value }) => Number(value))
-  @IsNumber()
+  @Type(() => Number)
+  @IsInt()
   @Min(1)
   participantCount?: number;
 
   @IsOptional()
-  @Transform(({ value }) => Number(value))
+  @Type(() => Number)
   @IsNumber()
   @Min(0)
   @Max(100)

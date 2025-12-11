@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,89 +6,202 @@ import {
   TouchableOpacity,
   TextInput,
   ScrollView,
-  Alert
-} from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+  Alert,
+  ActivityIndicator,
+} from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import participantsService, {
+  Participant,
+} from "../../../services/participants.service";
 
 export default function ParticipantsScreen() {
   const { id, participantCount } = useLocalSearchParams();
   const router = useRouter();
 
   const initialCount = Number(participantCount) || 0;
-  const [nameInput, setNameInput] = useState('');
-  const [participants, setParticipants] = useState<string[]>([]);
+  const [nameInput, setNameInput] = useState("");
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleAddParticipant = () => {
-    if (!nameInput.trim() || participants.length === (Number(participantCount) || 0)) {
-      Alert.alert('Limite atingido', 'O número máximo de participantes foi atingido');
+  // Carregar participantes existentes
+  useEffect(() => {
+    loadParticipants();
+  }, [id]);
+
+  const loadParticipants = async () => {
+    if (!id || typeof id !== "string") {
+      setIsLoading(false);
       return;
     }
-    setParticipants([...participants, nameInput.trim()]);
-    setNameInput('');
+
+    try {
+      const data = await participantsService.getParticipantsByBill(id);
+      setParticipants(data);
+    } catch (error: any) {
+      console.error("Erro ao carregar participantes:", error);
+      Alert.alert("Erro", "Não foi possível carregar os participantes.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleRemoveParticipant = (index: number) => {
-    const newParticipants = [...participants];
-    newParticipants.splice(index, 1);
-    setParticipants(newParticipants);
+  const handleUpdateParticipant = async (
+    participantId: string,
+    newName: string
+  ) => {
+    if (!newName.trim()) {
+      Alert.alert("Atenção", "Digite um nome válido.");
+      return;
+    }
+
+    try {
+      const updated = await participantsService.updateParticipant(
+        participantId,
+        newName
+      );
+      setParticipants((prev) =>
+        prev.map((p) => (p.id === participantId ? updated : p))
+      );
+      setNameInput("");
+    } catch (error: any) {
+      Alert.alert(
+        "Erro",
+        error.message || "Não foi possível atualizar o participante."
+      );
+    }
+  };
+
+  const handleAddOrUpdateNext = () => {
+    if (!nameInput.trim()) {
+      Alert.alert("Atenção", "Digite um nome.");
+      return;
+    }
+
+    // Encontrar o primeiro participante com nome padrão "Pessoa X"
+    const nextParticipant = participants.find((p) =>
+      p.name.startsWith("Pessoa ")
+    );
+
+    if (nextParticipant) {
+      handleUpdateParticipant(nextParticipant.id, nameInput.trim());
+    } else {
+      Alert.alert("Atenção", "Todos os participantes já foram nomeados.");
+      setNameInput("");
+    }
   };
 
   const handleScan = () => {
-    // Optional: Validate if participants match the count or if at least one exists
-    if (participants.length === 0) {
-      Alert.alert('Atenção', 'Adicione pelo menos um participante.');
+    // Verificar se há pelo menos um participante nomeado
+    const hasNamedParticipant = participants.some(
+      (p) => !p.name.startsWith("Pessoa ")
+    );
+
+    if (!hasNamedParticipant) {
+      Alert.alert(
+        "Atenção",
+        "Nomeie pelo menos um participante antes de continuar."
+      );
       return;
     }
 
     router.push({
-      pathname: '/(tabs)/(create)/camera',
+      pathname: "/(tabs)/(create)/camera",
       params: {
         id,
-        participants: JSON.stringify(participants)
-      }
+        participants: JSON.stringify(participants.map((p) => p.name)),
+      },
     });
   };
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color="#81007F" />
+        <Text style={styles.loadingText}>Carregando participantes...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={styles.title}>
-          Defina os nomes {initialCount > 0 ? `(${participants.length}/${initialCount})` : ''}
+          Defina os nomes (
+          {participants.filter((p) => !p.name.startsWith("Pessoa ")).length}/
+          {participants.length})
         </Text>
 
         <View style={styles.inputRow}>
           <TextInput
             style={styles.input}
-            placeholder="Digite seu nome...."
+            placeholder="Digite o nome do participante..."
             value={nameInput}
             onChangeText={setNameInput}
-            onSubmitEditing={handleAddParticipant}
+            onSubmitEditing={handleAddOrUpdateNext}
+            editable={!isSaving}
           />
-          <TouchableOpacity style={styles.okButton} onPress={handleAddParticipant}>
+          <TouchableOpacity
+            style={[styles.okButton, isSaving && styles.okButtonDisabled]}
+            onPress={handleAddOrUpdateNext}
+            disabled={isSaving}
+          >
             <Text style={styles.okButtonText}>OK</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.listContainer}>
           {participants.map((participant, index) => (
-            <View key={index} style={styles.participantRow}>
-              <Text style={styles.participantName}>{participant}</Text>
-              <TouchableOpacity onPress={() => handleRemoveParticipant(index)}>
-                <Ionicons name="close" size={20} color="#888" />
-              </TouchableOpacity>
+            <View key={participant.id} style={styles.participantRow}>
+              <View style={styles.participantInfo}>
+                <Text style={styles.participantName}>{participant.name}</Text>
+                {participant.name.startsWith("Pessoa ") && (
+                  <Text style={styles.participantHint}>Aguardando nome</Text>
+                )}
+              </View>
+              {!participant.name.startsWith("Pessoa ") && (
+                <TouchableOpacity
+                  onPress={() => {
+                    Alert.alert(
+                      "Editar Participante",
+                      `Deseja editar "${participant.name}"?`,
+                      [
+                        { text: "Cancelar", style: "cancel" },
+                        {
+                          text: "Editar",
+                          onPress: () => {
+                            Alert.prompt(
+                              "Editar Nome",
+                              "Digite o novo nome:",
+                              (text) => {
+                                if (text && text.trim()) {
+                                  handleUpdateParticipant(participant.id, text);
+                                }
+                              },
+                              "plain-text",
+                              participant.name
+                            );
+                          },
+                        },
+                      ]
+                    );
+                  }}
+                >
+                  <Ionicons name="pencil" size={20} color="#81007F" />
+                </TouchableOpacity>
+              )}
             </View>
           ))}
-
-          {/* Placeholder items to match the visual style if list is empty or short? 
-              The image shows "Nome Sobrenome 1", etc. 
-              We'll just show the actual added participants. 
-          */}
         </View>
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.scanButton} onPress={handleScan}>
+        <TouchableOpacity
+          style={[styles.scanButton, isSaving && styles.scanButtonDisabled]}
+          onPress={handleScan}
+          disabled={isSaving}
+        >
           <Text style={styles.scanButtonText}>Escanear</Text>
         </TouchableOpacity>
       </View>
@@ -99,7 +212,16 @@ export default function ParticipantsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
+  },
+  centerContent: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: "#666",
   },
   scrollContent: {
     paddingHorizontal: 24,
@@ -108,13 +230,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 24,
-    fontWeight: '500',
-    color: '#000',
+    fontWeight: "500",
+    color: "#000",
     marginBottom: 24,
   },
   inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     marginBottom: 24,
   },
@@ -122,59 +244,74 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 48,
     borderWidth: 1,
-    borderColor: '#999',
+    borderColor: "#999",
     borderRadius: 24,
     paddingHorizontal: 16,
     fontSize: 14,
-    color: '#333',
+    color: "#333",
   },
   okButton: {
     height: 48,
     paddingHorizontal: 24,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#81007F',
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderColor: "#81007F",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  okButtonDisabled: {
+    opacity: 0.5,
   },
   okButtonText: {
-    color: '#81007F',
-    fontWeight: 'bold',
+    color: "#81007F",
+    fontWeight: "bold",
     fontSize: 14,
   },
   listContainer: {
     marginTop: 8,
   },
   participantRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: "#eee",
+  },
+  participantInfo: {
+    flex: 1,
   },
   participantName: {
     fontSize: 16,
-    color: '#333',
+    color: "#333",
+    fontWeight: "500",
+  },
+  participantHint: {
+    fontSize: 12,
+    color: "#999",
+    marginTop: 4,
   },
   footer: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
     padding: 24,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
   scanButton: {
-    backgroundColor: '#81007F',
+    backgroundColor: "#81007F",
     height: 56,
     borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  scanButtonDisabled: {
+    opacity: 0.5,
   },
   scanButtonText: {
-    color: '#FFFF00', // Yellow text as per typical design in this app, or white? Image shows yellow/gold.
+    color: "#FFFF00",
     fontSize: 18,
-    fontWeight: '500',
+    fontWeight: "500",
   },
 });

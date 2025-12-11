@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useRouter } from 'expo-router';
+import React, { useState } from "react";
+import { useRouter } from "expo-router";
 import {
   View,
   Text,
@@ -11,39 +11,52 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
-} from 'react-native';
-import { useForm, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import billService from '../../../services/bill.service';
-import { useBillStore } from '../../../store/billStore';
-import { NumericInput } from '../../../components/common/NumericInput';
+} from "react-native";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import billService from "../../../services/bill.service";
+import { useBillStore } from "../../../store/billStore";
+import { NumericInput } from "../../../components/common/NumericInput";
 
 interface INewBillFormData {
   numPeople: string;
-  defineNameOption: 'sim' | 'nao';
+  defineNameOption: "sim" | "nao";
   billName?: string;
   serviceRate: string;
 }
 
-const newBillSchema = z.object({
-  numPeople: z.string()
-    .min(1, 'Campo obrigatório')
-    .refine((val) => !isNaN(Number(val)) && Number(val) >= 1, 'Mínimo de 1 participante'),
-  defineNameOption: z.enum(['sim', 'nao']),
-  billName: z.string().optional(),
-  serviceRate: z.string()
-    .min(1, 'Campo obrigatório')
-    .refine((val) => !isNaN(Number(val)) && Number(val) >= 0 && Number(val) <= 100, 'A taxa deve ser entre 0% e 100%'),
-}).superRefine((data, ctx) => {
-  if (data.defineNameOption === 'sim' && (!data.billName || data.billName.trim().length === 0)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'Nome da conta é obrigatório',
-      path: ['billName'],
-    });
-  }
-});
+const newBillSchema = z
+  .object({
+    numPeople: z
+      .string()
+      .min(1, "Campo obrigatório")
+      .refine(
+        (val) => !isNaN(Number(val)) && Number(val) >= 1,
+        "Mínimo de 1 participante"
+      ),
+    defineNameOption: z.enum(["sim", "nao"]),
+    billName: z.string().optional(),
+    serviceRate: z
+      .string()
+      .min(1, "Campo obrigatório")
+      .refine(
+        (val) => !isNaN(Number(val)) && Number(val) >= 0 && Number(val) <= 100,
+        "A taxa deve ser entre 0% e 100%"
+      ),
+  })
+  .superRefine((data, ctx) => {
+    if (
+      data.defineNameOption === "sim" &&
+      (!data.billName || data.billName.trim().length === 0)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Nome da conta é obrigatório",
+        path: ["billName"],
+      });
+    }
+  });
 
 export default function NewBillScreen() {
   const router = useRouter();
@@ -53,25 +66,31 @@ export default function NewBillScreen() {
   // Get store actions
   const { addBill } = useBillStore();
 
-  const { control, handleSubmit, watch, setValue, formState: { errors, isValid } } = useForm<INewBillFormData>({
+  const {
+    control,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors, isValid },
+  } = useForm<INewBillFormData>({
     resolver: zodResolver(newBillSchema),
     defaultValues: {
-      numPeople: '',
-      defineNameOption: 'nao',
-      billName: '',
-      serviceRate: '',
+      numPeople: "",
+      defineNameOption: "nao",
+      billName: "",
+      serviceRate: "",
     },
-    mode: 'onChange',
+    mode: "onChange",
   });
 
-  const defineNameOption = watch('defineNameOption');
+  const defineNameOption = watch("defineNameOption");
 
   const onSubmit = async (data: INewBillFormData) => {
     setIsLoading(true);
     try {
       const newBill = await billService.createBillSetup({
         participantCount: Number(data.numPeople),
-        billName: data.defineNameOption === 'sim' ? data.billName : undefined,
+        billName: data.defineNameOption === "sim" ? data.billName : undefined,
         serviceFeePercentage: Number(data.serviceRate),
       });
 
@@ -79,11 +98,14 @@ export default function NewBillScreen() {
       addBill(newBill);
 
       router.push({
-        pathname: '/(tabs)/(create)/participants',
-        params: { id: newBill.id, participantCount: data.numPeople }
+        pathname: "/(tabs)/(create)/participants",
+        params: { id: newBill.id, participantCount: data.numPeople },
       });
     } catch (error: any) {
-      Alert.alert('Erro', error.message || 'Não foi possível criar a conta. Tente novamente.');
+      Alert.alert(
+        "Erro",
+        error.message || "Não foi possível criar a conta. Tente novamente."
+      );
     } finally {
       setIsLoading(false);
     }
@@ -91,7 +113,7 @@ export default function NewBillScreen() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.container}
     >
       <ScrollView
@@ -123,11 +145,15 @@ export default function NewBillScreen() {
             <View style={styles.radioGroup}>
               <TouchableOpacity
                 style={styles.radioOption}
-                onPress={() => setValue('defineNameOption', 'sim', { shouldValidate: true })}
+                onPress={() =>
+                  setValue("defineNameOption", "sim", { shouldValidate: true })
+                }
                 disabled={isLoading}
               >
                 <View style={styles.radioCircle}>
-                  {defineNameOption === 'sim' && <View style={styles.radioCircleFilled} />}
+                  {defineNameOption === "sim" && (
+                    <View style={styles.radioCircleFilled} />
+                  )}
                 </View>
                 <Text style={styles.radioLabel}>Sim</Text>
               </TouchableOpacity>
@@ -135,19 +161,21 @@ export default function NewBillScreen() {
               <TouchableOpacity
                 style={styles.radioOption}
                 onPress={() => {
-                  setValue('defineNameOption', 'nao', { shouldValidate: true });
-                  setValue('billName', ''); // Clear name when switching to 'nao'
+                  setValue("defineNameOption", "nao", { shouldValidate: true });
+                  setValue("billName", ""); // Clear name when switching to 'nao'
                 }}
                 disabled={isLoading}
               >
                 <View style={styles.radioCircle}>
-                  {defineNameOption === 'nao' && <View style={styles.radioCircleFilled} />}
+                  {defineNameOption === "nao" && (
+                    <View style={styles.radioCircleFilled} />
+                  )}
                 </View>
                 <Text style={styles.radioLabel}>Não</Text>
               </TouchableOpacity>
             </View>
 
-            {defineNameOption === 'sim' && (
+            {defineNameOption === "sim" && (
               <View>
                 <Controller
                   control={control}
@@ -157,7 +185,7 @@ export default function NewBillScreen() {
                       style={[
                         styles.input,
                         styles.conditionalInput,
-                        errors.billName ? styles.inputError : null
+                        errors.billName ? styles.inputError : null,
                       ]}
                       placeholder="Nome da conta"
                       value={value}
@@ -168,7 +196,9 @@ export default function NewBillScreen() {
                   )}
                 />
                 {errors.billName && (
-                  <Text style={styles.errorText}>{errors.billName.message}</Text>
+                  <Text style={styles.errorText}>
+                    {errors.billName.message}
+                  </Text>
                 )}
               </View>
             )}
@@ -200,7 +230,10 @@ export default function NewBillScreen() {
 
       <View style={styles.buttonContainer}>
         <TouchableOpacity
-          style={[styles.button, (!isValid || isLoading) && styles.buttonDisabled]}
+          style={[
+            styles.button,
+            (!isValid || isLoading) && styles.buttonDisabled,
+          ]}
           onPress={handleSubmit(onSubmit)}
           disabled={!isValid || isLoading}
         >
@@ -218,12 +251,12 @@ export default function NewBillScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
   scrollContent: {
     flexGrow: 1,
     paddingBottom: 100,
-    paddingTop: 24
+    paddingTop: 24,
   },
   content: {
     flex: 1,
@@ -234,30 +267,30 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 24,
-    fontWeight: '500',
-    color: '#333',
+    fontWeight: "500",
+    color: "#333",
     marginBottom: 16,
   },
   label: {
     fontSize: 14,
-    color: '#333',
+    color: "#333",
     marginBottom: 8,
     marginTop: 8,
   },
   input: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 32,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: "#ddd",
   },
   inputError: {
-    borderColor: '#ff4d4d',
+    borderColor: "#ff4d4d",
   },
   errorText: {
-    color: '#ff4d4d',
+    color: "#ff4d4d",
     fontSize: 12,
     marginTop: 4,
     marginLeft: 8,
@@ -266,13 +299,13 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   radioGroup: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 24,
     marginTop: 4,
   },
   radioOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   radioCircle: {
@@ -280,41 +313,41 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#81007F',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "#81007F",
+    alignItems: "center",
+    justifyContent: "center",
   },
   radioCircleFilled: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#81007F',
+    backgroundColor: "#81007F",
   },
   radioLabel: {
     fontSize: 14,
-    color: '#333',
+    color: "#333",
   },
   buttonContainer: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
     padding: 24,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
   button: {
-    backgroundColor: '#81007F',
+    backgroundColor: "#81007F",
     height: 56,
     borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   buttonDisabled: {
     opacity: 0.6,
   },
   buttonText: {
-    color: '#FFFF00',
+    color: "#FFFF00",
     fontSize: 18,
-    fontWeight: '500',
+    fontWeight: "500",
   },
 });

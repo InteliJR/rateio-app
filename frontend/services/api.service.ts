@@ -61,7 +61,7 @@ class ApiService {
           originalRequest._retry = true;
 
           try {
-            const refreshToken = await SecureStore.getItemAsync('refreshToken');
+            const refreshToken = await storageService.getItem('refreshToken');
 
             if (!refreshToken) {
               await this.handleLogout();
@@ -78,9 +78,9 @@ class ApiService {
             const { accessToken, refreshToken: newRefreshToken } = response.data;
 
             // Salvar novos tokens
-            await SecureStore.setItemAsync('accessToken', accessToken);
+            await storageService.setItem('accessToken', accessToken);
             if (newRefreshToken) {
-              await SecureStore.setItemAsync('refreshToken', newRefreshToken);
+              await storageService.setItem('refreshToken', newRefreshToken);
             }
 
             console.log('[API] Token refreshed successfully');
@@ -103,8 +103,8 @@ class ApiService {
   }
 
   private async handleLogout() {
-    await SecureStore.deleteItemAsync('accessToken');
-    await SecureStore.deleteItemAsync('refreshToken');
+    await storageService.deleteItem('accessToken');
+    await storageService.deleteItem('refreshToken');
     this.onUnauthorized();
   }
 
