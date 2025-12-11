@@ -105,6 +105,12 @@ export default function CameraScreen() {
   // Função para otimizar imagem
   const optimizeImage = async (imageUri: string) => {
     try {
+      // Na web, pular otimização (FileSystem não funciona)
+      if (Platform.OS === "web") {
+        console.log("Pulando otimização na web");
+        return imageUri;
+      }
+
       // Obter informações da imagem original
       const imageInfo = await FileSystem.getInfoAsync(imageUri);
 
@@ -187,11 +193,11 @@ export default function CameraScreen() {
       const optimizedImageUri = await optimizeImage(capturedImage);
 
       router.push({
-        pathname: '/(tabs)/(create)/scanned',
+        pathname: "/(tabs)/(create)/scanned",
         params: {
           id,
-          participants: participants as string
-        }
+          participants: participants as string,
+        },
       });
 
       // Fazer upload da imagem para o servidor
@@ -203,7 +209,7 @@ export default function CameraScreen() {
           text: "OK",
           onPress: () => {
             // Voltar para a tela anterior e passar dados via params se necessário
-            router.push('/(tabs)/(create)/scanned');
+            router.push("/(tabs)/(create)/scanned");
           },
         },
       ]);
