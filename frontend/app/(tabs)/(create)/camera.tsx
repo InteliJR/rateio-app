@@ -15,13 +15,14 @@ import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as FileSystem from "expo-file-system/legacy";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import billService from "../../../services/bill.service";
 
 const { width, height } = Dimensions.get("window");
 
 export default function CameraScreen() {
   const router = useRouter();
+  const { id, participants } = useLocalSearchParams();
   const cameraRef = useRef<CameraView>(null);
 
   // Estados
@@ -185,6 +186,14 @@ export default function CameraScreen() {
       // Otimizar imagem antes de processar
       const optimizedImageUri = await optimizeImage(capturedImage);
 
+      router.push({
+        pathname: '/(tabs)/(create)/scanned',
+        params: {
+          id,
+          participants: participants as string
+        }
+      });
+
       // Fazer upload da imagem para o servidor
       const uploadedBill = await billService.uploadBill(optimizedImageUri);
 
@@ -194,7 +203,7 @@ export default function CameraScreen() {
           text: "OK",
           onPress: () => {
             // Voltar para a tela anterior e passar dados via params se necessário
-            router.back();
+            router.push('/(tabs)/(create)/scanned');
           },
         },
       ]);

@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { StyleSheet, Text, View, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useBillStore } from '../../store/billStore';
-import billService, { UploadBillResponse } from '../../services/bill.service';
+import { useBillStore } from '../../../store/billStore';
+import billService, { UploadBillResponse } from '../../../services/bill.service';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -36,7 +36,7 @@ export default function BillsScreen() {
   const renderItem = ({ item }: { item: UploadBillResponse }) => (
     <TouchableOpacity
       style={styles.card}
-      onPress={() => router.push(`/bills/${item.id}`)}
+      onPress={() => router.push(`/(bills)/${item.id}/items`)}
     >
       <View style={styles.cardHeader}>
         <Text style={styles.establishmentName}>

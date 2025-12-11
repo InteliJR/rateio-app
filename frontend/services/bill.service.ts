@@ -8,14 +8,28 @@ export interface UploadBillResponse {
   establishmentName?: string;
   totalAmount?: number;
   items?: Array<{
-    description: string;
-    amount: number;
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    totalPrice: number;
   }>;
   createdAt: string;
   _count?: {
     items: number;
     participants: number;
   };
+}
+
+export interface UpdateBillPayload {
+  status?: string;
+  establishmentName?: string;
+  totalAmount?: number;
+  items?: Array<{
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    totalPrice: number;
+  }>;
 }
 
 export interface UploadBillError {
@@ -155,7 +169,7 @@ class BillService {
    */
   async updateBill(
     billId: string,
-    data: Partial<Omit<UploadBillResponse, "id" | "createdAt">>
+    data: UpdateBillPayload
   ): Promise<UploadBillResponse> {
     try {
       const api = apiService.getApi();
