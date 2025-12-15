@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useRouter } from 'expo-router';
+import React, { useState } from "react";
+import { useRouter } from "expo-router";
 import {
   View,
   Text,
@@ -10,30 +10,35 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
-} from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
-import Logo from '@/assets/images/logo.svg';
-import { useAuthStore } from '@/store/authStore';
-import { useForm, Controller } from 'react-hook-form';
-import { z } from 'zod';
-import { zodResolver } from '@hookform/resolvers/zod';
+} from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
+import Logo from "@/assets/images/logo.svg";
+import { useAuthStore } from "@/store/authStore";
+import { useForm, Controller } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
 
-const registerSchema = z.object({
-  name: z.string().nonempty('Informe seu nome.').min(3, 'Nome muito curto.'),
-  email: z
-    .string()
-    .nonempty('Informe seu email.')
-    .email('Formato de email inválido.')
-    .refine((val) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val), 'Verifique se o email está completo.'),
-  password: z
-    .string()
-    .nonempty('Informe uma senha.')
-    .min(8, 'A senha precisa ter ao menos 8 caracteres.'),
-  confirmPassword: z.string().nonempty('Confirme sua senha.'),
-}).refine((data) => data.password === data.confirmPassword, {
-  path: ['confirmPassword'],
-  message: 'As senhas não coincidem.',
-});
+const registerSchema = z
+  .object({
+    name: z.string().nonempty("Informe seu nome.").min(3, "Nome muito curto."),
+    email: z
+      .string()
+      .nonempty("Informe seu email.")
+      .email("Formato de email inválido.")
+      .refine(
+        (val) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val),
+        "Verifique se o email está completo."
+      ),
+    password: z
+      .string()
+      .nonempty("Informe uma senha.")
+      .min(8, "A senha precisa ter ao menos 8 caracteres."),
+    confirmPassword: z.string().nonempty("Confirme sua senha."),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    path: ["confirmPassword"],
+    message: "As senhas não coincidem.",
+  });
 
 type RegisterFormData = z.infer<typeof registerSchema>;
 
@@ -43,10 +48,14 @@ export default function RegisterScreen() {
   const { register: registerUser, isLoading } = useAuthStore();
   const router = useRouter();
 
-  const { control, handleSubmit, formState: { errors, isValid } } = useForm<RegisterFormData>({
+  const {
+    control,
+    handleSubmit,
+    formState: { errors, isValid },
+  } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
-    defaultValues: { name: '', email: '', password: '', confirmPassword: '' },
-    mode: 'onChange',
+    defaultValues: { name: "", email: "", password: "", confirmPassword: "" },
+    mode: "onChange",
   });
 
   const onSubmit = async (data: RegisterFormData) => {
@@ -54,15 +63,14 @@ export default function RegisterScreen() {
     try {
       const response = await registerUser(data.name, data.email, data.password);
       Alert.alert(
-        'Cadastro realizado',
-        response?.message ||
-          'Conta criada com sucesso. Aguarde a aprova��o de um administrador para acessar.',
+        "Cadastro realizado",
+        "Conta criada com sucesso! Você já está logado.",
         [
           {
-            text: 'Ir para login',
-            onPress: () => router.replace('/(auth)/login'),
+            text: "Continuar",
+            onPress: () => router.replace("/(tabs)/(create)/new"),
           },
-        ],
+        ]
       );
     } catch (error: any) {
       setServerError(getApiErrorMessage(error));
@@ -73,31 +81,39 @@ export default function RegisterScreen() {
     const data = err?.response?.data;
     if (data) {
       if (Array.isArray(data.errors)) {
-        const arr = data.errors.map((e: any) => e?.message || String(e)).filter(Boolean);
-        if (arr.length) return arr.join('\n');
+        const arr = data.errors
+          .map((e: any) => e?.message || String(e))
+          .filter(Boolean);
+        if (arr.length) return arr.join("\n");
       }
-      if (data.errors && typeof data.errors === 'object' && !Array.isArray(data.errors)) {
-        const msgs = Object.values(data.errors).map((e: any) => (typeof e === 'string' ? e : e?.message)).filter(Boolean) as string[];
-        if (msgs.length) return msgs.join('\n');
+      if (
+        data.errors &&
+        typeof data.errors === "object" &&
+        !Array.isArray(data.errors)
+      ) {
+        const msgs = Object.values(data.errors)
+          .map((e: any) => (typeof e === "string" ? e : e?.message))
+          .filter(Boolean) as string[];
+        if (msgs.length) return msgs.join("\n");
       }
       switch (data.code) {
-        case 'EMAIL_IN_USE':
-          return 'Este email já está em uso.';
-        case 'WEAK_PASSWORD':
-          return 'A senha fornecida é considerada fraca.';
-        case 'INVALID_DATA':
-          return 'Dados inválidos. Verifique os campos.';
+        case "EMAIL_IN_USE":
+          return "Este email já está em uso.";
+        case "WEAK_PASSWORD":
+          return "A senha fornecida é considerada fraca.";
+        case "INVALID_DATA":
+          return "Dados inválidos. Verifique os campos.";
       }
-      if (typeof data.message === 'string' && data.message.trim()) {
+      if (typeof data.message === "string" && data.message.trim()) {
         return data.message;
       }
     }
-    return 'Não foi possível realizar o cadastro. Tente novamente.';
+    return "Não foi possível realizar o cadastro. Tente novamente.";
   }
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.container}
     >
       <View style={styles.content}>
@@ -105,7 +121,9 @@ export default function RegisterScreen() {
           <Logo style={styles.logo} />
           <Text style={styles.title}>Cadastro</Text>
 
-          {serverError && <Text style={styles.serverErrorText}>{serverError}</Text>}
+          {serverError && (
+            <Text style={styles.serverErrorText}>{serverError}</Text>
+          )}
 
           <Controller
             control={control}
@@ -121,7 +139,9 @@ export default function RegisterScreen() {
               />
             )}
           />
-          {errors.name && <Text style={styles.errorText}>{errors.name.message}</Text>}
+          {errors.name && (
+            <Text style={styles.errorText}>{errors.name.message}</Text>
+          )}
 
           <Controller
             control={control}
@@ -138,9 +158,16 @@ export default function RegisterScreen() {
               />
             )}
           />
-          {errors.email && <Text style={styles.errorText}>{errors.email.message}</Text>}
+          {errors.email && (
+            <Text style={styles.errorText}>{errors.email.message}</Text>
+          )}
 
-          <View style={[styles.passwordContainer, errors.password && styles.inputError]}>
+          <View
+            style={[
+              styles.passwordContainer,
+              errors.password && styles.inputError,
+            ]}
+          >
             <Controller
               control={control}
               name="password"
@@ -161,20 +188,25 @@ export default function RegisterScreen() {
               disabled={isLoading}
             >
               <MaterialIcons
-                name={showPassword ? 'visibility' : 'visibility-off'}
+                name={showPassword ? "visibility" : "visibility-off"}
                 size={20}
                 color="#333"
               />
             </TouchableOpacity>
           </View>
-          {errors.password && <Text style={styles.errorText}>{errors.password.message}</Text>}
+          {errors.password && (
+            <Text style={styles.errorText}>{errors.password.message}</Text>
+          )}
 
           <Controller
             control={control}
             name="confirmPassword"
             render={({ field: { onChange, value } }) => (
               <TextInput
-                style={[styles.input, errors.confirmPassword && styles.inputError]}
+                style={[
+                  styles.input,
+                  errors.confirmPassword && styles.inputError,
+                ]}
                 placeholder="Confirmar senha"
                 value={value}
                 onChangeText={onChange}
@@ -183,10 +215,17 @@ export default function RegisterScreen() {
               />
             )}
           />
-          {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword.message}</Text>}
+          {errors.confirmPassword && (
+            <Text style={styles.errorText}>
+              {errors.confirmPassword.message}
+            </Text>
+          )}
 
           <TouchableOpacity
-            style={[styles.button, (isLoading || !isValid) && styles.buttonDisabled]}
+            style={[
+              styles.button,
+              (isLoading || !isValid) && styles.buttonDisabled,
+            ]}
             onPress={handleSubmit(onSubmit)}
             disabled={isLoading || !isValid}
           >
@@ -199,9 +238,12 @@ export default function RegisterScreen() {
         </View>
 
         <View style={styles.linkRow}>
-          <Text style={{ color: '#333' }}>Já possui conta? </Text>
-          <TouchableOpacity onPress={() => router.push('/(auth)/login')} disabled={isLoading}>
-            <Text style={{ color: '#81007F', fontWeight: 'bold' }}>Entrar</Text>
+          <Text style={{ color: "#333" }}>Já possui conta? </Text>
+          <TouchableOpacity
+            onPress={() => router.push("/(auth)/login")}
+            disabled={isLoading}
+          >
+            <Text style={{ color: "#81007F", fontWeight: "bold" }}>Entrar</Text>
           </TouchableOpacity>
         </View>
 
@@ -214,63 +256,63 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
   content: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
     paddingHorizontal: 24,
   },
   stack: {
-    width: '100%',
+    width: "100%",
     gap: 16,
   },
   logo: {
-    alignSelf: 'center',
+    alignSelf: "center",
     marginBottom: 8,
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    textAlign: 'center',
+    fontWeight: "bold",
+    color: "#333",
+    textAlign: "center",
   },
   form: {
-    width: '100%',
+    width: "100%",
   },
   input: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 32,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: "#ddd",
   },
   inputError: {
-    borderColor: '#d00',
+    borderColor: "#d00",
   },
   errorText: {
-    color: '#d00',
+    color: "#d00",
     marginTop: -16,
     marginBottom: 16,
     marginLeft: 8,
     fontSize: 12,
   },
   serverErrorText: {
-    color: '#d00',
+    color: "#d00",
     marginBottom: 16,
-    textAlign: 'center',
+    textAlign: "center",
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   passwordContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
     borderRadius: 32,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: "#ddd",
   },
   passwordInput: {
     flex: 1,
@@ -286,27 +328,27 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   button: {
-    backgroundColor: '#81007F',
+    backgroundColor: "#81007F",
     paddingVertical: 14,
     borderRadius: 32,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 8,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
   buttonText: {
-    color: '#FFFF00',
+    color: "#FFFF00",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   linkRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
     marginTop: 8,
   },
   footer: {
-    height: '10%',
+    height: "10%",
   },
 });
