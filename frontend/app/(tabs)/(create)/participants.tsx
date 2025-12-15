@@ -93,19 +93,7 @@ export default function ParticipantsScreen() {
   };
 
   const handleScan = () => {
-    // Verificar se há pelo menos um participante nomeado
-    const hasNamedParticipant = participants.some(
-      (p) => !p.name.startsWith("Pessoa ")
-    );
-
-    if (!hasNamedParticipant) {
-      Alert.alert(
-        "Atenção",
-        "Nomeie pelo menos um participante antes de continuar."
-      );
-      return;
-    }
-
+    // Permitir continuar mesmo sem nomear todos os participantes
     router.push({
       pathname: "/(tabs)/(create)/camera",
       params: {
@@ -157,7 +145,9 @@ export default function ParticipantsScreen() {
               <View style={styles.participantInfo}>
                 <Text style={styles.participantName}>{participant.name}</Text>
                 {participant.name.startsWith("Pessoa ") && (
-                  <Text style={styles.participantHint}>Aguardando nome</Text>
+                  <Text style={styles.participantHint}>
+                    Opcional - pode manter esse nome
+                  </Text>
                 )}
               </View>
               {!participant.name.startsWith("Pessoa ") && (
@@ -232,7 +222,13 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "500",
     color: "#000",
-    marginBottom: 24,
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: "#666",
+    marginBottom: 20,
+    lineHeight: 20,
   },
   inputRow: {
     flexDirection: "row",
@@ -298,6 +294,20 @@ const styles = StyleSheet.create({
     right: 0,
     padding: 24,
     backgroundColor: "#fff",
+    gap: 12,
+  },
+  skipButton: {
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "#81007F",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  skipButtonText: {
+    color: "#81007F",
+    fontSize: 16,
+    fontWeight: "500",
   },
   scanButton: {
     backgroundColor: "#81007F",
