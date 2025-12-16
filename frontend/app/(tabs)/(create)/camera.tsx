@@ -30,6 +30,10 @@ export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStage, setUploadStage] = useState<
+    "idle" | "optimizing" | "uploading" | "processing"
+  >("idle");
 
   // Solicitar permissões ao montar o componente
   useEffect(() => {
@@ -100,6 +104,22 @@ export default function CameraScreen() {
   // Função para refazer (tirar nova foto)
   const retakePicture = () => {
     setCapturedImage(null);
+    setUploadStage("idle");
+    setUploadProgress(0);
+  };
+
+  // Função para obter mensagem de progresso
+  const getProgressMessage = (): string => {
+    switch (uploadStage) {
+      case "optimizing":
+        return "Otimizando imagem...";
+      case "uploading":
+        return "Enviando imagem...";
+      case "processing":
+        return "Processando conta...";
+      default:
+        return "Escaneando...";
+    }
   };
 
   // Função para otimizar imagem
@@ -188,38 +208,189 @@ export default function CameraScreen() {
 
     try {
       setIsLoading(true);
+      setUploadProgress(0);
 
-      // Otimizar imagem antes de processar
+      // Etapa 1: Otimizar imagem (0-30%)
+      setUploadStage("optimizing");
+      setUploadProgress(10);
       const optimizedImageUri = await optimizeImage(capturedImage);
+      setUploadProgress(30);
 
-      router.push({
-        pathname: "/(tabs)/(create)/scanned",
-        params: {
-          id,
-          participants: participants as string,
-        },
+      // Etapa 2: Upload da imagem (30-60%)
+      setUploadStage("uploading");
+      setUploadProgress(40);
+      
+      // Simular progresso durante upload
+      const uploadInterval = setInterval(() => {
+        setUploadProgress((prev) => Math.min(prev + 5, 60));
+      }, 300);
+
+      const uploadedBill = await billService.uploadBill(optimizedImageUri);
+      
+      clearInterval(uploadInterval);
+      setUploadProgress(60);
+
+      // Etapa 3: Processamento OCR (60-100%)
+      setUploadStage("processing");
+      setUploadProgress(70);
+      
+      // Simular progresso do OCR
+      const processingInterval = setInterval(() => {
+        setUploadProgress((prev) => Math.min(prev + 5, 95));
+      }, 400);
+
+      // Aguardar um pouco para dar tempo do OCR processar
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      
+      clearInterval(processingInterval);
+      setUploadProgress(100);
+
+      // Sucesso - navegar para tela de revisão
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      
+      // Resetar estados
+      setUploadStage("idle");
+      setUploadProgress(0);
+      setCapturedImage(null);
+      
+      // ✅ Navegar para tela de revisão com billId
+      router.push(`/bills/${uploadedBill.id}/review`);
+    } catch (error: any) {
+      console.error("❌ Erro ao processar conta:", {
+        message: error.message,
+        statusCode: error.statusCode,
+        response: error.response?.status,
+        data: error.response?.data,
+        code: error.code,
+        stack: error.stack,
       });
 
-      // Fazer upload da imagem para o servidor
-      const uploadedBill = await billService.uploadBill(optimizedImageUri);
+      let errorTitle = "Erro ao processar conta";
+      let errorMessage = "Não foi possível processar a conta. Tente novamente.";
+      let showRetry = true;
 
-      // Navegar para tela de revisão com os dados da conta
-      Alert.alert("Sucesso", "Conta processada com sucesso!", [
-        {
-          text: "OK",
+      // Tratamento específico por tipo de erro
+
+      // Erro de timeout (mais de 60s)
+      if (error.code === 'ECONNABORTED' || error.message?.toLowerCase().includes('timeout')) {
+        errorTitle = "Tempo esgotado";
+        errorMessage = "O processamento está demorando muito. Tente novamente com uma imagem mais clara ou verifique sua conexão.";
+        showRetry = true;
+      } 
+      // Erro de rede (sem internet)
+      else if (error.message?.toLowerCase().includes('network') || error.code === 'NETWORK_ERROR') {
+        errorTitle = "Sem conexão";
+        errorMessage = "Verifique sua conexão com a internet e tente novamente.";
+        showRetry = true;
+      }
+      // Erro 413: Arquivo muito grande
+      else if (error.response?.status === 413 || error.statusCode === 413) {
+        errorTitle = "Imagem muito grande";
+        errorMessage = "A imagem é muito grande (máx 5MB). Tente tirar outra foto ou reduzir a resolução.";
+        showRetry = false; // Não adianta tentar novamente sem mudar a imagem
+      }
+      // Erro 400: Formato inválido ou validação
+      else if (error.response?.status === 400 || error.statusCode === 400) {
+        errorTitle = "Formato inválido";
+        errorMessage = error.response?.data?.message || error.message || "Formato de imagem não suportado ou dados inválidos.";
+        showRetry = false;
+      }
+      // Erro 401/403: Não autorizado
+      else if (error.response?.status === 401 || error.statusCode === 401) {
+        errorTitle = "Sessão expirada";
+        errorMessage = "Sua sessão expirou. Faça login novamente.";
+        showRetry = false;
+      }
+      // Erro 500: Erro no servidor
+      else if (error.response?.status === 500 || error.statusCode === 500) {
+        errorTitle = "Erro no servidor";
+        errorMessage = "Nossos servidores estão com problema. Tente novamente em alguns minutos.";
+        showRetry = true;
+      }
+      // Erro 503: Serviço indisponível
+      else if (error.response?.status === 503 || error.statusCode === 503) {
+        errorTitle = "Serviço indisponível";
+        errorMessage = "O servidor está temporariamente indisponível. Tente novamente em alguns instantes.";
+        showRetry = true;
+      }
+      // Erro de otimização de imagem (antes do upload)
+      else if (error.message?.includes('otimizar') || error.message?.includes('compress')) {
+        errorTitle = "Erro ao processar imagem";
+        errorMessage = "Não foi possível otimizar a imagem. Tente tirar outra foto.";
+        showRetry = false;
+      }
+      // OCR falhou (backend retornou mas OCR não funcionou)
+      else if (error.message?.toLowerCase().includes('ocr') || error.response?.data?.status === 'OCR_FAILED') {
+        errorTitle = "OCR falhou";
+        errorMessage = "Não foi possível reconhecer o texto da conta. Tente tirar uma foto mais clara e bem iluminada.";
+        showRetry = true;
+      }
+      // Erro genérico do backend
+      else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      // Erro genérico
+      else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      // Construir array de botões do Alert
+      const alertButtons: Array<{
+        text: string;
+        style?: "cancel" | "default" | "destructive";
+        onPress?: () => void;
+      }> = [
+        { 
+          text: "Cancelar", 
+          style: "cancel",
           onPress: () => {
-            // Voltar para a tela anterior e passar dados via params se necessário
-            router.push("/(tabs)/(create)/scanned");
-          },
+            // Resetar estados
+            setUploadStage("idle");
+            setUploadProgress(0);
+            setIsLoading(false);
+          }
         },
-      ]);
-    } catch (error: any) {
-      console.error("Erro ao processar imagem:", error);
-      const errorMessage =
-        error.message || "Não foi possível processar a imagem";
-      Alert.alert("Erro", errorMessage);
+      ];
+
+      // Adicionar botão "Tentar Novamente" se apropriado
+      if (showRetry) {
+        alertButtons.push({
+          text: "Tentar Novamente",
+          onPress: () => {
+            // Resetar estados e tentar novamente
+            setUploadStage("idle");
+            setUploadProgress(0);
+            setIsLoading(false);
+            // Tentar novamente após um pequeno delay
+            setTimeout(() => confirmPicture(), 100);
+          },
+        });
+      } else {
+        alertButtons.push({
+          text: "Tirar Nova Foto",
+          onPress: () => {
+            // Resetar tudo e voltar para câmera
+            setUploadStage("idle");
+            setUploadProgress(0);
+            setIsLoading(false);
+            setCapturedImage(null);
+          },
+        });
+      }
+
+      Alert.alert(errorTitle, errorMessage, alertButtons);
+      
+      // Resetar estados em caso de erro (se não for retry)
+      if (!showRetry) {
+        setUploadStage("idle");
+        setUploadProgress(0);
+      }
     } finally {
-      setIsLoading(false);
+      // Garantir que loading seja desabilitado apenas se não estiver retrying
+      // O retry vai iniciar novamente o loading
+      if (!isLoading) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -265,12 +436,32 @@ export default function CameraScreen() {
             <View style={[styles.cornerBorder, styles.bottomRight]} />
           </View>
 
-          {/* Overlay de Loading */}
+          {/* Overlay de Loading com Progresso */}
           {isLoading && (
             <View style={styles.loadingOverlay}>
               <View style={styles.loadingContent}>
                 <ActivityIndicator size="large" color="#FFFFFF" />
-                <Text style={styles.loadingText}>Escaneando....</Text>
+                <Text style={styles.loadingText}>{getProgressMessage()}</Text>
+                
+                {/* Barra de Progresso */}
+                <View style={styles.progressBarContainer}>
+                  <View style={styles.progressBarBackground}>
+                    <View
+                      style={[
+                        styles.progressBarFill,
+                        { width: `${uploadProgress}%` },
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.progressText}>{uploadProgress}%</Text>
+                </View>
+
+                {/* Dica baseada no estágio */}
+                <Text style={styles.progressHint}>
+                  {uploadStage === "optimizing" && "Preparando sua imagem..."}
+                  {uploadStage === "uploading" && "Isso pode levar alguns segundos..."}
+                  {uploadStage === "processing" && "Identificando itens da conta..."}
+                </Text>
               </View>
             </View>
           )}
@@ -279,19 +470,36 @@ export default function CameraScreen() {
         {/* Botão de Confirmar no estilo roxo */}
         <View style={styles.previewActions}>
           <TouchableOpacity
-            style={styles.retakeIconButton}
+            style={[
+              styles.retakeIconButton,
+              isLoading && styles.buttonDisabled,
+            ]}
             onPress={retakePicture}
             disabled={isLoading}
           >
-            <Ionicons name="close" size={28} color="#FFFFFF" />
+            <Ionicons
+              name="close"
+              size={28}
+              color={isLoading ? "#888" : "#FFFFFF"}
+            />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.confirmButton}
+            style={[
+              styles.confirmButton,
+              isLoading && styles.buttonDisabled,
+            ]}
             onPress={confirmPicture}
             disabled={isLoading}
           >
-            <Text style={styles.confirmButtonText}>Confirmar</Text>
+            <Text
+              style={[
+                styles.confirmButtonText,
+                isLoading && styles.buttonTextDisabled,
+              ]}
+            >
+              {isLoading ? "Processando..." : "Confirmar"}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -465,12 +673,44 @@ const styles = StyleSheet.create({
   },
   loadingContent: {
     alignItems: "center",
+    paddingHorizontal: 40,
+    width: width * 0.8,
   },
   loadingText: {
     color: "#FFFFFF",
     fontSize: 18,
     marginTop: 20,
     fontWeight: "500",
+  },
+  progressBarContainer: {
+    width: "100%",
+    marginTop: 24,
+    alignItems: "center",
+  },
+  progressBarBackground: {
+    width: "100%",
+    height: 8,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    borderRadius: 4,
+    overflow: "hidden",
+  },
+  progressBarFill: {
+    height: "100%",
+    backgroundColor: "#8B3FD9",
+    borderRadius: 4,
+  },
+  progressText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    marginTop: 8,
+    fontWeight: "600",
+  },
+  progressHint: {
+    color: "rgba(255, 255, 255, 0.7)",
+    fontSize: 14,
+    marginTop: 16,
+    textAlign: "center",
+    fontStyle: "italic",
   },
   previewActions: {
     flexDirection: "row",
@@ -508,6 +748,12 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 18,
     fontWeight: "600",
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+  buttonTextDisabled: {
+    color: "#CCCCCC",
   },
   permissionText: {
     color: "#FFFFFF",
