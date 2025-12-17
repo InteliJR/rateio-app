@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import billService from '../../../services/bill.service';
 
 interface BillPerson {
   name: string;
@@ -31,57 +32,7 @@ interface BillDetail {
   items?: BillItem[];
 }
 
-const MOCK_BILLS: Record<string, BillDetail> = {
-  '1': {
-    id: '1',
-    establishmentName: 'Conta 1',
-    totalAmount: 184,
-    createdAt: '2024-11-20',
-    items: [
-      {
-        description: 'Suco de Laranja',
-        amount: 36,
-        quantity: 3,
-        people: [
-          { name: 'Nome Sobrenome 1', amount: 12 },
-          { name: 'Nome Sobrenome 2', amount: 12 },
-          { name: 'Nome Sobrenome 3', amount: 12 },
-        ],
-      },
-      {
-        description: 'Batata Frita',
-        amount: 85,
-        quantity: 4,
-        people: [
-          { name: 'Ana Costa', amount: 21.25 },
-          { name: 'Carlos Mendes', amount: 21.25 },
-          { name: 'Juliana Rocha', amount: 21.25 },
-          { name: 'Lucas Ferreira', amount: 21.25 },
-        ],
-      },
-      {
-        description: 'Sorvete',
-        amount: 48,
-        quantity: 4,
-        people: [
-          { name: 'Beatriz Lima', amount: 12 },
-          { name: 'Roberto Alves', amount: 12 },
-          { name: 'Fernanda Cruz', amount: 12 },
-          { name: 'Diego Souza', amount: 12 },
-        ],
-      },
-      {
-        description: 'Cerveja',
-        amount: 15,
-        quantity: 2,
-        people: [
-          { name: 'Gustavo Neves', amount: 7.50 },
-          { name: 'Camila Gomes', amount: 7.50 },
-        ],
-      },
-    ],
-  },
-};
+
 
 export default function BillDetail() {
   const { id } = useLocalSearchParams();
@@ -97,9 +48,40 @@ export default function BillDetail() {
   const loadBillDetails = async () => {
     try {
       setLoading(true);
-      await new Promise(resolve => setTimeout(resolve, 300));
-      const billData = MOCK_BILLS['1'];
-      setBill(billData);
+      const response = await billService.getSummary(id as string);
+      
+      // Mapear resposta da API agrupando por item (não por participante)
+      const itemMap = new Map<string, { item: any; people: BillPerson[] }>();
+      
+      response.participants.forEach(participant => {
+        participant.items.forEach(item => {
+          if (!itemMap.has(item.name)) {
+            itemMap.set(item.name, {
+              item: item,
+              people: []
+            });
+          }
+          itemMap.get(item.name)!.people.push({
+            name: participant.name,
+            amount: item.shareAmount
+          });
+        });
+      });
+
+      const billItems: BillItem[] = Array.from(itemMap.values()).map(({ item, people }) => ({
+        description: item.name,
+        amount: item.totalPrice,
+        quantity: item.quantity,
+        people
+      }));
+
+      setBill({
+        id: response.bill.id,
+        establishmentName: response.bill.establishmentName,
+        totalAmount: response.summary.total,
+        createdAt: response.bill.createdAt,
+        items: billItems,
+      });
     } catch (err) {
       console.error('Erro ao carregar conta:', err);
     } finally {
