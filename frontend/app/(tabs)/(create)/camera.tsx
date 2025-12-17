@@ -245,7 +245,7 @@ export default function CameraScreen() {
       clearInterval(processingInterval);
       setUploadProgress(100);
 
-      // Sucesso - navegar para tela de revisão
+      // Sucesso - navegar para tela de itens escaneados
       await new Promise((resolve) => setTimeout(resolve, 500));
       
       // Resetar estados
@@ -253,8 +253,11 @@ export default function CameraScreen() {
       setUploadProgress(0);
       setCapturedImage(null);
       
-      // ✅ Navegar para tela de revisão com billId
-      router.push(`/bills/${uploadedBill.id}/review`);
+      // Navegar para tela de itens escaneados (scanned.tsx)
+      router.replace({
+        pathname: "/(tabs)/(create)/scanned",
+        params: { id: uploadedBill.id },
+      });
     } catch (error: any) {
       console.error("❌ Erro ao processar conta:", {
         message: error.message,
