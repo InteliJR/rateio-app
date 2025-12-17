@@ -1,3 +1,0 @@
--- AlterTable
-ALTER TABLE "bills" ALTER COLUMN "imageUrl" DROP NOT NULL;
-ALTER TABLE "bills" ALTER COLUMN "imageKey" DROP NOT NULL;
