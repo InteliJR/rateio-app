@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,16 +7,16 @@ import {
   Image,
   Alert,
   ScrollView,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { authService } from '../../services/auth.service';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+} from "react-native";
+import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { authService } from "../../services/auth.service";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const [userName, setUserName] = useState('');
-  const [userEmail, setUserEmail] = useState('');
+  const [userName, setUserName] = useState("");
+  const [userEmail, setUserEmail] = useState("");
 
   useEffect(() => {
     loadUserData();
@@ -24,56 +24,57 @@ export default function ProfileScreen() {
 
   const loadUserData = async () => {
     try {
-      const name = await AsyncStorage.getItem('userName');
-      const email = await AsyncStorage.getItem('userEmail');
+      const name = await AsyncStorage.getItem("userName");
+      const email = await AsyncStorage.getItem("userEmail");
       if (name) setUserName(name);
       if (email) setUserEmail(email);
     } catch (error) {
-      console.error('Erro ao carregar dados do usuário:', error);
+      console.error("Erro ao carregar dados do usuário:", error);
     }
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'Sair',
-      'Deseja realmente sair da sua conta?',
-      [
-        {
-          text: 'Cancelar',
-          style: 'cancel',
+    Alert.alert("Sair", "Deseja realmente sair da sua conta?", [
+      {
+        text: "Cancelar",
+        style: "cancel",
+      },
+      {
+        text: "Sair",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await authService.logout();
+            router.replace("/(auth)/login");
+          } catch (error) {
+            console.error("Erro ao fazer logout:", error);
+            Alert.alert("Erro", "Não foi possível sair. Tente novamente.");
+          }
         },
-        {
-          text: 'Sair',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await authService.logout();
-              router.replace('/(auth)/login');
-            } catch (error) {
-              console.error('Erro ao fazer logout:', error);
-              Alert.alert('Erro', 'Não foi possível sair. Tente novamente.');
-            }
-          },
-        },
-      ]
-    );
+      },
+    ]);
   };
 
   const handleEditProfile = () => {
-    router.push('/profile/edit');
+    router.push("/profile/edit");
   };
 
   const handleSecurity = () => {
-    Alert.alert('Em breve', 'Funcionalidade de segurança em desenvolvimento');
+    router.push("/profile/security");
   };
 
   const handleSettings = () => {
-    Alert.alert('Em breve', 'Funcionalidade de configurações em desenvolvimento');
+    Alert.alert(
+      "Em breve",
+      "Funcionalidade de configurações em desenvolvimento"
+    );
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.contentContainer}
+    >
       {/* Profile Section */}
       <View style={styles.profileSection}>
         <View style={styles.avatarContainer}>
@@ -81,7 +82,7 @@ export default function ProfileScreen() {
             <Ionicons name="person" size={60} color="#FFF" />
           </View>
         </View>
-        <Text style={styles.userName}>{userName || 'Usuário'}</Text>
+        <Text style={styles.userName}>{userName || "Usuário"}</Text>
         {userEmail && <Text style={styles.userEmail}>{userEmail}</Text>}
       </View>
 
@@ -125,7 +126,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFF',
+    backgroundColor: "#FFF",
   },
   contentContainer: {
     paddingBottom: 40,
@@ -134,33 +135,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: "#F0F0F0",
   },
   logoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
   },
   logoIcon: {
     width: 40,
     height: 40,
     borderRadius: 8,
-    backgroundColor: '#7B2CBF',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#7B2CBF",
+    justifyContent: "center",
+    alignItems: "center",
   },
   logoText: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#FFF',
+    fontWeight: "bold",
+    color: "#FFF",
   },
   logoTitle: {
     fontSize: 20,
-    fontWeight: '600',
-    color: '#7B2CBF',
+    fontWeight: "600",
+    color: "#7B2CBF",
   },
   profileSection: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: 40,
     paddingHorizontal: 20,
   },
@@ -171,10 +172,10 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: '#7B2CBF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
+    backgroundColor: "#7B2CBF",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -182,44 +183,44 @@ const styles = StyleSheet.create({
   },
   userName: {
     fontSize: 24,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: "600",
+    color: "#333",
     marginBottom: 4,
   },
   userEmail: {
     fontSize: 14,
-    color: '#999',
+    color: "#999",
   },
   menuContainer: {
     paddingHorizontal: 20,
     paddingTop: 20,
   },
   menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingVertical: 16,
     paddingHorizontal: 16,
-    backgroundColor: '#FFF',
+    backgroundColor: "#FFF",
     borderRadius: 12,
     marginBottom: 12,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
   },
   menuItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 16,
   },
   menuItemText: {
     fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
+    fontWeight: "500",
+    color: "#333",
   },
   logoutText: {
-    color: '#E53935',
+    color: "#E53935",
   },
 });
