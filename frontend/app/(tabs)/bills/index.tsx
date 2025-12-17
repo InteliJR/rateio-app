@@ -19,226 +19,6 @@ interface BillWithStatus extends UploadBillResponse {
   status?: 'pending' | 'completed' | 'cancelled';
 }
 
-// Dados mockados para demonstração
-const MOCK_BILLS: BillWithStatus[] = [
-  {
-    id: '1',
-    establishmentName: 'Conta 1',
-    totalAmount: 287.50,
-    createdAt: '2025-09-12T18:30:00Z',
-    imageUrl: '',
-    status: 'pending',
-    items: [],
-  },
-  {
-    id: '2',
-    establishmentName: 'Conta 2',
-    totalAmount: 156.00,
-    createdAt: '2025-09-18T20:15:00Z',
-    imageUrl: '',
-    status: 'completed',
-    items: [],
-  },
-  {
-    id: '3',
-    establishmentName: 'Conta 3',
-    totalAmount: 425.80,
-    createdAt: '2025-09-20T19:45:00Z',
-    imageUrl: '',
-    status: 'completed',
-    items: [],
-  },
-  {
-    id: '4',
-    establishmentName: 'Conta 4',
-    totalAmount: 89.50,
-    createdAt: '2025-09-27T10:30:00Z',
-    imageUrl: '',
-    status: 'pending',
-    items: [],
-  },
-  {
-    id: '5',
-    establishmentName: 'Conta 5',
-    totalAmount: 234.90,
-    createdAt: '2025-09-28T22:00:00Z',
-    imageUrl: '',
-    status: 'completed',
-    items: [],
-  },
-  {
-    id: '6',
-    establishmentName: 'Conta 6',
-    totalAmount: 312.40,
-    createdAt: '2025-09-30T19:20:00Z',
-    imageUrl: '',
-    status: 'completed',
-    items: [],
-  },
-  {
-    id: '7',
-    establishmentName: 'Conta 7',
-    totalAmount: 165.30,
-    createdAt: '2025-10-10T18:10:00Z',
-    imageUrl: '',
-    status: 'pending',
-    items: [],
-  },
-  {
-    id: '8',
-    establishmentName: 'Conta 8',
-    totalAmount: 95.00,
-    createdAt: '2025-10-15T15:45:00Z',
-    imageUrl: '',
-    status: 'completed',
-    items: [],
-  },
-  {
-    id: '1',
-    establishmentName: 'Conta 1',
-    totalAmount: 287.50,
-    createdAt: '2025-09-12T18:30:00Z',
-    imageUrl: '',
-    status: 'pending',
-    items: [],
-  },
-  {
-    id: '2',
-    establishmentName: 'Conta 2',
-    totalAmount: 156.00,
-    createdAt: '2025-09-18T20:15:00Z',
-    imageUrl: '',
-    status: 'completed',
-    items: [],
-  },
-  {
-    id: '3',
-    establishmentName: 'Conta 3',
-    totalAmount: 425.80,
-    createdAt: '2025-09-20T19:45:00Z',
-    imageUrl: '',
-    status: 'completed',
-    items: [],
-  },
-  {
-    id: '4',
-    establishmentName: 'Conta 4',
-    totalAmount: 89.50,
-    createdAt: '2025-09-27T10:30:00Z',
-    imageUrl: '',
-    status: 'pending',
-    items: [],
-  },
-  {
-    id: '5',
-    establishmentName: 'Conta 5',
-    totalAmount: 234.90,
-    createdAt: '2025-09-28T22:00:00Z',
-    imageUrl: '',
-    status: 'completed',
-    items: [],
-  },
-  {
-    id: '6',
-    establishmentName: 'Conta 6',
-    totalAmount: 312.40,
-    createdAt: '2025-09-30T19:20:00Z',
-    imageUrl: '',
-    status: 'completed',
-    items: [],
-  },
-  {
-    id: '7',
-    establishmentName: 'Conta 7',
-    totalAmount: 165.30,
-    createdAt: '2025-10-10T18:10:00Z',
-    imageUrl: '',
-    status: 'pending',
-    items: [],
-  },
-  {
-    id: '8',
-    establishmentName: 'Conta 8',
-    totalAmount: 95.00,
-    createdAt: '2025-10-15T15:45:00Z',
-    imageUrl: '',
-    status: 'completed',
-    items: [],
-  },
-  {
-    id: '1',
-    establishmentName: 'Conta 1',
-    totalAmount: 287.50,
-    createdAt: '2025-09-12T18:30:00Z',
-    imageUrl: '',
-    status: 'pending',
-    items: [],
-  },
-  {
-    id: '2',
-    establishmentName: 'Conta 2',
-    totalAmount: 156.00,
-    createdAt: '2025-09-18T20:15:00Z',
-    imageUrl: '',
-    status: 'completed',
-    items: [],
-  },
-  {
-    id: '3',
-    establishmentName: 'Conta 3',
-    totalAmount: 425.80,
-    createdAt: '2025-09-20T19:45:00Z',
-    imageUrl: '',
-    status: 'completed',
-    items: [],
-  },
-  {
-    id: '4',
-    establishmentName: 'Conta 4',
-    totalAmount: 89.50,
-    createdAt: '2025-09-27T10:30:00Z',
-    imageUrl: '',
-    status: 'pending',
-    items: [],
-  },
-  {
-    id: '5',
-    establishmentName: 'Conta 5',
-    totalAmount: 234.90,
-    createdAt: '2025-09-28T22:00:00Z',
-    imageUrl: '',
-    status: 'completed',
-    items: [],
-  },
-  {
-    id: '6',
-    establishmentName: 'Conta 6',
-    totalAmount: 312.40,
-    createdAt: '2025-09-30T19:20:00Z',
-    imageUrl: '',
-    status: 'completed',
-    items: [],
-  },
-  {
-    id: '7',
-    establishmentName: 'Conta 7',
-    totalAmount: 165.30,
-    createdAt: '2025-10-10T18:10:00Z',
-    imageUrl: '',
-    status: 'pending',
-    items: [],
-  },
-  {
-    id: '8',
-    establishmentName: 'Conta 8',
-    totalAmount: 95.00,
-    createdAt: '2025-10-15T15:45:00Z',
-    imageUrl: '',
-    status: 'completed',
-    items: [],
-  },
-];
-
 const DATE_FILTERS = [
   { id: 'all', label: 'Todos' },
   { id: 'week', label: 'Última semana' },
@@ -289,36 +69,43 @@ export default function BillsScreen() {
 
     // Reseta paginação ao filtrar
     setCurrentPage(1);
-    // Aplica paginação
-    const paginatedBills = filtered.slice(0, itemsPerPage);
-    setDisplayedBills(paginatedBills);
-  }, [itemsPerPage]);
+    // Mostra todos os filtrados (sem paginação por enquanto)
+    setDisplayedBills(filtered);
+  }, []);
 
-  // Carrega contas do servidor
+  // Carrega contas do servidor (APENAS NA MONTAGEM)
   const loadBills = useCallback(async () => {
     try {
       setLoading(true);
-      const bills = await billService.listBills();
-      setAllBills(bills);
-      applyDateFilter('all', bills, searchText);
+      const response = await billService.listBills(1, 100); // Carrega todas de uma vez
+      setAllBills(response.data);
     } catch (error) {
       console.error('Erro ao carregar contas:', error);
-      // Fallback para dados mockados em caso de erro
-      setAllBills(MOCK_BILLS);
-      applyDateFilter('all', MOCK_BILLS, searchText);
+      setAllBills([]);
+      setDisplayedBills([]);
     } finally {
       setLoading(false);
     }
-  }, [applyDateFilter, searchText]);
+  }, []);
 
+  // CARREGA APENAS UMA VEZ NA MONTAGEM
   useEffect(() => {
     loadBills();
   }, [loadBills]);
 
-  // Aplicar filtros quando os filtros mudarem
+  // Aplicar filtros APÓS carregar (quando allBills mudar)
   useEffect(() => {
-    applyDateFilter(selectedDateFilter, allBills, searchText);
-  }, [selectedDateFilter, searchText, allBills, applyDateFilter]);
+    if (allBills.length > 0) {
+      applyDateFilter(selectedDateFilter, allBills, searchText);
+    }
+  }, [allBills]); // Só dispara quando allBills mudar
+
+  // Quando filtro ou busca mudarem, reaplica o filtro
+  useEffect(() => {
+    if (allBills.length > 0) {
+      applyDateFilter(selectedDateFilter, allBills, searchText);
+    }
+  }, [selectedDateFilter, searchText, applyDateFilter]);
 
   // Formatar data
   const formatDate = (dateString: string): string => {
