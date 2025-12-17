@@ -60,7 +60,7 @@ export default function ProfileScreen() {
   };
 
   const handleEditProfile = () => {
-    Alert.alert('Em breve', 'Funcionalidade de editar perfil em desenvolvimento');
+    router.push('/profile/edit');
   };
 
   const handleSecurity = () => {
