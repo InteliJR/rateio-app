@@ -1,7 +1,7 @@
 // mobile/services/api.service.ts
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
-import * as SecureStore from 'expo-secure-store';
+import { storageService } from './storage.service';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 
@@ -10,6 +10,7 @@ class ApiService {
   private onUnauthorized: () => void = () => { };
 
   constructor() {
+    console.log('[API] Using API_URL:', API_URL);
     this.api = axios.create({
       baseURL: API_URL,
       headers: {
@@ -21,7 +22,7 @@ class ApiService {
     // Interceptor para adicionar token
     this.api.interceptors.request.use(
       async (config) => {
-        const token = await SecureStore.getItemAsync('accessToken');
+        const token = await storageService.getItem('accessToken');
 
         // Verificar se é endpoint público
         const isPublicEndpoint = config.url?.includes('/auth/login') || config.url?.includes('/auth/register');
@@ -60,7 +61,7 @@ class ApiService {
           originalRequest._retry = true;
 
           try {
-            const refreshToken = await SecureStore.getItemAsync('refreshToken');
+            const refreshToken = await storageService.getItem('refreshToken');
 
             if (!refreshToken) {
               await this.handleLogout();
@@ -77,9 +78,9 @@ class ApiService {
             const { accessToken, refreshToken: newRefreshToken } = response.data;
 
             // Salvar novos tokens
-            await SecureStore.setItemAsync('accessToken', accessToken);
+            await storageService.setItem('accessToken', accessToken);
             if (newRefreshToken) {
-              await SecureStore.setItemAsync('refreshToken', newRefreshToken);
+              await storageService.setItem('refreshToken', newRefreshToken);
             }
 
             console.log('[API] Token refreshed successfully');
@@ -102,8 +103,8 @@ class ApiService {
   }
 
   private async handleLogout() {
-    await SecureStore.deleteItemAsync('accessToken');
-    await SecureStore.deleteItemAsync('refreshToken');
+    await storageService.deleteItem('accessToken');
+    await storageService.deleteItem('refreshToken');
     this.onUnauthorized();
   }
 

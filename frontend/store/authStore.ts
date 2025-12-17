@@ -1,7 +1,7 @@
 // mobile/store/authStore.ts
 
 import { create } from "zustand";
-import * as SecureStore from "expo-secure-store";
+import { storageService } from "../services/storage.service";
 import { AuthState } from "../types/auth.types";
 import { authService } from "../services/auth.service";
 
@@ -17,10 +17,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const response = await authService.login({ email, password });
 
-      // Salvar tokens no SecureStore
-      console.log('[AuthStore] Saving tokens to SecureStore...');
-      await SecureStore.setItemAsync("accessToken", response.accessToken);
-      await SecureStore.setItemAsync("refreshToken", response.refreshToken);
+      // Salvar tokens no storage
+      console.log('[AuthStore] Saving tokens to storage...');
+      await storageService.setItem("accessToken", response.accessToken);
+      await storageService.setItem("refreshToken", response.refreshToken);
       console.log('[AuthStore] Tokens saved successfully');
 
       set({
@@ -57,8 +57,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: async () => {
     try {
       await authService.logout();
-      await SecureStore.deleteItemAsync("accessToken");
-      await SecureStore.deleteItemAsync("refreshToken");
+      await storageService.deleteItem("accessToken");
+      await storageService.deleteItem("refreshToken");
 
       set({
         user: null,
@@ -73,8 +73,8 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   loadTokens: async () => {
     try {
-      const accessToken = await SecureStore.getItemAsync("accessToken");
-      const refreshToken = await SecureStore.getItemAsync("refreshToken");
+      const accessToken = await storageService.getItem("accessToken");
+      const refreshToken = await storageService.getItem("refreshToken");
 
       if (accessToken && refreshToken) {
         // Buscar dados do usuário
@@ -94,8 +94,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       console.error("Erro ao carregar tokens:", error);
       // Se falhar, limpar tokens
       try {
-        await SecureStore.deleteItemAsync("accessToken");
-        await SecureStore.deleteItemAsync("refreshToken");
+        await storageService.deleteItem("accessToken");
+        await storageService.deleteItem("refreshToken");
       } catch { }
       set({ isLoading: false, isAuthenticated: false });
     }

@@ -25,7 +25,6 @@ class StorageService {
 
   async getItem(key: string): Promise<string | null> {
     if (Platform.OS === 'web') {
-      // Web: usar localStorage
       try {
         return localStorage.getItem(key);
       } catch (error) {
@@ -33,14 +32,12 @@ class StorageService {
         return null;
       }
     } else {
-      // Mobile: usar SecureStore
       return await SecureStore.getItemAsync(key);
     }
   }
 
   async deleteItem(key: string): Promise<void> {
     if (Platform.OS === 'web') {
-      // Web: usar localStorage
       try {
         localStorage.removeItem(key);
       } catch (error) {
@@ -48,7 +45,6 @@ class StorageService {
         throw error;
       }
     } else {
-      // Mobile: usar SecureStore
       await SecureStore.deleteItemAsync(key);
     }
   }

@@ -8,14 +8,28 @@ export interface UploadBillResponse {
   establishmentName?: string;
   totalAmount?: number;
   items?: Array<{
-    description: string;
-    amount: number;
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    totalPrice: number;
   }>;
   createdAt: string;
   _count?: {
     items: number;
     participants: number;
   };
+}
+
+export interface UpdateBillPayload {
+  status?: string;
+  establishmentName?: string;
+  totalAmount?: number;
+  items?: Array<{
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    totalPrice: number;
+  }>;
 }
 
 export interface UploadBillError {
@@ -95,11 +109,17 @@ class BillService {
    */
   async createBillSetup(config: CreateBillSetupConfig): Promise<UploadBillResponse> {
     try {
+      console.log('[BillService] Creating bill setup with config:', config);
       const api = apiService.getApi();
+      console.log('[BillService] API baseURL:', api.defaults.baseURL);
       const response = await api.post<UploadBillResponse>("/bills", config);
+      console.log('[BillService] Success:', response.data);
       return response.data;
     } catch (error: any) {
-      console.error('[BillService] Error creating bill setup:', error.response?.status, error.response?.data);
+      console.error('[BillService] Full error object:', error);
+      console.error('[BillService] Error message:', error.message);
+      console.error('[BillService] Error code:', error.code);
+      console.error('[BillService] Error response:', error.response?.status, error.response?.data);
       const billError: UploadBillError = {
         message: "Erro ao criar configuração da conta",
         statusCode: error.response?.status,
@@ -155,7 +175,7 @@ class BillService {
    */
   async updateBill(
     billId: string,
-    data: Partial<Omit<UploadBillResponse, "id" | "createdAt">>
+    data: UpdateBillPayload
   ): Promise<UploadBillResponse> {
     try {
       const api = apiService.getApi();

@@ -87,38 +87,79 @@ export class BillsService {
     }
 
     // Fluxo manual (sem imagem)
-    const establishmentName = createBillDto.billName || createBillDto.establishmentName;
+    try {
+      const establishmentName = createBillDto.billName || createBillDto.establishmentName;
 
-    const bill = await this.prisma.bill.create({
-      data: {
-        userId,
-        status: BillStatus.DIVIDING, // Vai direto para divisão
-        establishmentName,
-        // imageUrl e imageKey ficam null
-      },
-    });
-
-    // Adicionar taxa de serviço se houver
-    if (createBillDto.serviceFeePercentage !== undefined) {
-      await this.prisma.fee.create({
+      const bill = await this.prisma.bill.create({
         data: {
-          billId: bill.id,
-          type: 'SERVICE_PERCENTAGE',
-          value: createBillDto.serviceFeePercentage,
+          userId,
+          status: BillStatus.DIVIDING, // Vai direto para divisão
+          establishmentName,
+          // imageUrl e imageKey ficam null
         },
       });
-    }
 
-    // Adicionar participantes iniciais
-    if (createBillDto.participantCount && createBillDto.participantCount > 0) {
-      const participants = Array.from({ length: createBillDto.participantCount }, (_, i) => ({
-        billId: bill.id,
-        name: `Pessoa ${i + 1}`,
-      }));
-      await this.prisma.participant.createMany({ data: participants });
-    }
+      // Adicionar taxa de serviço se houver
+      if (
+        createBillDto.serviceFeePercentage !== undefined &&
+        createBillDto.serviceFeePercentage !== null &&
+        !isNaN(Number(createBillDto.serviceFeePercentage)) &&
+        Number(createBillDto.serviceFeePercentage) >= 0 &&
+        Number(createBillDto.serviceFeePercentage) <= 100
+      ) {
+        try {
+          await this.prisma.fee.create({
+            data: {
+              billId: bill.id,
+              type: 'SERVICE_PERCENTAGE',
+              value: Number(createBillDto.serviceFeePercentage),
+            },
+          });
+        } catch (feeError) {
+          console.error('[BillsService] Erro ao criar taxa de serviço:', feeError);
+          // Se falhar ao criar a fee, deletar a bill criada para manter consistência
+          await this.prisma.bill.delete({ where: { id: bill.id } });
+          throw new BadRequestException(
+            `Erro ao criar taxa de serviço: ${feeError instanceof Error ? feeError.message : 'Erro desconhecido'}`,
+          );
+        }
+      }
 
-    return bill;
+      // Adicionar participantes iniciais
+      if (
+        createBillDto.participantCount !== undefined &&
+        createBillDto.participantCount !== null &&
+        !isNaN(Number(createBillDto.participantCount)) &&
+        Number(createBillDto.participantCount) > 0
+      ) {
+        try {
+          const participantCount = Number(createBillDto.participantCount);
+          const participants = Array.from({ length: participantCount }, (_, i) => ({
+            billId: bill.id,
+            name: `Pessoa ${i + 1}`,
+          }));
+          await this.prisma.participant.createMany({ data: participants });
+        } catch (participantError) {
+          console.error('[BillsService] Erro ao criar participantes:', participantError);
+          // Se falhar ao criar participantes, deletar a bill e fee criadas
+          await this.prisma.fee.deleteMany({ where: { billId: bill.id } }).catch(() => {});
+          await this.prisma.bill.delete({ where: { id: bill.id } });
+          throw new BadRequestException(
+            `Erro ao criar participantes: ${participantError instanceof Error ? participantError.message : 'Erro desconhecido'}`,
+          );
+        }
+      }
+
+      return bill;
+    } catch (error) {
+      console.error('[BillsService] Erro ao criar conta:', error);
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException(
+        `Erro ao criar conta: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
+      );
+    }
   }
 
   /**
@@ -460,7 +501,7 @@ export class BillsService {
     });
 
     // Gerar nova URL pré-assinada (caso a antiga tenha expirado)
-    const freshUrl = await this.storage.getSignedUrl(bill.imageKey);
+    const freshUrl = bill.imageKey ? await this.storage.getSignedUrl(bill.imageKey) : null;
 
     return {
       bill: {

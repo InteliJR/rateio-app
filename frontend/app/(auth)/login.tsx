@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useRouter } from 'expo-router';
+import React, { useState } from "react";
+import { useRouter } from "expo-router";
 import {
   View,
   Text,
@@ -9,75 +9,56 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-} from 'react-native';
-import { useForm, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useAuthStore } from '@/store/authStore';
-import Logo from '@/assets/images/logo.svg';
-import { z } from 'zod';
-import * as SecureStore from 'expo-secure-store';
+} from "react-native";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { MaterialIcons } from "@expo/vector-icons";
+import { useAuthStore } from "@/store/authStore";
+import Logo from "@/assets/images/logo.svg";
+import { z } from "zod";
+import { storageService } from "@/services/storage.service";
 
 export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
-  const { login, isLoading } = useAuthStore();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { login } = useAuthStore();
   const router = useRouter();
 
   const loginSchema = z.object({
     email: z
       .string()
-      .nonempty('Por favor, informe seu email.')
-      .email('Digite um email válido (ex: usuario@dominio.com).'),
+      .nonempty("Por favor, informe seu email.")
+      .email("Digite um email válido (ex: usuario@dominio.com)."),
     password: z
       .string()
-      .nonempty('Por favor, informe sua senha.')
-      .min(8, 'A senha precisa ter pelo menos 8 caracteres.'),
+      .nonempty("Por favor, informe sua senha.")
+      .min(8, "A senha precisa ter pelo menos 8 caracteres."),
   });
 
   type LoginFormData = z.infer<typeof loginSchema>;
 
-  const { control, handleSubmit, formState: { errors, isValid } } = useForm<LoginFormData>({
+  const {
+    control,
+    handleSubmit,
+    formState: { errors, isValid },
+  } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: '', password: '' },
-    mode: 'onChange',
+    defaultValues: { email: "", password: "" },
+    mode: "onChange",
   });
 
   const onSubmit = async (data: LoginFormData) => {
     setServerError(null);
+    setIsSubmitting(true);
     try {
-      // Mock de login para desenvolvimento
-      if (data.email === 'teste@gmail.com' && data.password === 'teste123') {
-        const mockUser = {
-          id: 'mock-1',
-          email: 'teste@gmail.com',
-          name: 'Usuário Mock',
-          role: 'USER' as const,
-          createdAt: new Date().toISOString(),
-        };
-
-        const accessToken = 'mock-access-token';
-        const refreshToken = 'mock-refresh-token';
-
-        await SecureStore.setItemAsync('accessToken', accessToken);
-        await SecureStore.setItemAsync('refreshToken', refreshToken);
-
-        useAuthStore.setState({
-          user: mockUser,
-          accessToken,
-          refreshToken,
-          isAuthenticated: true,
-          isLoading: false,
-        });
-
-        router.replace('/(tabs)/camera');
-        return;
-      }
       await login(data.email, data.password);
-      router.replace('/(tabs)/camera');
+      router.replace("/(tabs)/(create)/new");
     } catch (error: any) {
       const message = getApiErrorMessage(error);
       setServerError(message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -86,37 +67,45 @@ export default function LoginScreen() {
     if (data) {
       // Lista de erros como array
       if (Array.isArray(data.errors)) {
-        const arr = data.errors.map((e: any) => e?.message || String(e)).filter(Boolean);
-        if (arr.length) return arr.join('\n');
+        const arr = data.errors
+          .map((e: any) => e?.message || String(e))
+          .filter(Boolean);
+        if (arr.length) return arr.join("\n");
       }
       // Objeto de erros campo->mensagem
-      if (data.errors && typeof data.errors === 'object' && !Array.isArray(data.errors)) {
-        const msgs = Object.values(data.errors).map((e: any) => (typeof e === 'string' ? e : e?.message)).filter(Boolean) as string[];
-        if (msgs.length) return msgs.join('\n');
+      if (
+        data.errors &&
+        typeof data.errors === "object" &&
+        !Array.isArray(data.errors)
+      ) {
+        const msgs = Object.values(data.errors)
+          .map((e: any) => (typeof e === "string" ? e : e?.message))
+          .filter(Boolean) as string[];
+        if (msgs.length) return msgs.join("\n");
       }
       // Códigos específicos
       switch (data.code) {
-        case 'INVALID_CREDENTIALS':
-          return 'Email ou senha incorretos.';
-        case 'USER_NOT_FOUND':
-          return 'Usuário não encontrado.';
-        case 'ACCOUNT_LOCKED':
-          return 'Conta bloqueada temporariamente. Tente mais tarde.';
-        case 'USER_INACTIVE':
-          return 'Conta ainda não ativada. Verifique seu email.';
-        case 'TOO_MANY_ATTEMPTS':
-          return 'Muitas tentativas falhas. Aguarde alguns minutos.';
+        case "INVALID_CREDENTIALS":
+          return "Email ou senha incorretos.";
+        case "USER_NOT_FOUND":
+          return "Usuário não encontrado.";
+        case "ACCOUNT_LOCKED":
+          return "Conta bloqueada temporariamente. Tente mais tarde.";
+        case "USER_INACTIVE":
+          return "Conta ainda não ativada. Verifique seu email.";
+        case "TOO_MANY_ATTEMPTS":
+          return "Muitas tentativas falhas. Aguarde alguns minutos.";
       }
-      if (typeof data.message === 'string' && data.message.trim()) {
+      if (typeof data.message === "string" && data.message.trim()) {
         return data.message;
       }
     }
-    return 'Não foi possível fazer login. Tente novamente.';
+    return "Não foi possível fazer login. Tente novamente.";
   }
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.container}
     >
       <View style={styles.content}>
@@ -139,13 +128,20 @@ export default function LoginScreen() {
                 onChangeText={onChange}
                 autoCapitalize="none"
                 keyboardType="email-address"
-                editable={!isLoading}
+                editable={!isSubmitting}
               />
             )}
           />
-          {errors.email && <Text style={styles.errorText}>{errors.email.message}</Text>}
+          {errors.email && (
+            <Text style={styles.errorText}>{errors.email.message}</Text>
+          )}
 
-          <View style={[styles.passwordContainer, errors.password && styles.inputError]}>
+          <View
+            style={[
+              styles.passwordContainer,
+              errors.password && styles.inputError,
+            ]}
+          >
             <Controller
               control={control}
               name="password"
@@ -156,30 +152,35 @@ export default function LoginScreen() {
                   value={value}
                   onChangeText={onChange}
                   secureTextEntry={!showPassword}
-                  editable={!isLoading}
+                  editable={!isSubmitting}
                 />
               )}
             />
             <TouchableOpacity
               style={styles.eyeButton}
               onPress={() => setShowPassword(!showPassword)}
-              disabled={isLoading}
+              disabled={isSubmitting}
             >
               <MaterialIcons
-                name={showPassword ? 'visibility' : 'visibility-off'}
+                name={showPassword ? "visibility" : "visibility-off"}
                 size={20}
                 color="#333"
               />
             </TouchableOpacity>
           </View>
-          {errors.password && <Text style={styles.errorText}>{errors.password.message}</Text>}
+          {errors.password && (
+            <Text style={styles.errorText}>{errors.password.message}</Text>
+          )}
 
           <TouchableOpacity
-            style={[styles.button, (isLoading || !isValid) && styles.buttonDisabled]}
+            style={[
+              styles.button,
+              (isSubmitting || !isValid) && styles.buttonDisabled,
+            ]}
             onPress={handleSubmit(onSubmit)}
-            disabled={isLoading || !isValid}
+            disabled={isSubmitting || !isValid}
           >
-            {isLoading ? (
+            {isSubmitting ? (
               <ActivityIndicator color="#FFFF00" />
             ) : (
               <Text style={styles.buttonText}>Entrar</Text>
@@ -188,9 +189,14 @@ export default function LoginScreen() {
         </View>
 
         <View style={styles.linkRow}>
-          <Text style={{ color: '#333' }}>Não possui uma conta? </Text>
-          <TouchableOpacity onPress={() => router.push('/(auth)/register')} disabled={isLoading}>
-            <Text style={{ color: '#81007F', fontWeight: 'bold' }}>Cadastre-se</Text>
+          <Text style={{ color: "#333" }}>Não possui uma conta? </Text>
+          <TouchableOpacity
+            onPress={() => router.push("/(auth)/register")}
+            disabled={isSubmitting}
+          >
+            <Text style={{ color: "#81007F", fontWeight: "bold" }}>
+              Cadastre-se
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -203,64 +209,64 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
   content: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
     paddingHorizontal: 24,
   },
   stack: {
-    width: '100%',
+    width: "100%",
     gap: 16,
   },
   logo: {
-    alignSelf: 'center',
+    alignSelf: "center",
     marginBottom: 8,
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    textAlign: 'center',
+    fontWeight: "bold",
+    color: "#333",
+    textAlign: "center",
     marginBottom: 24,
   },
   form: {
-    width: '100%',
+    width: "100%",
   },
   input: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 32,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: "#ddd",
   },
   inputError: {
-    borderColor: '#d00',
+    borderColor: "#d00",
   },
   errorText: {
-    color: '#d00',
+    color: "#d00",
     marginTop: -16,
     marginBottom: 16,
     marginLeft: 8,
     fontSize: 12,
   },
   serverErrorText: {
-    color: '#d00',
+    color: "#d00",
     marginBottom: 16,
-    textAlign: 'center',
+    textAlign: "center",
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   passwordContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
     borderRadius: 32,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: "#ddd",
   },
   passwordInput: {
     flex: 1,
@@ -276,27 +282,27 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   button: {
-    backgroundColor: '#81007F',
+    backgroundColor: "#81007F",
     paddingVertical: 14,
     borderRadius: 32,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 8,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
   buttonText: {
-    color: '#FFFF00',
+    color: "#FFFF00",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   linkRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
     marginTop: 8,
   },
   footer: {
-    height: '10%',
+    height: "10%",
   },
 });

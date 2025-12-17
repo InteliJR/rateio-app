@@ -13,11 +13,10 @@ export default function TabsLayout() {
       <Tabs.Screen name="(create)" options={{
         tabBarIcon: ({ color }) => <MaterialCommunityIcons name="camera-outline" size={24} color={color} />,
         tabBarLabel: 'Scanner',
-        href: '/(tabs)/(create)/new',
       }} />
       <Tabs.Screen name="bills" options={{
         tabBarIcon: ({ color }) => <MaterialCommunityIcons name="invoice-text-clock-outline" size={24} color={color} />,
-        tabBarLabel: 'Contas'
+        tabBarLabel: 'Contas',
       }} />
       <Tabs.Screen name="profile" options={{
         tabBarIcon: ({ color }) => <MaterialCommunityIcons name="account-outline" size={24} color={color} />,
