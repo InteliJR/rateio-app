@@ -14,12 +14,11 @@ export class AuthService {
     private usersService: UsersService,
     private jwtService: JwtService,
     private tokenRevocationService: TokenRevocationService,
-  ) {}
+  ) { }
 
   /**
    * Registro de usuário
-   * IMPORTANTE: Usuários são criados INATIVOS por padrão
-   * Apenas ADMIN pode ativá-los posteriormente
+   * Usuários são criados ATIVOS e podem fazer login imediatamente
    */
   async register(
     email: string,
@@ -34,20 +33,28 @@ export class AuthService {
       );
     }
 
-    // Criar usuário INATIVO por padrão
+    // Criar usuário ATIVO por padrão
     const user = await this.usersService.create(
       email,
       name,
       password,
-      role || UserRole.USER, // ✅ MUDANÇA AQUI
-      false, // isActive = false
+      role || UserRole.USER,
+      true, // isActive = true - usuário pode fazer login imediatamente
     );
 
-    // Não retornar tokens - usuário precisa ser ativado primeiro
+    // Gerar tokens para login automático
+    const tokens = await this.generateTokens(user.id, user.email, user.role);
+
     return {
-      user,
-      message:
-        'Usuário criado com sucesso. Aguarde ativação por um administrador.',
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        createdAt: user.createdAt,
+      },
+      ...tokens,
+      message: 'Usuário criado com sucesso. Você já pode fazer login.',
     };
   }
 

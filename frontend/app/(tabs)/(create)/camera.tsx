@@ -15,13 +15,14 @@ import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as FileSystem from "expo-file-system/legacy";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import billService from "../../services/bill.service";
+import { useRouter, useLocalSearchParams } from "expo-router";
+import billService from "../../../services/bill.service";
 
 const { width, height } = Dimensions.get("window");
 
 export default function CameraScreen() {
   const router = useRouter();
+  const { id, participants } = useLocalSearchParams();
   const cameraRef = useRef<CameraView>(null);
 
   // Estados
@@ -124,6 +125,12 @@ export default function CameraScreen() {
   // Função para otimizar imagem
   const optimizeImage = async (imageUri: string) => {
     try {
+      // Na web, pular otimização (FileSystem não funciona)
+      if (Platform.OS === "web") {
+        console.log("Pulando otimização na web");
+        return imageUri;
+      }
+
       // Obter informações da imagem original
       const imageInfo = await FileSystem.getInfoAsync(imageUri);
 
