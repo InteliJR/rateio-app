@@ -15,14 +15,13 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { userService } from "../../services/user.service";
 
-type EditField = "name" | "birthDate" | "email" | null;
+type EditField = "name" | "email" | null;
 
 export default function EditProfileScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [name, setName] = useState("");
-  const [birthDate, setBirthDate] = useState("");
   const [email, setEmail] = useState("");
   const [editingField, setEditingField] = useState<EditField>(null);
   const [tempValue, setTempValue] = useState("");
@@ -37,10 +36,6 @@ export default function EditProfileScreen() {
       const profile = await userService.getProfile();
       setName(profile.name);
       setEmail(profile.email);
-
-      // Carregar data de nascimento do AsyncStorage (não está na API)
-      const userBirthDate = await AsyncStorage.getItem("userBirthDate");
-      if (userBirthDate) setBirthDate(userBirthDate);
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
       Alert.alert("Erro", "Não foi possível carregar seus dados");
@@ -59,27 +54,6 @@ export default function EditProfileScreen() {
     setTempValue("");
   };
 
-  const handleDateChange = (text: string) => {
-    // Remove tudo que não é número
-    const cleaned = text.replace(/\D/g, "");
-
-    // Aplica a máscara DD/MM/AAAA
-    let formatted = cleaned;
-    if (cleaned.length >= 2) {
-      formatted = cleaned.slice(0, 2) + "/" + cleaned.slice(2);
-    }
-    if (cleaned.length >= 4) {
-      formatted =
-        cleaned.slice(0, 2) +
-        "/" +
-        cleaned.slice(2, 4) +
-        "/" +
-        cleaned.slice(4, 8);
-    }
-
-    setTempValue(formatted);
-  };
-
   const saveField = async () => {
     if (!tempValue.trim()) {
       Alert.alert("Erro", "Campo não pode estar vazio");
@@ -92,15 +66,6 @@ export default function EditProfileScreen() {
       return;
     }
 
-    if (editingField === "birthDate") {
-      // Valida formato DD/MM/AAAA
-      const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
-      if (!dateRegex.test(tempValue)) {
-        Alert.alert("Erro", "Data inválida. Use o formato DD/MM/AAAA");
-        return;
-      }
-    }
-
     try {
       setLoading(true);
 
@@ -109,10 +74,6 @@ export default function EditProfileScreen() {
         await userService.updateProfile({ name: tempValue });
         setName(tempValue);
         await AsyncStorage.setItem("userName", tempValue);
-      } else if (editingField === "birthDate") {
-        // Data de nascimento só no AsyncStorage (não está na API)
-        setBirthDate(tempValue);
-        await AsyncStorage.setItem("userBirthDate", tempValue);
       }
 
       closeEditModal();
@@ -174,20 +135,6 @@ export default function EditProfileScreen() {
             <Ionicons name="chevron-forward" size={20} color="#999" />
           </TouchableOpacity>
 
-          {/* Data de Nascimento */}
-          <TouchableOpacity
-            style={styles.fieldRow}
-            onPress={() => openEditModal("birthDate", birthDate)}
-          >
-            <View style={styles.fieldContent}>
-              <Text style={styles.fieldLabel}>Data de Nascimento</Text>
-              <Text style={styles.fieldValue}>
-                {birthDate || "Não informado"}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#999" />
-          </TouchableOpacity>
-
           {/* Email (Somente Leitura) */}
           <View style={styles.fieldRow}>
             <View style={styles.fieldContent}>
@@ -213,11 +160,7 @@ export default function EditProfileScreen() {
                 <Text style={styles.modalCancel}>Cancelar</Text>
               </TouchableOpacity>
               <Text style={styles.modalTitle}>
-                {editingField === "name"
-                  ? "Editar Nome"
-                  : editingField === "birthDate"
-                  ? "Editar Data de Nascimento"
-                  : "Editar Email"}
+                {editingField === "name" ? "Editar Nome" : "Editar Email"}
               </Text>
               <TouchableOpacity onPress={saveField} disabled={loading}>
                 <Text
@@ -233,33 +176,20 @@ export default function EditProfileScreen() {
 
             <View style={styles.modalBody}>
               <Text style={styles.modalLabel}>
-                {editingField === "name"
-                  ? "Nome"
-                  : editingField === "birthDate"
-                  ? "Data de Nascimento"
-                  : "Email"}
+                {editingField === "name" ? "Nome" : "Email"}
               </Text>
               <TextInput
                 style={styles.modalInput}
                 value={tempValue}
-                onChangeText={
-                  editingField === "birthDate" ? handleDateChange : setTempValue
-                }
-                placeholder={
-                  editingField === "birthDate"
-                    ? "DD/MM/AAAA"
-                    : `Digite seu ${editingField === "name" ? "nome" : "email"}`
-                }
+                onChangeText={setTempValue}
+                placeholder={`Digite seu ${
+                  editingField === "name" ? "nome" : "email"
+                }`}
                 placeholderTextColor="#999"
                 keyboardType={
-                  editingField === "email"
-                    ? "email-address"
-                    : editingField === "birthDate"
-                    ? "numeric"
-                    : "default"
+                  editingField === "email" ? "email-address" : "default"
                 }
                 autoCapitalize={editingField === "email" ? "none" : "words"}
-                maxLength={editingField === "birthDate" ? 10 : undefined}
                 autoFocus
               />
             </View>
