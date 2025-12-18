@@ -6,14 +6,26 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  Modal,
+  TextInput,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { userService } from "../../services/user.service";
 
 export default function SecurityScreen() {
   const router = useRouter();
   const [userName, setUserName] = React.useState("");
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   React.useEffect(() => {
     loadUserName();
@@ -28,18 +40,50 @@ export default function SecurityScreen() {
     }
   };
 
-  const handleChangePassword = () => {
-    Alert.alert(
-      "Em breve",
-      "Funcionalidade de alterar senha em desenvolvimento"
-    );
+  const openPasswordModal = () => {
+    setShowPasswordModal(true);
   };
 
-  const handlePasswordRecovery = () => {
-    Alert.alert(
-      "Em breve",
-      "Funcionalidade de recuperação de senha em desenvolvimento"
-    );
+  const closePasswordModal = () => {
+    setShowPasswordModal(false);
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setShowCurrentPassword(false);
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
+  };
+
+  const handleSavePassword = async () => {
+    // Validações
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      Alert.alert("Erro", "Todos os campos são obrigatórios");
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      Alert.alert("Erro", "A nova senha deve ter no mínimo 8 caracteres");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      Alert.alert("Erro", "As senhas não coincidem");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await userService.updateProfile({ password: newPassword });
+      Alert.alert("Sucesso", "Senha alterada com sucesso!");
+      closePasswordModal();
+    } catch (error: any) {
+      console.error("Erro ao alterar senha:", error);
+      const errorMessage =
+        error.response?.data?.message || "Não foi possível alterar a senha";
+      Alert.alert("Erro", errorMessage);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -70,21 +114,122 @@ export default function SecurityScreen() {
         <View style={styles.optionsContainer}>
           <TouchableOpacity
             style={styles.optionItem}
-            onPress={handleChangePassword}
+            onPress={openPasswordModal}
           >
-            <Text style={styles.optionText}>Senha</Text>
-            <Ionicons name="chevron-forward" size={24} color="#999" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.optionItem}
-            onPress={handlePasswordRecovery}
-          >
-            <Text style={styles.optionText}>Recuperação de senha</Text>
+            <Text style={styles.optionText}>Alterar Senha</Text>
             <Ionicons name="chevron-forward" size={24} color="#999" />
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Change Password Modal */}
+      <Modal
+        visible={showPasswordModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={closePasswordModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={closePasswordModal}>
+                <Text style={styles.modalCancel}>Cancelar</Text>
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Alterar Senha</Text>
+              <TouchableOpacity onPress={handleSavePassword} disabled={loading}>
+                <Text
+                  style={[
+                    styles.modalSave,
+                    loading && styles.modalSaveDisabled,
+                  ]}
+                >
+                  {loading ? "..." : "Salvar"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody}>
+              {/* Senha Atual */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Senha Atual</Text>
+                <View style={styles.passwordContainer}>
+                  <TextInput
+                    style={styles.passwordInput}
+                    value={currentPassword}
+                    onChangeText={setCurrentPassword}
+                    placeholder="Digite sua senha atual"
+                    placeholderTextColor="#999"
+                    secureTextEntry={!showCurrentPassword}
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowCurrentPassword(!showCurrentPassword)}
+                    style={styles.eyeButton}
+                  >
+                    <Ionicons
+                      name={showCurrentPassword ? "eye-off" : "eye"}
+                      size={20}
+                      color="#999"
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Nova Senha */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Nova Senha</Text>
+                <View style={styles.passwordContainer}>
+                  <TextInput
+                    style={styles.passwordInput}
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    placeholder="Mínimo 8 caracteres"
+                    placeholderTextColor="#999"
+                    secureTextEntry={!showNewPassword}
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowNewPassword(!showNewPassword)}
+                    style={styles.eyeButton}
+                  >
+                    <Ionicons
+                      name={showNewPassword ? "eye-off" : "eye"}
+                      size={20}
+                      color="#999"
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Confirmar Senha */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Confirmar Nova Senha</Text>
+                <View style={styles.passwordContainer}>
+                  <TextInput
+                    style={styles.passwordInput}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    placeholder="Digite novamente a nova senha"
+                    placeholderTextColor="#999"
+                    secureTextEntry={!showConfirmPassword}
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                    style={styles.eyeButton}
+                  >
+                    <Ionicons
+                      name={showConfirmPassword ? "eye-off" : "eye"}
+                      size={20}
+                      color="#999"
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -162,5 +307,74 @@ const styles = StyleSheet.create({
   optionText: {
     fontSize: 16,
     color: "#333",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#FFF",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 40,
+    maxHeight: "80%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
+  },
+  modalCancel: {
+    fontSize: 16,
+    color: "#666",
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#333",
+  },
+  modalSave: {
+    fontSize: 16,
+    color: "#7B2CBF",
+    fontWeight: "600",
+  },
+  modalSaveDisabled: {
+    opacity: 0.5,
+  },
+  modalBody: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 14,
+    color: "#666",
+    fontWeight: "500",
+    marginBottom: 8,
+  },
+  passwordContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F5F5F5",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+  },
+  passwordInput: {
+    flex: 1,
+    fontSize: 16,
+    color: "#333",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  eyeButton: {
+    paddingHorizontal: 16,
   },
 });
