@@ -80,10 +80,7 @@ export default function ProfileScreen() {
   };
 
   const handleSettings = () => {
-    Alert.alert(
-      "Em breve",
-      "Funcionalidade de configurações em desenvolvimento"
-    );
+    router.push("/profile/config");
   };
 
   if (loading) {
