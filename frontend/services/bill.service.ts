@@ -203,14 +203,33 @@ class BillService {
   }
 
   /**
-   * Lista todas as contas do usuário
+   * Lista todas as contas do usuário com paginação
+   * @param page - Número da página (padrão: 1)
+   * @param limit - Itens por página (padrão: 10)
+   * @returns Objeto com array de bills e metadados de paginação
    */
-  async listBills(): Promise<UploadBillResponse[]> {
+  async listBills(page: number = 1, limit: number = 10): Promise<{
+    data: UploadBillResponse[];
+    meta: {
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    };
+  }> {
     try {
       const api = apiService.getApi();
-      const response = await api.get<UploadBillResponse[]>("/bills");
+      const response = await api.get("/bills", {
+        params: {
+          page,
+          limit,
+          sortBy: 'createdAt',
+          sortOrder: 'desc',
+        },
+      });
       return response.data;
     } catch (error: any) {
+      console.error('[BillService] Erro ao listar contas:', error);
       throw {
         message: error.response?.data?.message || "Erro ao listar contas",
         statusCode: error.response?.status,
@@ -253,6 +272,25 @@ class BillService {
     } catch (error: any) {
       throw {
         message: error.response?.data?.message || "Erro ao deletar conta",
+        statusCode: error.response?.status,
+      } as UploadBillError;
+    }
+  }
+
+  /**
+   * Busca o resumo/summary da conta com valores por participante
+   * @param billId - ID da conta
+   * @returns Resumo com participantes e seus valores
+   */
+  async getSummary(billId: string) {
+    try {
+      const api = apiService.getApi();
+      const response = await api.get(`/bills/${billId}/summary`);
+      return response.data;
+    } catch (error: any) {
+      console.error('[BillService] Erro ao buscar summary:', error);
+      throw {
+        message: error.response?.data?.message || "Erro ao buscar resumo da conta",
         statusCode: error.response?.status,
       } as UploadBillError;
     }
