@@ -7,16 +7,19 @@ import {
   Image,
   Alert,
   ScrollView,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { authService } from "../../services/auth.service";
+import { userService } from "../../services/user.service";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function ProfileScreen() {
   const router = useRouter();
   const [userName, setUserName] = useState("");
   const [userEmail, setUserEmail] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadUserData();
@@ -24,12 +27,25 @@ export default function ProfileScreen() {
 
   const loadUserData = async () => {
     try {
+      setLoading(true);
+      const profile = await userService.getProfile();
+      setUserName(profile.name);
+      setUserEmail(profile.email);
+
+      // Atualizar AsyncStorage para compatibilidade
+      await AsyncStorage.setItem("userName", profile.name);
+      await AsyncStorage.setItem("userEmail", profile.email);
+    } catch (error) {
+      console.error("Erro ao carregar dados do usuário:", error);
+      Alert.alert("Erro", "Não foi possível carregar os dados do perfil");
+
+      // Fallback para AsyncStorage
       const name = await AsyncStorage.getItem("userName");
       const email = await AsyncStorage.getItem("userEmail");
       if (name) setUserName(name);
       if (email) setUserEmail(email);
-    } catch (error) {
-      console.error("Erro ao carregar dados do usuário:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -69,6 +85,15 @@ export default function ProfileScreen() {
       "Funcionalidade de configurações em desenvolvimento"
     );
   };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#7B2CBF" />
+        <Text style={styles.loadingText}>Carregando perfil...</Text>
+      </View>
+    );
+  }
 
   return (
     <ScrollView
@@ -124,6 +149,17 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#FFF",
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: "#666",
+  },
   container: {
     flex: 1,
     backgroundColor: "#FFF",

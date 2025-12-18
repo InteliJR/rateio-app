@@ -13,6 +13,7 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { userService } from "../../services/user.service";
 
 type EditField = "name" | "birthDate" | "email" | null;
 
@@ -33,12 +34,12 @@ export default function EditProfileScreen() {
   const loadUserData = async () => {
     try {
       setInitialLoading(true);
-      const userName = await AsyncStorage.getItem("userName");
-      const userEmail = await AsyncStorage.getItem("userEmail");
-      const userBirthDate = await AsyncStorage.getItem("userBirthDate");
+      const profile = await userService.getProfile();
+      setName(profile.name);
+      setEmail(profile.email);
 
-      if (userName) setName(userName);
-      if (userEmail) setEmail(userEmail);
+      // Carregar data de nascimento do AsyncStorage (não está na API)
+      const userBirthDate = await AsyncStorage.getItem("userBirthDate");
       if (userBirthDate) setBirthDate(userBirthDate);
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
@@ -85,13 +86,10 @@ export default function EditProfileScreen() {
       return;
     }
 
-    // Validações específicas
+    // Email não deve ser editável
     if (editingField === "email") {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(tempValue)) {
-        Alert.alert("Erro", "Email inválido");
-        return;
-      }
+      Alert.alert("Atenção", "O email não pode ser alterado");
+      return;
     }
 
     if (editingField === "birthDate") {
@@ -106,16 +104,15 @@ export default function EditProfileScreen() {
     try {
       setLoading(true);
 
-      // Atualizar o estado e AsyncStorage
+      // Atualizar via API
       if (editingField === "name") {
+        await userService.updateProfile({ name: tempValue });
         setName(tempValue);
         await AsyncStorage.setItem("userName", tempValue);
       } else if (editingField === "birthDate") {
+        // Data de nascimento só no AsyncStorage (não está na API)
         setBirthDate(tempValue);
         await AsyncStorage.setItem("userBirthDate", tempValue);
-      } else if (editingField === "email") {
-        setEmail(tempValue);
-        await AsyncStorage.setItem("userEmail", tempValue);
       }
 
       closeEditModal();
@@ -191,17 +188,14 @@ export default function EditProfileScreen() {
             <Ionicons name="chevron-forward" size={20} color="#999" />
           </TouchableOpacity>
 
-          {/* Email */}
-          <TouchableOpacity
-            style={styles.fieldRow}
-            onPress={() => openEditModal("email", email)}
-          >
+          {/* Email (Somente Leitura) */}
+          <View style={styles.fieldRow}>
             <View style={styles.fieldContent}>
               <Text style={styles.fieldLabel}>Email</Text>
               <Text style={styles.fieldValue}>{email || "Não informado"}</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#999" />
-          </TouchableOpacity>
+            <Ionicons name="lock-closed" size={18} color="#999" />
+          </View>
         </View>
       </ScrollView>
 
