@@ -8,10 +8,13 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Modal,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
+type EditField = "name" | "birthDate" | "email" | null;
 
 export default function EditProfileScreen() {
   const router = useRouter();
@@ -20,6 +23,8 @@ export default function EditProfileScreen() {
   const [name, setName] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [email, setEmail] = useState("");
+  const [editingField, setEditingField] = useState<EditField>(null);
+  const [tempValue, setTempValue] = useState("");
 
   useEffect(() => {
     loadUserData();
@@ -43,53 +48,21 @@ export default function EditProfileScreen() {
     }
   };
 
-  const handleSave = async () => {
-    if (!name.trim()) {
-      Alert.alert("Erro", "Nome é obrigatório");
-      return;
-    }
-
-    if (!email.trim()) {
-      Alert.alert("Erro", "Email é obrigatório");
-      return;
-    }
-
-    // Validar formato de email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      Alert.alert("Erro", "Email inválido");
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      // Salvar no AsyncStorage
-      await AsyncStorage.setItem("userName", name);
-      await AsyncStorage.setItem("userEmail", email);
-      if (birthDate) {
-        await AsyncStorage.setItem("userBirthDate", birthDate);
-      }
-
-      Alert.alert("Sucesso", "Perfil atualizado com sucesso!", [
-        {
-          text: "OK",
-          onPress: () => router.back(),
-        },
-      ]);
-    } catch (error) {
-      console.error("Erro ao salvar:", error);
-      Alert.alert("Erro", "Não foi possível salvar as alterações");
-    } finally {
-      setLoading(false);
-    }
+  const openEditModal = (field: EditField, currentValue: string) => {
+    setEditingField(field);
+    setTempValue(currentValue);
   };
 
-  const formatDate = (text: string) => {
+  const closeEditModal = () => {
+    setEditingField(null);
+    setTempValue("");
+  };
+
+  const handleDateChange = (text: string) => {
     // Remove tudo que não é número
     const cleaned = text.replace(/\D/g, "");
 
-    // Aplica máscara DD/MM/AAAA
+    // Aplica a máscara DD/MM/AAAA
     let formatted = cleaned;
     if (cleaned.length >= 2) {
       formatted = cleaned.slice(0, 2) + "/" + cleaned.slice(2);
@@ -103,12 +76,56 @@ export default function EditProfileScreen() {
         cleaned.slice(4, 8);
     }
 
-    return formatted;
+    setTempValue(formatted);
   };
 
-  const handleDateChange = (text: string) => {
-    const formatted = formatDate(text);
-    setBirthDate(formatted);
+  const saveField = async () => {
+    if (!tempValue.trim()) {
+      Alert.alert("Erro", "Campo não pode estar vazio");
+      return;
+    }
+
+    // Validações específicas
+    if (editingField === "email") {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(tempValue)) {
+        Alert.alert("Erro", "Email inválido");
+        return;
+      }
+    }
+
+    if (editingField === "birthDate") {
+      // Valida formato DD/MM/AAAA
+      const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+      if (!dateRegex.test(tempValue)) {
+        Alert.alert("Erro", "Data inválida. Use o formato DD/MM/AAAA");
+        return;
+      }
+    }
+
+    try {
+      setLoading(true);
+
+      // Atualizar o estado e AsyncStorage
+      if (editingField === "name") {
+        setName(tempValue);
+        await AsyncStorage.setItem("userName", tempValue);
+      } else if (editingField === "birthDate") {
+        setBirthDate(tempValue);
+        await AsyncStorage.setItem("userBirthDate", tempValue);
+      } else if (editingField === "email") {
+        setEmail(tempValue);
+        await AsyncStorage.setItem("userEmail", tempValue);
+      }
+
+      closeEditModal();
+      Alert.alert("Sucesso", "Alteração salva com sucesso!");
+    } catch (error) {
+      console.error("Erro ao salvar:", error);
+      Alert.alert("Erro", "Não foi possível salvar as alterações");
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (initialLoading) {
@@ -133,7 +150,6 @@ export default function EditProfileScreen() {
         >
           <Ionicons name="chevron-back" size={28} color="#333" />
         </TouchableOpacity>
-
         {/* Avatar */}
         <View style={styles.avatarSection}>
           <View style={styles.avatarContainer}>
@@ -147,71 +163,115 @@ export default function EditProfileScreen() {
           <Text style={styles.changePhotoText}>Alterar Foto</Text>
         </View>
 
-        {/* Form Fields */}
-        <View style={styles.formSection}>
+        {/* Clickable Fields */}
+        <View style={styles.fieldsList}>
           {/* Nome */}
-          <View style={styles.fieldContainer}>
-            <Text style={styles.fieldLabel}>Nome</Text>
-            <View style={styles.inputRow}>
-              <TextInput
-                style={styles.input}
-                value={name}
-                onChangeText={setName}
-                placeholder="Digite seu nome"
-                placeholderTextColor="#999"
-              />
-              <Ionicons name="chevron-forward" size={20} color="#999" />
+          <TouchableOpacity
+            style={styles.fieldRow}
+            onPress={() => openEditModal("name", name)}
+          >
+            <View style={styles.fieldContent}>
+              <Text style={styles.fieldLabel}>Nome</Text>
+              <Text style={styles.fieldValue}>{name || "Não informado"}</Text>
             </View>
-          </View>
+            <Ionicons name="chevron-forward" size={20} color="#999" />
+          </TouchableOpacity>
 
           {/* Data de Nascimento */}
-          <View style={styles.fieldContainer}>
-            <Text style={styles.fieldLabel}>Data de Nascimento</Text>
-            <View style={styles.inputRow}>
-              <TextInput
-                style={styles.input}
-                value={birthDate}
-                onChangeText={handleDateChange}
-                placeholder="DD/MM/AAAA"
-                placeholderTextColor="#999"
-                keyboardType="numeric"
-                maxLength={10}
-              />
-              <Ionicons name="chevron-forward" size={20} color="#999" />
+          <TouchableOpacity
+            style={styles.fieldRow}
+            onPress={() => openEditModal("birthDate", birthDate)}
+          >
+            <View style={styles.fieldContent}>
+              <Text style={styles.fieldLabel}>Data de Nascimento</Text>
+              <Text style={styles.fieldValue}>
+                {birthDate || "Não informado"}
+              </Text>
             </View>
-          </View>
+            <Ionicons name="chevron-forward" size={20} color="#999" />
+          </TouchableOpacity>
 
           {/* Email */}
-          <View style={styles.fieldContainer}>
-            <Text style={styles.fieldLabel}>Email</Text>
-            <View style={styles.inputRow}>
+          <TouchableOpacity
+            style={styles.fieldRow}
+            onPress={() => openEditModal("email", email)}
+          >
+            <View style={styles.fieldContent}>
+              <Text style={styles.fieldLabel}>Email</Text>
+              <Text style={styles.fieldValue}>{email || "Não informado"}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#999" />
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+
+      {/* Edit Modal */}
+      <Modal
+        visible={editingField !== null}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={closeEditModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={closeEditModal}>
+                <Text style={styles.modalCancel}>Cancelar</Text>
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>
+                {editingField === "name"
+                  ? "Editar Nome"
+                  : editingField === "birthDate"
+                  ? "Editar Data de Nascimento"
+                  : "Editar Email"}
+              </Text>
+              <TouchableOpacity onPress={saveField} disabled={loading}>
+                <Text
+                  style={[
+                    styles.modalSave,
+                    loading && styles.modalSaveDisabled,
+                  ]}
+                >
+                  {loading ? "..." : "Salvar"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
+              <Text style={styles.modalLabel}>
+                {editingField === "name"
+                  ? "Nome"
+                  : editingField === "birthDate"
+                  ? "Data de Nascimento"
+                  : "Email"}
+              </Text>
               <TextInput
-                style={styles.input}
-                value={email}
-                onChangeText={setEmail}
-                placeholder="Digite seu email"
+                style={styles.modalInput}
+                value={tempValue}
+                onChangeText={
+                  editingField === "birthDate" ? handleDateChange : setTempValue
+                }
+                placeholder={
+                  editingField === "birthDate"
+                    ? "DD/MM/AAAA"
+                    : `Digite seu ${editingField === "name" ? "nome" : "email"}`
+                }
                 placeholderTextColor="#999"
-                keyboardType="email-address"
-                autoCapitalize="none"
+                keyboardType={
+                  editingField === "email"
+                    ? "email-address"
+                    : editingField === "birthDate"
+                    ? "numeric"
+                    : "default"
+                }
+                autoCapitalize={editingField === "email" ? "none" : "words"}
+                maxLength={editingField === "birthDate" ? 10 : undefined}
+                autoFocus
               />
-              <Ionicons name="chevron-forward" size={20} color="#999" />
             </View>
           </View>
         </View>
-
-        {/* Save Button */}
-        <TouchableOpacity
-          style={[styles.saveButton, loading && styles.saveButtonDisabled]}
-          onPress={handleSave}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#FFF" />
-          ) : (
-            <Text style={styles.saveButtonText}>Salvar Alterações</Text>
-          )}
-        </TouchableOpacity>
-      </ScrollView>
+      </Modal>
     </View>
   );
 }
@@ -290,49 +350,93 @@ const styles = StyleSheet.create({
     color: "#7B2CBF",
     fontWeight: "600",
   },
-  formSection: {
+  fieldsList: {
     paddingHorizontal: 20,
-    gap: 20,
+    gap: 1,
+    backgroundColor: "#F5F5F5",
+    marginTop: 24,
   },
-  fieldContainer: {
-    gap: 8,
+  fieldRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: "#FFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
+  },
+  fieldContent: {
+    flex: 1,
+    gap: 4,
   },
   fieldLabel: {
     fontSize: 14,
     color: "#666",
     fontWeight: "500",
   },
-  inputRow: {
+  fieldValue: {
+    fontSize: 16,
+    color: "#333",
+    fontWeight: "400",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#FFF",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 40,
+    minHeight: 300,
+  },
+  modalHeader: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
+  },
+  modalCancel: {
+    fontSize: 16,
+    color: "#666",
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#333",
+  },
+  modalSave: {
+    fontSize: 16,
+    color: "#7B2CBF",
+    fontWeight: "600",
+  },
+  modalSaveDisabled: {
+    opacity: 0.5,
+  },
+  modalBody: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    gap: 12,
+  },
+  modalLabel: {
+    fontSize: 14,
+    color: "#666",
+    fontWeight: "500",
+  },
+  modalInput: {
+    fontSize: 16,
+    color: "#333",
     paddingHorizontal: 16,
     paddingVertical: 16,
-    backgroundColor: "#FFF",
+    backgroundColor: "#F5F5F5",
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#E0E0E0",
-    gap: 12,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: "#333",
-  },
-  saveButton: {
-    marginHorizontal: 20,
-    marginTop: 32,
-    paddingVertical: 16,
-    backgroundColor: "#7B2CBF",
-    borderRadius: 12,
-    alignItems: "center",
-    shadowColor: "#7B2CBF",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  saveButtonDisabled: {
-    opacity: 0.6,
   },
   saveButtonText: {
     fontSize: 16,

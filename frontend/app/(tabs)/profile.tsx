@@ -131,35 +131,6 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingBottom: 40,
   },
-  header: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
-  },
-  logoContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  logoIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: "#7B2CBF",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  logoText: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#FFF",
-  },
-  logoTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#7B2CBF",
-  },
   profileSection: {
     alignItems: "center",
     paddingVertical: 40,
