@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "expo-router";
 import {
   View,
@@ -45,8 +45,13 @@ type RegisterFormData = z.infer<typeof registerSchema>;
 export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
-  const { register: registerUser, isLoading } = useAuthStore();
+  const { register: registerUser, isLoading, loadTokens } = useAuthStore();
   const router = useRouter();
+
+  useEffect(() => {
+    // Initialize loading state on mount
+    loadTokens();
+  }, [loadTokens]);
 
   const {
     control,
@@ -73,13 +78,16 @@ export default function RegisterScreen() {
         ]
       );
     } catch (error: any) {
+      console.error("[RegisterPage] Registration error:", error);
       setServerError(getApiErrorMessage(error));
     }
   };
 
   function getApiErrorMessage(err: any): string {
+    console.log("[RegisterPage] Error details:", { err });
     const data = err?.response?.data;
     if (data) {
+      console.log("[RegisterPage] Response data:", data);
       if (Array.isArray(data.errors)) {
         const arr = data.errors
           .map((e: any) => e?.message || String(e))
@@ -108,6 +116,7 @@ export default function RegisterScreen() {
         return data.message;
       }
     }
+    console.log("[RegisterPage] Returning generic error message");
     return "Não foi possível realizar o cadastro. Tente novamente.";
   }
 

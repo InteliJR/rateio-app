@@ -15,8 +15,18 @@ export const authService = {
   },
 
   async register(data: RegisterRequest): Promise<RegisterResponse> {
-    const response = await api.post<RegisterResponse>("/auth/register", data);
-    return response.data;
+    try {
+      console.log("[AuthService] Attempting registration with:", {
+        email: data.email,
+        name: data.name,
+      });
+      const response = await api.post<RegisterResponse>("/auth/register", data);
+      console.log("[AuthService] Registration successful:", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("[AuthService] Registration failed:", error);
+      throw error;
+    }
   },
 
   async logout() {

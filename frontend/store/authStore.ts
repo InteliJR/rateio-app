@@ -40,11 +40,18 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isLoading: true });
     try {
       const response = await authService.register({ name, email, password });
+
+      // Salvar tokens e usuário (o backend retorna tokens na resposta)
+      console.log("[AuthStore] Saving registration tokens to storage...");
+      await storageService.setItem("accessToken", response.accessToken);
+      await storageService.setItem("refreshToken", response.refreshToken);
+      console.log("[AuthStore] Registration tokens saved successfully");
+
       set({
-        user: null,
-        accessToken: null,
-        refreshToken: null,
-        isAuthenticated: false,
+        user: response.user,
+        accessToken: response.accessToken,
+        refreshToken: response.refreshToken,
+        isAuthenticated: true,
         isLoading: false,
       });
       return response;
