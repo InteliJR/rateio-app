@@ -67,6 +67,11 @@ export default function RegisterScreen() {
     setServerError(null);
     try {
       const response = await registerUser(data.name, data.email, data.password);
+      console.log('[RegisterPage] Registration successful, tokens should be saved');
+      
+      // Pequeno delay para garantir que os tokens foram salvos na storage
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       Alert.alert(
         "Cadastro realizado",
         "Conta criada com sucesso! Você já está logado.",

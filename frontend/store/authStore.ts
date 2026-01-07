@@ -83,18 +83,36 @@ export const useAuthStore = create<AuthState>((set) => ({
       const accessToken = await storageService.getItem("accessToken");
       const refreshToken = await storageService.getItem("refreshToken");
 
-      if (accessToken && refreshToken) {
-        // Buscar dados do usuário
-        const user = await authService.getProfile();
+      console.log('[AuthStore] loadTokens - accessToken:', accessToken ? "Found" : "Missing");
+      console.log('[AuthStore] loadTokens - refreshToken:', refreshToken ? "Found" : "Missing");
 
-        set({
-          user,
-          accessToken,
-          refreshToken,
-          isAuthenticated: true,
-          isLoading: false,
-        });
+      if (accessToken && refreshToken) {
+        // Tentar buscar dados do usuário
+        try {
+          console.log('[AuthStore] Fetching user profile...');
+          const user = await authService.getProfile();
+          console.log('[AuthStore] User profile fetched successfully');
+
+          set({
+            user,
+            accessToken,
+            refreshToken,
+            isAuthenticated: true,
+            isLoading: false,
+          });
+        } catch (profileError) {
+          // Se falhar ao buscar perfil, ainda mantém os tokens (podem estar válidos)
+          console.error('[AuthStore] Failed to fetch profile, but keeping tokens:', profileError);
+          set({
+            user: null,
+            accessToken,
+            refreshToken,
+            isAuthenticated: true,
+            isLoading: false,
+          });
+        }
       } else {
+        console.log('[AuthStore] No tokens found, user not authenticated');
         set({ isLoading: false, isAuthenticated: false });
       }
     } catch (error) {

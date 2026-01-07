@@ -34,10 +34,14 @@ class ApiService {
             "[API] Token from SecureStore:",
             token ? "Found" : "Missing"
           );
+          console.log(
+            "[API] Token value:",
+            token ? `${token.substring(0, 20)}...` : "none"
+          );
 
           if (token) {
             config.headers.Authorization = `Bearer ${token}`;
-            console.log("[API] Authorization header set");
+            console.log("[API] Authorization header set with token");
           } else {
             console.log("[API] No token found for protected endpoint");
             this.onUnauthorized();
