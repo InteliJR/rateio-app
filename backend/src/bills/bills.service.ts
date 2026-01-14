@@ -95,8 +95,9 @@ export class BillsService {
           userId,
           status: BillStatus.DIVIDING, // Vai direto para divisão
           establishmentName,
-          // imageUrl e imageKey ficam null
-        },
+          imageUrl: '',
+          imageKey: '',
+        } as any,
       });
 
       // Adicionar taxa de serviço se houver
