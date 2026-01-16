@@ -14,6 +14,8 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { userService } from "../../services/user.service";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 type EditField = "name" | "email" | null;
 
@@ -23,6 +25,7 @@ export default function EditProfileScreen() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [createdAt, setCreatedAt] = useState("");
   const [editingField, setEditingField] = useState<EditField>(null);
   const [tempValue, setTempValue] = useState("");
 
@@ -36,6 +39,7 @@ export default function EditProfileScreen() {
       const profile = await userService.getProfile();
       setName(profile.name);
       setEmail(profile.email);
+      setCreatedAt(profile.createdAt);
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
       Alert.alert("Erro", "Não foi possível carregar seus dados");
@@ -83,6 +87,15 @@ export default function EditProfileScreen() {
       Alert.alert("Erro", "Não foi possível salvar as alterações");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return format(date, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+    } catch {
+      return "Data indisponível";
     }
   };
 
@@ -143,6 +156,17 @@ export default function EditProfileScreen() {
             </View>
             <Ionicons name="lock-closed" size={18} color="#999" />
           </View>
+
+          {/* Data de Cadastro (Opcional) */}
+          {createdAt && (
+            <View style={styles.fieldRow}>
+              <View style={styles.fieldContent}>
+                <Text style={styles.fieldLabel}>Membro desde</Text>
+                <Text style={styles.fieldValue}>{formatDate(createdAt)}</Text>
+              </View>
+              <Ionicons name="calendar-outline" size={18} color="#999" />
+            </View>
+          )}
         </View>
       </ScrollView>
 
