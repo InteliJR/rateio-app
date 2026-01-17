@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
+  Image,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,6 +17,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { userService } from "../../services/user.service";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import * as ImagePicker from "expo-image-picker";
 
 type EditField = "name" | "email" | null;
 
@@ -28,7 +30,9 @@ export default function EditProfileScreen() {
   const [createdAt, setCreatedAt] = useState("");
   const [editingField, setEditingField] = useState<EditField>(null);
   const [tempValue, setTempValue] = useState("");
-
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  
   useEffect(() => {
     loadUserData();
   }, []);
@@ -40,11 +44,59 @@ export default function EditProfileScreen() {
       setName(profile.name);
       setEmail(profile.email);
       setCreatedAt(profile.createdAt);
+      
+      // Construir URL completa do avatar
+      const fullAvatarUrl = profile.avatarUrl 
+        ? `http://localhost:3000${profile.avatarUrl}` 
+        : null;
+      setAvatarUrl(fullAvatarUrl);
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
       Alert.alert("Erro", "Não foi possível carregar seus dados");
     } finally {
       setInitialLoading(false);
+    }
+  };
+
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permissão necessária', 'Precisamos de permissão para acessar suas fotos.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+  
+    if (!result.canceled) {
+      await uploadImage(result.assets[0].uri);
+    }
+  };
+
+  const uploadImage = async (uri: string) => {
+    setUploadingAvatar(true);
+    try { 
+      const updatedProfile = await userService.uploadAvatar(uri);
+      console.log('[EDIT] Upload response:', updatedProfile);
+      console.log('[EDIT] Avatar URL from backend:', updatedProfile.avatarUrl);
+      
+      // Construir URL completa do avatar
+      const fullAvatarUrl = updatedProfile.avatarUrl 
+        ? `http://localhost:3000${updatedProfile.avatarUrl}` 
+        : null;
+      console.log('[EDIT] Full avatar URL:', fullAvatarUrl);
+      setAvatarUrl(fullAvatarUrl);
+      
+      Alert.alert('Sucesso', 'Foto de perfil atualizada com sucesso!');
+    }
+    catch (error) {
+      console.error('Erro ao fazer upload da imagem:', error);
+      Alert.alert('Erro', 'Não foi possível atualizar a foto de perfil.');
+    } finally {
+      setUploadingAvatar(false);
     }
   };
 
@@ -121,14 +173,30 @@ export default function EditProfileScreen() {
         >
           <Ionicons name="chevron-back" size={28} color="#333" />
         </TouchableOpacity>
+
         {/* Avatar */}
         <View style={styles.avatarSection}>
           <View style={styles.avatarContainer}>
-            <View style={styles.avatar}>
-              <Ionicons name="person" size={60} color="#FFF" />
-            </View>
-            <TouchableOpacity style={styles.cameraButton}>
-              <Ionicons name="camera" size={20} color="#FFF" />
+            {avatarUrl ? (
+              <>
+                <Image
+                  source={{ uri: avatarUrl }}
+                  style={styles.avatarImage}
+                  onError={(e) => console.error('[EDIT] Image load error:', e.nativeEvent.error)}
+                  onLoad={() => console.log('[EDIT] Image loaded successfully:', avatarUrl)}
+                />
+              </>
+            ) : (
+              <View style={styles.avatar}>
+                <Ionicons name="person" size={60} color="#FFF" />
+              </View>
+            )}
+            <TouchableOpacity style={styles.cameraButton} onPress={pickImage} disabled={uploadingAvatar}>
+              {uploadingAvatar ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <Ionicons name="camera" size={20} color="#FFF" />
+              )}
             </TouchableOpacity>
           </View>
           <Text style={styles.changePhotoText}>Alterar Foto</Text>
@@ -279,6 +347,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#7B2CBF",
     justifyContent: "center",
     alignItems: "center",
+  },
+  avatarImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: "#e0e0e0",
   },
   cameraButton: {
     position: "absolute",

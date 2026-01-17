@@ -9,7 +9,7 @@ import {
   ScrollView,
   ActivityIndicator,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { authService } from "../../services/auth.service";
 import { userService } from "../../services/user.service";
@@ -19,11 +19,14 @@ export default function ProfileScreen() {
   const router = useRouter();
   const [userName, setUserName] = useState("");
   const [userEmail, setUserEmail] = useState("");
+  const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadUserData();
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      loadUserData();
+    }, [])
+  );
 
   const loadUserData = async () => {
     try {
@@ -31,7 +34,13 @@ export default function ProfileScreen() {
       const profile = await userService.getProfile();
       setUserName(profile.name);
       setUserEmail(profile.email);
-
+      
+      // Construir URL completa do avatar
+      const fullAvatarUrl = profile.avatarUrl 
+        ? `http://localhost:3000${profile.avatarUrl}` 
+        : null;
+      setUserAvatarUrl(fullAvatarUrl);
+      
       // Atualizar AsyncStorage para compatibilidade
       await AsyncStorage.setItem("userName", profile.name);
       await AsyncStorage.setItem("userEmail", profile.email);
@@ -100,9 +109,16 @@ export default function ProfileScreen() {
       {/* Profile Section */}
       <View style={styles.profileSection}>
         <View style={styles.avatarContainer}>
-          <View style={styles.avatar}>
-            <Ionicons name="person" size={60} color="#FFF" />
-          </View>
+          {userAvatarUrl ? (
+            <Image
+              source={{ uri: userAvatarUrl }}
+              style={styles.avatarImage}
+            />
+          ) : (
+            <View style={styles.avatar}>
+              <Ionicons name="person" size={60} color="#FFF" />
+            </View>
+          )}
         </View>
         <Text style={styles.userName}>{userName || "Usuário"}</Text>
         {userEmail && <Text style={styles.userEmail}>{userEmail}</Text>}
@@ -184,6 +200,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 5,
+  },
+  avatarImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#e0e0e0',
   },
   userName: {
     fontSize: 24,
