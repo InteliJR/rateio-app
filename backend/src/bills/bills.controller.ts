@@ -55,6 +55,7 @@ export class BillsController {
     @Query('status') status?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('search') search?: string,
     @Query('sortBy') sortBy?: string,
     @Query('sortOrder') sortOrder?: string,
   ) {
@@ -70,6 +71,7 @@ export class BillsController {
       status?: BillStatus;
       startDate?: Date;
       endDate?: Date;
+      search?: string;
       sortBy?: 'createdAt' | 'totalAmount';
       sortOrder?: 'asc' | 'desc';
     } = {};
@@ -93,6 +95,10 @@ export class BillsController {
       if (!isNaN(parsedEndDate.getTime())) {
         filters.endDate = parsedEndDate;
       }
+    }
+
+    if (search) {
+      filters.search = search;
     }
 
     // Validar e aplicar ordenação

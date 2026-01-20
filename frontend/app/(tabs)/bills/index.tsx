@@ -7,17 +7,17 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
-  SafeAreaView,
   ScrollView,
   TextInput,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import billService, { UploadBillResponse } from '../../../services/bill.service';
+import billService, { UploadBillResponse, BillFilters } from '../../../services/bill.service';
 
-interface BillWithStatus extends UploadBillResponse {
-  status?: 'pending' | 'completed' | 'cancelled';
-}
+// Interface BillWithStatus removed as it conflicts with UploadBillResponse
+
 
 const DATE_FILTERS = [
   { id: 'all', label: 'Todos' },
@@ -27,91 +27,71 @@ const DATE_FILTERS = [
 
 export default function BillsScreen() {
   const router = useRouter();
-  const [allBills, setAllBills] = useState<BillWithStatus[]>([]);
-  const [displayedBills, setDisplayedBills] = useState<BillWithStatus[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [selectedDateFilter, setSelectedDateFilter] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [searchText, setSearchText] = useState<string>('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const itemsPerPage = 10;
+  
+  // Debounce search text for query
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
-  // Aplicar filtro de data
-  const applyDateFilter = useCallback((filterId: string, bills: BillWithStatus[], search: string = '') => {
-    let filtered = bills;
-
-    // Aplicar filtro de data
-    if (filterId !== 'all') {
-      const now = new Date();
-      filtered = bills.filter(bill => {
-        const billDate = new Date(bill.createdAt);
-        const daysDiff = Math.floor((now.getTime() - billDate.getTime()) / (1000 * 60 * 60 * 24));
-
-        switch (filterId) {
-          case 'week':
-            return daysDiff <= 7;
-          case 'month':
-            return daysDiff <= 30;
-          default:
-            return true;
-        }
-      });
-    }
-
-    // Aplicar filtro de busca
-    if (search.trim()) {
-      filtered = filtered.filter(bill =>
-        bill.establishmentName?.toLowerCase().includes(search.toLowerCase())
-      );
-    }
-
-    // Reseta paginação ao filtrar
-    setCurrentPage(1);
-    // Mostra todos os filtrados (sem paginação por enquanto)
-    setDisplayedBills(filtered);
-  }, []);
-
-  // Carrega contas do servidor (APENAS NA MONTAGEM)
-  const loadBills = useCallback(async () => {
-    try {
-      setLoading(true);
-      const response = await billService.listBills(1, 100); // Carrega todas de uma vez
-      setAllBills(response.data);
-    } catch (error) {
-      console.error('Erro ao carregar contas:', error);
-      setAllBills([]);
-      setDisplayedBills([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // CARREGA APENAS UMA VEZ NA MONTAGEM
   useEffect(() => {
-    loadBills();
-  }, [loadBills]);
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchText);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchText]);
 
-  // Aplicar filtros APÓS carregar (quando allBills mudar)
-  useEffect(() => {
-    if (allBills.length > 0) {
-      applyDateFilter(selectedDateFilter, allBills, searchText);
+  // Construir filtros para a query
+  const filters: BillFilters = {};
+  if (debouncedSearch) filters.search = debouncedSearch;
+  
+  if (selectedDateFilter !== 'all') {
+    const now = new Date();
+    const startDate = new Date();
+    
+    switch (selectedDateFilter) {
+      case 'week':
+        startDate.setDate(now.getDate() - 7);
+        break;
+      case 'month':
+        startDate.setDate(now.getDate() - 30);
+        break;
     }
-  }, [allBills]); // Só dispara quando allBills mudar
+    
+    filters.startDate = startDate.toISOString();
+  }
 
-  // Quando filtro ou busca mudarem, reaplica o filtro
-  useEffect(() => {
-    if (allBills.length > 0) {
-      applyDateFilter(selectedDateFilter, allBills, searchText);
-    }
-  }, [selectedDateFilter, searchText, applyDateFilter]);
+  // React Query Infinite Query
+  const {
+    data,
+    isLoading,
+    isError,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    refetch,
+    isRefetching
+  } = useInfiniteQuery({
+    queryKey: ['bills', { ...filters, dateFilter: selectedDateFilter }],
+    queryFn: ({ pageParam = 1 }) => billService.listBills(pageParam as number, 10, filters),
+    getNextPageParam: (lastPage) => {
+      if (lastPage.meta.page < lastPage.meta.totalPages) {
+        return lastPage.meta.page + 1;
+      }
+      return undefined;
+    },
+    initialPageParam: 1,
+  });
 
-  // Formatar data
-  const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('pt-BR');
-  };
+  // Atualizar dados ao focar na tela
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [refetch])
+  );
+
+  // Flatten data for FlatList
+  const allBills = data?.pages.flatMap(page => page.data) || [];
 
   // Mudar filtro
   const handleFilterChange = useCallback((filterId: string) => {
@@ -125,73 +105,29 @@ export default function BillsScreen() {
 
   // Carregar mais bills (scroll infinito)
   const handleLoadMore = useCallback(() => {
-    if (loadingMore || displayedBills.length === allBills.length) return;
-
-    setLoadingMore(true);
-    // Simula delay de carregamento
-    setTimeout(() => {
-      const nextPage = currentPage + 1;
-      const startIdx = (nextPage - 1) * itemsPerPage;
-      const endIdx = startIdx + itemsPerPage;
-      
-      let filtered = allBills;
-
-      // Aplicar filtro de data
-      if (selectedDateFilter !== 'all') {
-        const now = new Date();
-        filtered = allBills.filter(bill => {
-          const billDate = new Date(bill.createdAt);
-          const daysDiff = Math.floor((now.getTime() - billDate.getTime()) / (1000 * 60 * 60 * 24));
-
-          switch (selectedDateFilter) {
-            case 'week':
-              return daysDiff <= 7;
-            case 'month':
-              return daysDiff <= 30;
-            default:
-              return true;
-          }
-        });
-      }
-
-      // Aplicar filtro de busca
-      if (searchText.trim()) {
-        filtered = filtered.filter(bill =>
-          bill.establishmentName?.toLowerCase().includes(searchText.toLowerCase())
-        );
-      }
-
-      const newBills = filtered.slice(startIdx, endIdx);
-      setDisplayedBills(prev => [...prev, ...newBills]);
-      setCurrentPage(nextPage);
-      setLoadingMore(false);
-    }, 300);
-  }, [currentPage, displayedBills.length, allBills.length, loadingMore, selectedDateFilter, searchText, itemsPerPage]);
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // Renderizar card de conta
-  const renderBillCard = ({ item }: { item: BillWithStatus }) => (
+  const renderBillCard = ({ item }: { item: UploadBillResponse }) => (
     <TouchableOpacity
       style={styles.card}
       onPress={() => router.push(`/(tabs)/bills/${item.id}`)}
       activeOpacity={0.7}
     >
       <View style={styles.cardContent}>
-        <Text style={styles.cardTitle}>{item.establishmentName}</Text>
-        <Text style={styles.cardDate}>{formatDate(item.createdAt)}</Text>
+        <Text style={styles.cardTitle}>{item.establishmentName || 'Sem nome'}</Text>
+        <Text style={styles.cardDate}>{new Date(item.createdAt).toLocaleDateString('pt-BR')}</Text>
       </View>
     </TouchableOpacity>
   );
 
   // Pull-to-refresh
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
-    setCurrentPage(1);
-    try {
-      await loadBills();
-    } finally {
-      setRefreshing(false);
-    }
-  }, [loadBills]);
+  const handleRefresh = useCallback(() => {
+    refetch();
+  }, [refetch]);
 
   // Renderizar filtros
   const renderFilters = () => (
@@ -227,16 +163,24 @@ export default function BillsScreen() {
     </View>
   );
 
-  // Renderizar cabeçalho (será implementado em outra task)
-  const renderHeader = () => null;
-
   // Lista vazia
   const renderEmpty = () => {
-    if (loading) {
+    if (isLoading) {
       return (
         <View style={styles.emptyContainer}>
           <ActivityIndicator size="large" color="#C91F7A" />
           <Text style={styles.emptyText}>Carregando contas...</Text>
+        </View>
+      );
+    }
+
+    if (isError) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>Erro ao carregar contas.</Text>
+          <TouchableOpacity onPress={() => refetch()} style={{ marginTop: 10 }}>
+             <Text style={{ color: '#C91F7A', fontWeight: 'bold' }}>Tentar novamente</Text>
+          </TouchableOpacity>
         </View>
       );
     }
@@ -250,7 +194,7 @@ export default function BillsScreen() {
 
   // Renderizar footer com loading de paginação
   const renderFooter = () => {
-    if (!loadingMore) return null;
+    if (!isFetchingNextPage) return null;
     return (
       <View style={styles.footerLoader}>
         <ActivityIndicator size="small" color="#A01D66" />
@@ -293,17 +237,16 @@ export default function BillsScreen() {
       {showFilters && renderFilters()}
 
       <FlatList
-        data={displayedBills}
+        data={allBills}
         keyExtractor={(item) => item.id}
         renderItem={renderBillCard}
-        ListHeaderComponent={renderHeader}
         ListEmptyComponent={renderEmpty}
         ListFooterComponent={renderFooter}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
+            refreshing={isRefetching && !isFetchingNextPage}
             onRefresh={handleRefresh}
             tintColor="#8B2E8F"
           />

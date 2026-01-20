@@ -27,6 +27,7 @@ export interface BillFilters {
   status?: BillStatus;
   startDate?: Date;
   endDate?: Date;
+  search?: string;
   sortBy?: BillSortField;
   sortOrder?: SortOrder;
 }
@@ -143,7 +144,7 @@ export class BillsService {
         } catch (participantError) {
           console.error('[BillsService] Erro ao criar participantes:', participantError);
           // Se falhar ao criar participantes, deletar a bill e fee criadas
-          await this.prisma.fee.deleteMany({ where: { billId: bill.id } }).catch(() => {});
+          await this.prisma.fee.deleteMany({ where: { billId: bill.id } }).catch(() => { });
           await this.prisma.bill.delete({ where: { id: bill.id } });
           throw new BadRequestException(
             `Erro ao criar participantes: ${participantError instanceof Error ? participantError.message : 'Erro desconhecido'}`,
@@ -245,6 +246,13 @@ export class BillsService {
       if (filters.endDate) {
         where.createdAt.lte = filters.endDate;
       }
+    }
+
+    if (filters?.search) {
+      where.establishmentName = {
+        contains: filters.search,
+        mode: 'insensitive',
+      };
     }
 
     // Construir ordenação
