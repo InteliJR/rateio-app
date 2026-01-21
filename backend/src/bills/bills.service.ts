@@ -567,6 +567,15 @@ export class BillsService {
     // Gerar nova URL pré-assinada (caso a antiga tenha expirado)
     const freshUrl = bill.imageKey ? await this.storage.getSignedUrl(bill.imageKey) : null;
 
+    // Mapear itens gerais da conta
+    const billItems = bill.items.map((item) => ({
+      id: item.id,
+      name: item.name,
+      quantity: item.quantity,
+      unitPrice: Number(item.unitPrice),
+      totalPrice: Number(item.totalPrice),
+    }));
+
     return {
       bill: {
         id: bill.id,
@@ -576,6 +585,7 @@ export class BillsService {
         createdAt: bill.createdAt,
         updatedAt: bill.updatedAt,
       },
+      items: billItems,
       participants,
       summary: {
         subtotal: Math.round(subtotal * 100) / 100,

@@ -51,6 +51,51 @@ export interface UpdateBillPayload {
   items?: any[]; // Simplified for now
 }
 
+export interface BillSummaryResponse {
+  bill: {
+    id: string;
+    status: string;
+    establishmentName: string;
+    imageUrl: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+  items: Array<{
+    id: string;
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    totalPrice: number;
+  }>;
+  participants: Array<{
+    id: string;
+    name: string;
+    subtotal: number;
+    fees: number;
+    total: number;
+    items: Array<{
+      id: string;
+      name: string;
+      quantity: number;
+      unitPrice: number;
+      totalPrice: number;
+      shareAmount: number;
+    }>;
+    feeDetails: Array<{
+      id: string;
+      type: string;
+      description: string | null;
+      originalValue: number;
+      participantShare: number;
+    }>;
+  }>;
+  summary: {
+    subtotal: number;
+    totalFees: number;
+    total: number;
+  };
+}
+
 class BillService {
   /**
    * Faz upload de uma conta (imagem) para o servidor
@@ -352,10 +397,10 @@ class BillService {
    * @param billId - ID da conta
    * @returns Resumo com participantes e seus valores
    */
-  async getSummary(billId: string) {
+  async getSummary(billId: string): Promise<BillSummaryResponse> {
     try {
       const api = apiService.getApi();
-      const response = await api.get(`/bills/${billId}/summary`);
+      const response = await api.get<BillSummaryResponse>(`/bills/${billId}/summary`);
       return response.data;
     } catch (error: any) {
       console.error('[BillService] Erro ao buscar summary:', error);
