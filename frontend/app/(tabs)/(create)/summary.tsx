@@ -34,6 +34,7 @@ interface ParticipantSummary {
   }>;
   couvert: number;
   paysFee: boolean;
+  paysCouvert: boolean;
 }
 
 interface BillSummaryData {
@@ -63,6 +64,7 @@ export default function SummaryScreen() {
   const [summary, setSummary] = useState<BillSummaryData>(EMPTY_SUMMARY);
   const [expandedIndex, setExpandedIndex] = useState<number>(-1);
   const [serviceFeePercentage, setServiceFeePercentage] = useState(10); // 10% padrão
+  const [couvertPerPerson, setCouvertPerPerson] = useState(5.00); // R$ 5,00 por pessoa (padrão)
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -121,8 +123,8 @@ export default function SummaryScreen() {
           // Calcular taxa de serviço (10% do subtotal)
           const serviceFee = (subtotal * serviceFeePercentage) / 100;
 
-          // TODO: Buscar couvert do backend quando estiver implementado
-          const couvert = 0;
+          // Couvert fixo por pessoa (buscar do backend futuramente)
+          const couvert = couvertPerPerson;
 
           return {
             id: participant.id,
@@ -136,6 +138,7 @@ export default function SummaryScreen() {
             couvert,
             totalAmount: subtotal + serviceFee + couvert,
             paysFee: true, // Padrão: todos pagam taxa
+            paysCouvert: true, // Padrão: todos pagam couvert
           };
         },
       );
@@ -202,9 +205,10 @@ export default function SummaryScreen() {
         const serviceFee = p.paysFee
           ? (p.subtotal * serviceFeePercentage) / 100
           : 0;
+        const couvertAmount = p.paysCouvert ? p.couvert : 0;
         return {
           ...p,
-          totalAmount: p.subtotal + serviceFee + p.couvert,
+          totalAmount: p.subtotal + serviceFee + couvertAmount,
           fees:
             serviceFee > 0
               ? [{ name: "Taxa de Serviço", amount: serviceFee }]
@@ -217,7 +221,7 @@ export default function SummaryScreen() {
       }, 0);
 
       const couvertTotal = updatedParticipants.reduce(
-        (sum, p) => sum + p.couvert,
+        (sum, p) => sum + (p.paysCouvert ? p.couvert : 0),
         0,
       );
 
@@ -227,7 +231,44 @@ export default function SummaryScreen() {
         feesTotal: newFeesTotal,
         grandTotal: prev.itemsTotal + newFeesTotal + couvertTotal,
       };
-    };);
+    });
+  };
+
+  const toggleParticipantCouvert = (index: number) => {
+    setSummary((prev) => {
+      const newParticipants = [...prev.participants];
+      newParticipants[index] = {
+        ...newParticipants[index],
+        paysCouvert: !newParticipants[index].paysCouvert,
+      };
+
+      // Recalcular totais
+      const updatedParticipants = newParticipants.map((p) => {
+        const serviceFee = p.paysFee
+          ? (p.subtotal * serviceFeePercentage) / 100
+          : 0;
+        const couvertAmount = p.paysCouvert ? p.couvert : 0;
+        return {
+          ...p,
+          totalAmount: p.subtotal + serviceFee + couvertAmount,
+        };
+      });
+
+      const newFeesTotal = updatedParticipants.reduce((sum, p) => {
+        return sum + (p.fees?.reduce((s, f) => s + f.amount, 0) || 0);
+      }, 0);
+
+      const couvertTotal = updatedParticipants.reduce(
+        (sum, p) => sum + (p.paysCouvert ? p.couvert : 0),
+        0,
+      );
+
+      return {
+        ...prev,
+        participants: updatedParticipants,
+        grandTotal: prev.itemsTotal + newFeesTotal + couvertTotal,
+      };
+    });
   };
 
   const handleSave = () => {
@@ -328,6 +369,11 @@ export default function SummaryScreen() {
                     {/* Divider */}
                     <View style={styles.divider} />
 
+                    {/* Seção Taxas e Encargos */}
+                    <View style={styles.sectionHeader}>
+                      <Text style={styles.sectionHeaderText}>Taxas e Encargos</Text>
+                    </View>
+
                     {/* Taxa com Checkbox */}
                     <TouchableOpacity
                       style={[styles.dropdownItem, styles.dropdownFeeItem]}
@@ -358,15 +404,33 @@ export default function SummaryScreen() {
                       </Text>
                     </TouchableOpacity>
 
-                    {/* Couvert */}
-                    {participant.couvert > 0 && (
-                      <View style={styles.dropdownItem}>
-                        <Text style={styles.dropdownItemText}>Couvert</Text>
-                        <Text style={styles.dropdownItemAmount}>
-                          {formatCurrency(participant.couvert)}
-                        </Text>
+                    {/* Couvert com Checkbox */}
+                    <TouchableOpacity
+                      style={[styles.dropdownItem, styles.dropdownCouvertItem]}
+                      onPress={() => toggleParticipantCouvert(index)}
+                      activeOpacity={0.6}
+                    >
+                      <View style={styles.feeWithCheckbox}>
+                        <View
+                          style={[
+                            styles.checkbox,
+                            participant.paysCouvert && styles.checkboxActive,
+                          ]}
+                        >
+                          {participant.paysCouvert && (
+                            <MaterialCommunityIcons
+                              name="check"
+                              size={12}
+                              color="#8B2E8F"
+                            />
+                          )}
+                        </View>
+                        <Text style={styles.dropdownCouvertText}>Couvert</Text>
                       </View>
-                    )}
+                      <Text style={styles.dropdownItemAmount}>
+                        {formatCurrency(participant.paysCouvert ? participant.couvert : 0)}
+                      </Text>
+                    </TouchableOpacity>
 
                     {/* Divider */}
                     <View style={styles.divider} />
@@ -559,6 +623,11 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 8,
   },
+  dropdownCouvertItem: {
+    paddingTop: 8,
+    paddingBottom: 8,
+    backgroundColor: '#FFFBF5',
+  },
   subtotalItem: {
     backgroundColor: "#FAFAFA",
     borderTopWidth: 1,
@@ -583,6 +652,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "400",
     color: "#999",
+    fontStyle: "italic",
+  },
+  dropdownCouvertText: {
+    fontSize: 13,
+    fontWeight: "400",
+    color: "#d97706",
     fontStyle: "italic",
   },
   dropdownItemAmount: {
