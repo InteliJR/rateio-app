@@ -62,6 +62,7 @@ const EMPTY_SUMMARY: BillSummaryData = {
 export default function SummaryScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
+  const { addBill } = useBillStore();
   const [summary, setSummary] = useState<BillSummaryData>(EMPTY_SUMMARY);
   const [expandedIndex, setExpandedIndex] = useState<number>(-1);
   const [serviceFeePercentage, setServiceFeePercentage] = useState(10); // 10% padrão
@@ -533,14 +534,26 @@ export default function SummaryScreen() {
               setIsCompleted(true);
               setBillStatus('COMPLETED');
 
+              // 5.5. Atualizar estado global (Zustand) para garantir que apareça na lista
+              if (result.bill) {
+                console.log('[Summary] Adding finalized bill to global state');
+                addBill(result.bill);
+              }
+
               // 6. Mostrar sucesso e navegar
               Alert.alert(
-                'Sucesso!',
-                `Conta finalizada com sucesso!\n\nTotal Geral: ${formatCurrency(result.summary.grandTotal)}`,
+                '✅ Conta Finalizada!',
+                `${summary.establishmentName || 'Conta'} foi salva com sucesso.\n\n` +
+                `💰 Total: ${formatCurrency(result.summary.grandTotal)}\n` +
+                `👥 ${summary.participants.length} participante${summary.participants.length > 1 ? 's' : ''}\n\n` +
+                `A conta está disponível no seu histórico.`,
                 [
                   {
-                    text: 'OK',
-                    onPress: () => router.push('/(tabs)/bills'),
+                    text: 'Ver Histórico',
+                    onPress: () => {
+                      console.log('[Summary] Navigating to bills list...');
+                      router.push('/(tabs)/bills');
+                    },
                   },
                 ]
               );

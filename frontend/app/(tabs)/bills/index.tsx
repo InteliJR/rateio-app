@@ -11,9 +11,10 @@ import {
   ScrollView,
   TextInput,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import billService, { UploadBillResponse } from '../../../services/bill.service';
+import { useBillStore } from '../../../store/billStore';
 
 interface BillWithStatus extends UploadBillResponse {
   status?: 'pending' | 'completed' | 'cancelled';
@@ -27,6 +28,7 @@ const DATE_FILTERS = [
 
 export default function BillsScreen() {
   const router = useRouter();
+  const { bills: billsFromStore, setBills } = useBillStore();
   const [allBills, setAllBills] = useState<BillWithStatus[]>([]);
   const [displayedBills, setDisplayedBills] = useState<BillWithStatus[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,6 +81,8 @@ export default function BillsScreen() {
       setLoading(true);
       const response = await billService.listBills(1, 100); // Carrega todas de uma vez
       setAllBills(response.data);
+      setBills(response.data); // Atualiza store global
+      console.log('[Bills] Loaded', response.data.length, 'bills');
     } catch (error) {
       console.error('Erro ao carregar contas:', error);
       setAllBills([]);
@@ -86,12 +90,34 @@ export default function BillsScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setBills]);
 
   // CARREGA APENAS UMA VEZ NA MONTAGEM
   useEffect(() => {
     loadBills();
   }, [loadBills]);
+
+  // RECARREGA SEMPRE QUE A TELA RECEBE FOCO (após finalizar conta, etc)
+  useFocusEffect(
+    useCallback(() => {
+      console.log('[Bills] Screen focused - reloading bills');
+      loadBills();
+    }, [loadBills])
+  );
+
+  // Sincronizar com store global quando ele mudar (conta finalizada adicionada)
+  useEffect(() => {
+    if (billsFromStore.length > 0) {
+      console.log('[Bills] Store updated with', billsFromStore.length, 'bills - syncing');
+      // Mesclar com bills existentes (evitar duplicatas)
+      setAllBills(prevBills => {
+        const newBills = [...billsFromStore];
+        const existingIds = new Set(prevBills.map(b => b.id));
+        const uniqueNewBills = newBills.filter(b => !existingIds.has(b.id));
+        return [...uniqueNewBills, ...prevBills];
+      });
+    }
+  }, [billsFromStore]);
 
   // Aplicar filtros APÓS carregar (quando allBills mudar)
   useEffect(() => {
