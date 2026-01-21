@@ -295,6 +295,74 @@ class BillService {
       } as UploadBillError;
     }
   }
+
+  /**
+   * Finaliza a conta, salvando todas as divisões e taxas
+   * Muda o status para COMPLETED e bloqueia edições
+   * @param billId - ID da conta
+   * @param data - Dados de finalização (divisões e taxas)
+   * @returns Resumo da conta finalizada
+   */
+  async finalizeBill(billId: string, data: FinalizeBillPayload): Promise<FinalizeBillResponse> {
+    try {
+      console.log('[BillService] Finalizing bill:', billId, data);
+      const api = apiService.getApi();
+      const response = await api.post<FinalizeBillResponse>(
+        `/bills/${billId}/finalize`,
+        data
+      );
+      console.log('[BillService] Bill finalized successfully:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('[BillService] Error finalizing bill:', error);
+      throw {
+        message: error.response?.data?.message || "Erro ao finalizar conta",
+        statusCode: error.response?.status,
+      } as UploadBillError;
+    }
+  }
+}
+
+export interface UpdateBillPayload {
+  establishmentName?: string;
+  totalAmount?: number;
+  status?: string;
+}
+
+export interface FinalizeBillPayload {
+  divisions: Array<{
+    billItemId: string;
+    participantId: string;
+    shareAmount: number;
+  }>;
+  fees: Array<{
+    type: 'SERVICE_PERCENTAGE' | 'SERVICE_FIXED' | 'COVER_CHARGE';
+    value: number;
+    description?: string;
+  }>;
+}
+
+export interface FinalizeBillResponse {
+  bill: UploadBillResponse;
+  summary: {
+    subtotal: number;
+    totalFees: number;
+    grandTotal: number;
+  };
+  participantTotals: Record<string, {
+    subtotal: number;
+    fees: number;
+    total: number;
+  }>;
+  fees: Array<{
+    id: string;
+    billId: string;
+    type: string;
+    description?: string;
+    value: number;
+    createdAt: string;
+    updatedAt: string;
+  }>;
 }
 
 export default new BillService();

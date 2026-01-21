@@ -40,6 +40,7 @@ export default function ScannedBillScreen() {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [savingName, setSavingName] = useState(false);
+  const [isCompleted, setIsCompleted] = useState(false);
 
   useEffect(() => {
     loadBillData();
@@ -48,6 +49,14 @@ export default function ScannedBillScreen() {
   const loadBillData = async () => {
     try {
       setLoading(true);
+      
+      // Verificar status da conta
+      const billData = await billService.getBill(id as string);
+      setIsCompleted(billData.status === 'COMPLETED');
+      
+      if (billData.status === 'COMPLETED') {
+        console.log('[Scanned] Bill is completed - read-only mode');
+      }
       
       // TODO: Remover mock quando OCR estiver funcionando
       // MOCK DATA para visualizar o design
@@ -113,6 +122,15 @@ export default function ScannedBillScreen() {
   }, [participantsParam]);
 
   const toggleParticipant = (itemId: string, participant: string) => {
+    if (isCompleted) {
+      Alert.alert(
+        'Conta Finalizada',
+        'Esta conta já foi finalizada e não pode ser editada.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     setItems(prevItems =>
       prevItems.map(item => {
         if (item.id === itemId) {
@@ -171,6 +189,16 @@ export default function ScannedBillScreen() {
           contentContainerStyle={styles.scrollContent}
         >
           <View style={styles.contentContainer}>
+            {/* Banner de Conta Finalizada */}
+            {isCompleted && (
+              <View style={styles.completedBanner}>
+                <MaterialCommunityIcons name="check-circle" size={20} color="#10b981" />
+                <Text style={styles.completedBannerText}>
+                  Conta finalizada - Somente leitura
+                </Text>
+              </View>
+            )}
+
             {/* Header */}
             <View style={styles.header}>
               <View style={styles.billNameContainer}>
@@ -180,6 +208,7 @@ export default function ScannedBillScreen() {
                   onChangeText={setBillName}
                   onBlur={saveBillName}
                   placeholder="Nome da conta"
+                  editable={!isCompleted}
                 />
                 {savingName && (
                   <ActivityIndicator size="small" color="#81007F" style={styles.savingIndicator} />
@@ -249,18 +278,22 @@ export default function ScannedBillScreen() {
 
                   {/* Buttons Footer Row */}
                   <View style={styles.footerRow}>
-                    <TouchableOpacity
-                      style={styles.deleteIconButton}
-                      onPress={() => deleteItem(item.id)}
-                    >
-                      <MaterialCommunityIcons name="trash-can-outline" size={20} color="#999" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.addItemButton}
-                      onPress={() => setIsModalVisible(true)}
-                    >
-                      <Text style={styles.addItemButtonLabel}>Adicionar</Text>
-                    </TouchableOpacity>
+                    {!isCompleted && (
+                      <>
+                        <TouchableOpacity
+                          style={styles.deleteIconButton}
+                          onPress={() => deleteItem(item.id)}
+                        >
+                          <MaterialCommunityIcons name="trash-can-outline" size={20} color="#999" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.addItemButton}
+                          onPress={() => setIsModalVisible(true)}
+                        >
+                          <Text style={styles.addItemButtonLabel}>Adicionar</Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
                   </View>
                 </View>
               )}
@@ -309,6 +342,24 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     gap: 10,
     backgroundColor: '#fff',
+  },
+  completedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#d1fae5',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#10b981',
+  },
+  completedBannerText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#065f46',
   },
   header: {
     flexDirection: 'row',

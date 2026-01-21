@@ -13,11 +13,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useBillStore } from '../../../store/billStore';
 import divisionsService from "../../../services/divisions.service";
-import billService from "../../../services/bill.service";
+import billService, { FinalizeBillPayload } from "../../../services/bill.service";
 import itemsService from "../../../services/items.service";
 import participantsService, {
   Participant,
 } from "../../../services/participants.service";
+import feesService, { FeeType } from "../../../services/fees.service";
 
 interface ParticipantSummary {
   id: string;
@@ -66,6 +67,9 @@ export default function SummaryScreen() {
   const [serviceFeePercentage, setServiceFeePercentage] = useState(10); // 10% padrão
   const [couvertPerPerson, setCouvertPerPerson] = useState(5.00); // R$ 5,00 por pessoa (padrão)
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [billStatus, setBillStatus] = useState<string>('DIVIDING');
+  const [isCompleted, setIsCompleted] = useState(false);
 
   useEffect(() => {
     loadSummaryData();
@@ -85,6 +89,14 @@ export default function SummaryScreen() {
       // 1. Buscar informações da conta
       const billData = await billService.getBill(id as string);
       console.log("[Summary] Bill data:", billData);
+      
+      // Verificar status da conta
+      setBillStatus(billData.status);
+      setIsCompleted(billData.status === 'COMPLETED');
+      
+      if (billData.status === 'COMPLETED') {
+        console.log('[Summary] Bill is already completed - read-only mode');
+      }
 
       // 2. Buscar itens da conta
       const itemsData = await itemsService.getItems(id as string);
@@ -305,6 +317,15 @@ export default function SummaryScreen() {
   };
 
   const toggleParticipantFee = (index: number) => {
+    if (isCompleted) {
+      Alert.alert(
+        'Conta Finalizada',
+        'Esta conta já foi finalizada e não pode ser editada.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     setSummary((prev) => {
       const newParticipants = [...prev.participants];
       newParticipants[index] = {
@@ -356,6 +377,15 @@ export default function SummaryScreen() {
   };
 
   const toggleParticipantCouvert = (index: number) => {
+    if (isCompleted) {
+      Alert.alert(
+        'Conta Finalizada',
+        'Esta conta já foi finalizada e não pode ser editada.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     setSummary((prev) => {
       const newParticipants = [...prev.participants];
       newParticipants[index] = {
@@ -402,13 +432,132 @@ export default function SummaryScreen() {
     });
   };
 
-  const handleSave = () => {
-    Alert.alert('Sucesso', 'Conta dividida e salva!', [
-      {
-        text: 'OK',
-        onPress: () => router.push('/(tabs)/bills'),
-      },
-    ]);
+  const handleFinalize = async () => {
+    if (isCompleted) {
+      Alert.alert(
+        'Conta já finalizada',
+        'Esta conta já foi finalizada e não pode ser editada.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    if (saving) return;
+
+    // Validar que há participantes
+    if (summary.participants.length === 0) {
+      Alert.alert(
+        'Erro',
+        'É necessário ter pelo menos um participante para finalizar a conta.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    // Validar cálculos antes de finalizar
+    const isValid = validateCalculations(summary);
+    if (!isValid) {
+      Alert.alert(
+        'Erro nos Cálculos',
+        'Há inconsistências nos cálculos. Verifique os valores e tente novamente.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    // Confirmar finalização
+    Alert.alert(
+      'Finalizar Conta',
+      'Após finalizar, a conta não poderá mais ser editada. Deseja continuar?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Finalizar',
+          style: 'default',
+          onPress: async () => {
+            try {
+              setSaving(true);
+              console.log('[Summary] Starting finalization...');
+
+              // 1. Buscar todas as divisões existentes
+              const divisionsData = await divisionsService.findAllByBill(id as string);
+              console.log('[Summary] Divisions to save:', divisionsData.length);
+
+              // 2. Preparar array de taxas
+              const fees: FinalizeBillPayload['fees'] = [];
+
+              // Taxa de serviço (SERVICE_PERCENTAGE)
+              if (serviceFeePercentage > 0) {
+                fees.push({
+                  type: 'SERVICE_PERCENTAGE',
+                  value: serviceFeePercentage,
+                  description: `Taxa de Serviço (${serviceFeePercentage}%)`,
+                });
+              }
+
+              // Couvert para cada participante que paga
+              const participantsPayingCouvert = summary.participants.filter(
+                (p) => p.paysCouvert
+              );
+              if (participantsPayingCouvert.length > 0 && couvertPerPerson > 0) {
+                fees.push({
+                  type: 'COVER_CHARGE',
+                  value: couvertPerPerson * participantsPayingCouvert.length,
+                  description: `Couvert (${participantsPayingCouvert.length} pessoa${participantsPayingCouvert.length > 1 ? 's' : ''})`,
+                });
+              }
+
+              console.log('[Summary] Fees to save:', fees);
+
+              // 3. Preparar payload de finalização
+              const finalizePayload: FinalizeBillPayload = {
+                divisions: divisionsData.map((div: any) => ({
+                  billItemId: div.billItemId,
+                  participantId: div.participantId,
+                  shareAmount: Number(div.shareAmount),
+                })),
+                fees,
+              };
+
+              console.log('[Summary] Finalize payload:', finalizePayload);
+
+              // 4. Chamar endpoint de finalização
+              const result = await billService.finalizeBill(
+                id as string,
+                finalizePayload
+              );
+
+              console.log('[Summary] Finalization result:', result);
+
+              // 5. Atualizar estado local
+              setIsCompleted(true);
+              setBillStatus('COMPLETED');
+
+              // 6. Mostrar sucesso e navegar
+              Alert.alert(
+                'Sucesso!',
+                `Conta finalizada com sucesso!\n\nTotal Geral: ${formatCurrency(result.summary.grandTotal)}`,
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => router.push('/(tabs)/bills'),
+                  },
+                ]
+              );
+            } catch (error: any) {
+              console.error('[Summary] Error finalizing bill:', error);
+              Alert.alert(
+                'Erro ao Finalizar',
+                error.message || 'Não foi possível finalizar a conta. Tente novamente.',
+                [{ text: 'OK' }]
+              );
+            } finally {
+              setSaving(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -635,10 +784,28 @@ export default function SummaryScreen() {
               </View>
             )}
 
-            {/* Botão Salvar */}
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-              <Text style={styles.saveButtonText}>Salvar</Text>
-            </TouchableOpacity>
+            {/* Botão Finalizar/Salvar */}
+            {isCompleted ? (
+              <View style={[styles.saveButton, styles.completedButton]}>
+                <MaterialCommunityIcons name="check-circle" size={20} color="#FFF" />
+                <Text style={styles.saveButtonText}>Conta Finalizada</Text>
+              </View>
+            ) : (
+              <TouchableOpacity 
+                style={[styles.saveButton, saving && styles.savingButton]} 
+                onPress={handleFinalize}
+                disabled={saving}
+              >
+                {saving ? (
+                  <>
+                    <ActivityIndicator size="small" color="#FFF" />
+                    <Text style={styles.saveButtonText}>Finalizando...</Text>
+                  </>
+                ) : (
+                  <Text style={styles.saveButtonText}>Finalizar Conta</Text>
+                )}
+              </TouchableOpacity>
+            )}
           </View>
         </ScrollView>
       )}
@@ -971,6 +1138,15 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     alignItems: "center",
     justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  savingButton: {
+    backgroundColor: "#6B1E6F",
+    opacity: 0.7,
+  },
+  completedButton: {
+    backgroundColor: "#10b981",
   },
   saveButtonText: {
     fontSize: 16,
