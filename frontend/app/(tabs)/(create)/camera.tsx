@@ -225,7 +225,17 @@ export default function CameraScreen() {
         setUploadProgress((prev) => Math.min(prev + 5, 60));
       }, 300);
 
-      const uploadedBill = await billService.uploadBill(optimizedImageUri);
+      let uploadedBill;
+      
+      // Se já temos um ID (veio da tela anterior), usar endpoint específico
+      if (id && typeof id === 'string') {
+        console.log("Upload de imagem para conta existente:", id);
+        uploadedBill = await billService.uploadBillImage(id, optimizedImageUri);
+      } else {
+        // Senão, criar nova conta (comportamento antigo)
+        console.log("Criando nova conta com imagem");
+        uploadedBill = await billService.uploadBill(optimizedImageUri);
+      }
       
       clearInterval(uploadInterval);
       setUploadProgress(60);

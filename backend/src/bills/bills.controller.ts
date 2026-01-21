@@ -44,6 +44,24 @@ export class BillsController {
     return this.billsService.create(file, req.user.id, createBillDto);
   }
 
+
+
+  /**
+   * Upload de foto para conta existente + OCR
+   */
+  @Post(':id/image')
+  @UseInterceptors(FileInterceptor('image'))
+  async uploadImage(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Request() req: any,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Imagem obrigatória');
+    }
+    return this.billsService.uploadImage(id, file, req.user.id);
+  }
+
   /**
    * Listar contas do usuário com paginação, filtros e ordenação
    */

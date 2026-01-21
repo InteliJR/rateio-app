@@ -5,7 +5,7 @@ import { storageService } from "../services/storage.service";
 import { AuthState } from "../types/auth.types";
 import { authService } from "../services/auth.service";
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   accessToken: null,
   refreshToken: null,
@@ -41,19 +41,14 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const response = await authService.register({ name, email, password });
 
-      // Salvar tokens e usuário (o backend retorna tokens na resposta)
-      console.log("[AuthStore] Saving registration tokens to storage...");
-      await storageService.setItem("accessToken", response.accessToken);
-      await storageService.setItem("refreshToken", response.refreshToken);
-      console.log("[AuthStore] Registration tokens saved successfully");
+      // Note: Backend currently does not return tokens on register. User must login afterwards.
+      // console.log("[AuthStore] User registered:", response);
 
-      set({
-        user: response.user,
-        accessToken: response.accessToken,
-        refreshToken: response.refreshToken,
-        isAuthenticated: true,
-        isLoading: false,
-      });
+      // set({
+      //   user: response.user,
+      //   isAuthenticated: false, // Wait for explicit login
+      //   isLoading: false,
+      // });
       return response;
     } catch (error) {
       set({ isLoading: false });
@@ -100,9 +95,20 @@ export const useAuthStore = create<AuthState>((set) => ({
             isAuthenticated: true,
             isLoading: false,
           });
-        } catch (profileError) {
-          // Se falhar ao buscar perfil, ainda mantém os tokens (podem estar válidos)
-          console.error('[AuthStore] Failed to fetch profile, but keeping tokens:', profileError);
+        } catch (profileError: any) {
+          console.error('[AuthStore] Failed to fetch profile:', profileError);
+
+          // Se o erro for 401 (Unauthorized), significa que o token é inválido e o refresh falhou/não foi possível
+          // Neste caso, NÃO devemos restaurar os tokens antigos, pois isso sobrescreveria o logout feito pelo interceptor
+          if (profileError.response?.status === 401 || profileError.message?.includes('401')) {
+            console.log('[AuthStore] Profile fetch returned 401, clearing tokens');
+            await get().logout(); // Garante que limpamos tudo
+            return; // Interrompe aqui, mantendo estado de deslogado
+          }
+
+          // Para outros erros (ex: rede, 500), ainda podemos manter os tokens na memória
+          // pois o usuário pode estar apenas sem internet
+          console.log('[AuthStore] profile fetch failed with non-auth error, keeping local tokens');
           set({
             user: null,
             accessToken,
