@@ -144,11 +144,9 @@ export default function ScannedBillScreen() {
 
   const handleSummary = () => {
     router.push({
-      pathname: '/(tabs)/(create)/summary',
+      pathname: "/(tabs)/(create)/summary",
       params: {
-        billName: billName,
-        items: JSON.stringify(items),
-        participants: JSON.stringify(participants),
+        id: id as string, // Pass bill ID for backend data fetching
       },
     });
   };
