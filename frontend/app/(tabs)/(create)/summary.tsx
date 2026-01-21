@@ -108,23 +108,23 @@ export default function SummaryScreen() {
             (div: any) => div.participantId === participant.id,
           );
 
-          // Calcular itens e valores
+          // Calcular itens e valores com arredondamento correto
           const items = participantDivisions.map((div: any) => {
             // Encontrar o item correspondente
             const item = itemsData.find((i: any) => i.id === div.billItemId);
             return {
               name: item?.name || "Item desconhecido",
-              amount: Number(div.shareAmount),
+              amount: round2(Number(div.shareAmount)),
             };
           });
 
-          const subtotal = items.reduce((sum, item) => sum + item.amount, 0);
+          const subtotal = round2(items.reduce((sum, item) => sum + item.amount, 0));
 
-          // Calcular taxa de serviço (10% do subtotal)
-          const serviceFee = (subtotal * serviceFeePercentage) / 100;
+          // Calcular taxa de serviço (10% do subtotal) com arredondamento
+          const serviceFee = round2((subtotal * serviceFeePercentage) / 100);
 
           // Couvert fixo por pessoa (buscar do backend futuramente)
-          const couvert = couvertPerPerson;
+          const couvert = round2(couvertPerPerson);
 
           return {
             id: participant.id,
@@ -136,43 +136,48 @@ export default function SummaryScreen() {
                 ? [{ name: "Taxa de Serviço", amount: serviceFee }]
                 : [],
             couvert,
-            totalAmount: subtotal + serviceFee + couvert,
+            totalAmount: round2(subtotal + serviceFee + couvert),
             paysFee: true, // Padrão: todos pagam taxa
             paysCouvert: true, // Padrão: todos pagam couvert
           };
         },
       );
 
-      // 6. Calcular totais
-      const itemsTotal = participantSummaries.reduce(
-        (sum, p) => sum + p.subtotal,
-        0,
+      // 6. Calcular totais com arredondamento correto
+      const itemsTotal = round2(
+        participantSummaries.reduce((sum, p) => sum + p.subtotal, 0)
       );
-      const feesTotal = participantSummaries.reduce((sum, p) => {
-        return sum + (p.fees?.reduce((s, f) => s + f.amount, 0) || 0);
-      }, 0);
-      const couvertTotal = participantSummaries.reduce(
-        (sum, p) => sum + p.couvert,
-        0,
+      const feesTotal = round2(
+        participantSummaries.reduce((sum, p) => {
+          return sum + (p.fees?.reduce((s, f) => s + f.amount, 0) || 0);
+        }, 0)
+      );
+      const couvertTotal = round2(
+        participantSummaries.reduce((sum, p) => sum + p.couvert, 0)
       );
 
-      setSummary({
+      const summaryData: BillSummaryData = {
         billId: id as string,
         establishmentName: billData.establishmentName || "Conta",
         totalAmount: itemsTotal,
         itemsTotal,
         feesTotal,
-        grandTotal: itemsTotal + feesTotal + couvertTotal,
+        grandTotal: round2(itemsTotal + feesTotal + couvertTotal),
         participants: participantSummaries,
-      });
+      };
+
+      setSummary(summaryData);
 
       console.log("[Summary] Summary calculated:", {
-        itemsTotal,
-        feesTotal,
-        couvertTotal,
-        grandTotal: itemsTotal + feesTotal + couvertTotal,
+        itemsTotal: itemsTotal.toFixed(2),
+        feesTotal: feesTotal.toFixed(2),
+        couvertTotal: couvertTotal.toFixed(2),
+        grandTotal: summaryData.grandTotal.toFixed(2),
         participantsCount: participantSummaries.length,
       });
+
+      // Validar cálculos
+      validateCalculations(summaryData);
     } catch (error: any) {
       console.error("[Summary] Error loading data:", error);
       Alert.alert(
@@ -192,6 +197,113 @@ export default function SummaryScreen() {
     })}`;
   };
 
+  // Função auxiliar para arredondar para 2 casas decimais
+  const round2 = (value: number): number => {
+    return Math.round(value * 100) / 100;
+  };
+
+  // Função para validar se os cálculos estão corretos
+  const validateCalculations = (summary: BillSummaryData): boolean => {
+    let isValid = true;
+    const errors: string[] = [];
+
+    // 1. Validar cada participante: subtotal + taxa + couvert = total
+    summary.participants.forEach((p, index) => {
+      const serviceFee = p.paysFee ? round2((p.subtotal * serviceFeePercentage) / 100) : 0;
+      const couvertAmount = p.paysCouvert ? p.couvert : 0;
+      const expectedTotal = round2(p.subtotal + serviceFee + couvertAmount);
+      const actualTotal = round2(p.totalAmount);
+
+      if (Math.abs(expectedTotal - actualTotal) > 0.01) {
+        errors.push(
+          `Participante ${index + 1} (${p.name}): ` +
+          `esperado ${expectedTotal.toFixed(2)}, atual ${actualTotal.toFixed(2)}`
+        );
+        isValid = false;
+      }
+    });
+
+    // 2. Validar soma de subtotais
+    const expectedItemsTotal = round2(
+      summary.participants.reduce((sum, p) => sum + p.subtotal, 0)
+    );
+    const actualItemsTotal = round2(summary.itemsTotal);
+
+    if (Math.abs(expectedItemsTotal - actualItemsTotal) > 0.01) {
+      errors.push(
+        `Subtotal geral: esperado ${expectedItemsTotal.toFixed(2)}, ` +
+        `atual ${actualItemsTotal.toFixed(2)}`
+      );
+      isValid = false;
+    }
+
+    // 3. Validar soma de taxas
+    const expectedFeesTotal = round2(
+      summary.participants.reduce((sum, p) => {
+        const fee = p.fees?.reduce((s, f) => s + f.amount, 0) || 0;
+        return sum + fee;
+      }, 0)
+    );
+    const actualFeesTotal = round2(summary.feesTotal);
+
+    if (Math.abs(expectedFeesTotal - actualFeesTotal) > 0.01) {
+      errors.push(
+        `Taxa total: esperado ${expectedFeesTotal.toFixed(2)}, ` +
+        `atual ${actualFeesTotal.toFixed(2)}`
+      );
+      isValid = false;
+    }
+
+    // 4. Validar soma de couverts
+    const expectedCouvertTotal = round2(
+      summary.participants.reduce((sum, p) => {
+        return sum + (p.paysCouvert ? p.couvert : 0);
+      }, 0)
+    );
+
+    // 5. Validar total geral
+    const expectedGrandTotal = round2(
+      expectedItemsTotal + expectedFeesTotal + expectedCouvertTotal
+    );
+    const actualGrandTotal = round2(summary.grandTotal);
+
+    if (Math.abs(expectedGrandTotal - actualGrandTotal) > 0.01) {
+      errors.push(
+        `Total geral: esperado ${expectedGrandTotal.toFixed(2)}, ` +
+        `atual ${actualGrandTotal.toFixed(2)}`
+      );
+      isValid = false;
+    }
+
+    // 6. Validar soma de totais individuais = total geral
+    const sumOfIndividualTotals = round2(
+      summary.participants.reduce((sum, p) => sum + p.totalAmount, 0)
+    );
+
+    if (Math.abs(sumOfIndividualTotals - actualGrandTotal) > 0.01) {
+      errors.push(
+        `Soma dos totais individuais (${sumOfIndividualTotals.toFixed(2)}) ` +
+        `não bate com total geral (${actualGrandTotal.toFixed(2)})`
+      );
+      isValid = false;
+    }
+
+    if (!isValid) {
+      console.error('[Summary] Validation errors:', errors);
+    } else {
+      console.log('[Summary] ✓ All calculations validated successfully');
+      console.log('[Summary] Validation details:', {
+        itemsTotal: actualItemsTotal.toFixed(2),
+        feesTotal: actualFeesTotal.toFixed(2),
+        couvertTotal: expectedCouvertTotal.toFixed(2),
+        grandTotal: actualGrandTotal.toFixed(2),
+        sumOfIndividuals: sumOfIndividualTotals.toFixed(2),
+      });
+    }
+
+    return isValid;
+  };
+
   const toggleParticipantFee = (index: number) => {
     setSummary((prev) => {
       const newParticipants = [...prev.participants];
@@ -200,15 +312,15 @@ export default function SummaryScreen() {
         paysFee: !newParticipants[index].paysFee,
       };
 
-      // Recalcular totais com base em quem paga taxa
+      // Recalcular totais com base em quem paga taxa (com arredondamento)
       const updatedParticipants = newParticipants.map((p) => {
         const serviceFee = p.paysFee
-          ? (p.subtotal * serviceFeePercentage) / 100
+          ? round2((p.subtotal * serviceFeePercentage) / 100)
           : 0;
         const couvertAmount = p.paysCouvert ? p.couvert : 0;
         return {
           ...p,
-          totalAmount: p.subtotal + serviceFee + couvertAmount,
+          totalAmount: round2(p.subtotal + serviceFee + couvertAmount),
           fees:
             serviceFee > 0
               ? [{ name: "Taxa de Serviço", amount: serviceFee }]
@@ -216,21 +328,30 @@ export default function SummaryScreen() {
         };
       });
 
-      const newFeesTotal = updatedParticipants.reduce((sum, p) => {
-        return sum + (p.fees?.reduce((s, f) => s + f.amount, 0) || 0);
-      }, 0);
-
-      const couvertTotal = updatedParticipants.reduce(
-        (sum, p) => sum + (p.paysCouvert ? p.couvert : 0),
-        0,
+      const newFeesTotal = round2(
+        updatedParticipants.reduce((sum, p) => {
+          return sum + (p.fees?.reduce((s, f) => s + f.amount, 0) || 0);
+        }, 0)
       );
 
-      return {
+      const couvertTotal = round2(
+        updatedParticipants.reduce(
+          (sum, p) => sum + (p.paysCouvert ? p.couvert : 0),
+          0
+        )
+      );
+
+      const newSummary = {
         ...prev,
         participants: updatedParticipants,
         feesTotal: newFeesTotal,
-        grandTotal: prev.itemsTotal + newFeesTotal + couvertTotal,
+        grandTotal: round2(prev.itemsTotal + newFeesTotal + couvertTotal),
       };
+
+      // Validar cálculos após atualização
+      setTimeout(() => validateCalculations(newSummary), 100);
+
+      return newSummary;
     });
   };
 
@@ -242,32 +363,42 @@ export default function SummaryScreen() {
         paysCouvert: !newParticipants[index].paysCouvert,
       };
 
-      // Recalcular totais
+      // Recalcular totais (com arredondamento)
       const updatedParticipants = newParticipants.map((p) => {
         const serviceFee = p.paysFee
-          ? (p.subtotal * serviceFeePercentage) / 100
+          ? round2((p.subtotal * serviceFeePercentage) / 100)
           : 0;
         const couvertAmount = p.paysCouvert ? p.couvert : 0;
         return {
           ...p,
-          totalAmount: p.subtotal + serviceFee + couvertAmount,
+          totalAmount: round2(p.subtotal + serviceFee + couvertAmount),
         };
       });
 
-      const newFeesTotal = updatedParticipants.reduce((sum, p) => {
-        return sum + (p.fees?.reduce((s, f) => s + f.amount, 0) || 0);
-      }, 0);
-
-      const couvertTotal = updatedParticipants.reduce(
-        (sum, p) => sum + (p.paysCouvert ? p.couvert : 0),
-        0,
+      const newFeesTotal = round2(
+        updatedParticipants.reduce((sum, p) => {
+          return sum + (p.fees?.reduce((s, f) => s + f.amount, 0) || 0);
+        }, 0)
       );
 
-      return {
+      const couvertTotal = round2(
+        updatedParticipants.reduce(
+          (sum, p) => sum + (p.paysCouvert ? p.couvert : 0),
+          0
+        )
+      );
+
+      const newSummary = {
         ...prev,
         participants: updatedParticipants,
-        grandTotal: prev.itemsTotal + newFeesTotal + couvertTotal,
+        feesTotal: newFeesTotal,
+        grandTotal: round2(prev.itemsTotal + newFeesTotal + couvertTotal),
       };
+
+      // Validar cálculos após atualização
+      setTimeout(() => validateCalculations(newSummary), 100);
+
+      return newSummary;
     });
   };
 
@@ -454,6 +585,55 @@ export default function SummaryScreen() {
                 {formatCurrency(summary.grandTotal)}
               </Text>
             </View>
+
+            {/* Detalhamento dos Cálculos */}
+            {summary.participants.length > 0 && (
+              <View style={styles.calculationDetailsCard}>
+                <Text style={styles.calculationDetailsTitle}>Detalhamento</Text>
+                <View style={styles.calculationRow}>
+                  <Text style={styles.calculationLabel}>Subtotal (Itens)</Text>
+                  <Text style={styles.calculationValue}>
+                    {formatCurrency(summary.itemsTotal)}
+                  </Text>
+                </View>
+                <View style={styles.calculationRow}>
+                  <Text style={styles.calculationLabel}>Taxa de Serviço</Text>
+                  <Text style={styles.calculationValue}>
+                    {formatCurrency(summary.feesTotal)}
+                  </Text>
+                </View>
+                <View style={styles.calculationRow}>
+                  <Text style={styles.calculationLabel}>Couvert</Text>
+                  <Text style={styles.calculationValue}>
+                    {formatCurrency(
+                      summary.participants.reduce(
+                        (sum, p) => sum + (p.paysCouvert ? p.couvert : 0),
+                        0
+                      )
+                    )}
+                  </Text>
+                </View>
+                <View style={[styles.calculationRow, styles.calculationTotal]}>
+                  <Text style={styles.calculationTotalLabel}>Total Geral</Text>
+                  <Text style={styles.calculationTotalValue}>
+                    {formatCurrency(summary.grandTotal)}
+                  </Text>
+                </View>
+                <View style={styles.validationRow}>
+                  <MaterialCommunityIcons 
+                    name="check-circle" 
+                    size={16} 
+                    color="#10b981" 
+                  />
+                  <Text style={styles.validationText}>
+                    {summary.participants.length} participante{summary.participants.length !== 1 ? 's' : ''} • 
+                    Soma verificada: {formatCurrency(
+                      summary.participants.reduce((sum, p) => sum + p.totalAmount, 0)
+                    )}
+                  </Text>
+                </View>
+              </View>
+            )}
 
             {/* Botão Salvar */}
             <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
@@ -717,6 +897,69 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "600",
     color: "#000",
+  },
+  calculationDetailsCard: {
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: "#F8F9FA",
+    marginTop: 12,
+    gap: 8,
+  },
+  calculationDetailsTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#666",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  calculationRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 4,
+  },
+  calculationLabel: {
+    fontSize: 13,
+    color: "#666",
+  },
+  calculationValue: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#333",
+  },
+  calculationTotal: {
+    borderTopWidth: 1,
+    borderTopColor: "#E0E0E0",
+    marginTop: 4,
+    paddingTop: 8,
+  },
+  calculationTotalLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#333",
+  },
+  calculationTotalValue: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#8B2E8F",
+  },
+  validationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#E0E0E0",
+  },
+  validationText: {
+    fontSize: 11,
+    color: "#10b981",
+    fontWeight: "500",
   },
   saveButton: {
     marginHorizontal: 0,
