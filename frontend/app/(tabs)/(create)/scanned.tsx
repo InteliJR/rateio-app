@@ -40,10 +40,32 @@ export default function ScannedBillScreen() {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [savingName, setSavingName] = useState(false);
+  const [editingItemNameId, setEditingItemNameId] = useState<string | null>(null);
+  const [editingItemPriceId, setEditingItemPriceId] = useState<string | null>(null);
+  const [editingItemQtyId, setEditingItemQtyId] = useState<string | null>(null);
+  const [savingItemId, setSavingItemId] = useState<string | null>(null);
+  const [itemNames, setItemNames] = useState<Record<string, string>>({});
+  const [itemPrices, setItemPrices] = useState<Record<string, string>>({});
+  const [itemQuantities, setItemQuantities] = useState<Record<string, string>>({});
 
   useEffect(() => {
     loadBillData();
   }, [id]);
+
+  // Inicializar nomes, preços e quantidades dos itens quando items mudarem
+  useEffect(() => {
+    const names: Record<string, string> = {};
+    const prices: Record<string, string> = {};
+    const quantities: Record<string, string> = {};
+    items.forEach(item => {
+      names[item.id] = item.name;
+      prices[item.id] = item.price.toFixed(2).replace('.', ',');
+      quantities[item.id] = item.quantity.toString();
+    });
+    setItemNames(names);
+    setItemPrices(prices);
+    setItemQuantities(quantities);
+  }, [items]);
 
   const loadBillData = async () => {
     try {
@@ -129,16 +151,198 @@ export default function ScannedBillScreen() {
     );
   };
 
-  const handleAddNewItem = (newItem: Omit<BillItem, 'id' | 'assignedParticipants'>) => {
-    const newId = Date.now().toString();
-    setItems([...items, { ...newItem, id: newId, assignedParticipants: [] }]);
-    setIsModalVisible(false);
+  const handleAddNewItem = async (newItem: Omit<BillItem, 'id' | 'assignedParticipants'>) => {
+    try {
+      const createdItem = await itemsService.createItem(id as string, newItem);
+      setItems([...items, createdItem]);
+      setIsModalVisible(false);
+      // Feedback de sucesso silencioso - item aparece na lista
+    } catch (error: any) {
+      console.error('Error adding item:', error);
+      Alert.alert('Erro', error.message || 'Não foi possível adicionar o item');
+    }
   };
 
   const deleteItem = (itemId: string) => {
     setItems(items.filter(item => item.id !== itemId));
     if (expandedItemId === itemId) {
       setExpandedItemId('');
+    }
+  };
+
+  const handleItemNameChange = (itemId: string, newName: string) => {
+    setItemNames(prev => ({
+      ...prev,
+      [itemId]: newName,
+    }));
+  };
+
+  const handleItemNameBlur = async (itemId: string) => {
+    const trimmedName = itemNames[itemId]?.trim();
+    
+    // Validar que nome não está vazio
+    if (!trimmedName) {
+      // Reverter para o valor original
+      const originalItem = items.find(item => item.id === itemId);
+      if (originalItem) {
+        setItemNames(prev => ({
+          ...prev,
+          [itemId]: originalItem.name,
+        }));
+      }
+      setEditingItemNameId(null);
+      return;
+    }
+
+    // Se não mudou, apenas sair do modo de edição
+    const originalItem = items.find(item => item.id === itemId);
+    if (originalItem && trimmedName === originalItem.name) {
+      setEditingItemNameId(null);
+      return;
+    }
+
+    // Salvar no backend
+    try {
+      setSavingItemId(itemId);
+      await itemsService.updateItemName(id as string, itemId, trimmedName);
+      
+      // Atualizar estado local
+      setItems(prevItems =>
+        prevItems.map(item =>
+          item.id === itemId ? { ...item, name: trimmedName } : item
+        )
+      );
+    } catch (error: any) {
+      console.error('Error updating item name:', error);
+      Alert.alert('Erro', error.message || 'Não foi possível atualizar o nome do item');
+      
+      // Reverter para o valor original em caso de erro
+      const originalItem = items.find(item => item.id === itemId);
+      if (originalItem) {
+        setItemNames(prev => ({
+          ...prev,
+          [itemId]: originalItem.name,
+        }));
+      }
+    } finally {
+      setSavingItemId(null);
+      setEditingItemNameId(null);
+    }
+  };
+
+  const handleItemPriceChange = (itemId: string, newPrice: string) => {
+    // Permitir apenas números, vírgula e ponto
+    const cleaned = newPrice.replace(/[^0-9,.]/g, '').replace(',', '.');
+    setItemPrices(prev => ({
+      ...prev,
+      [itemId]: cleaned.replace('.', ','),
+    }));
+  };
+
+  const handleItemPriceBlur = async (itemId: string) => {
+    const priceStr = itemPrices[itemId]?.replace(',', '.') || '0';
+    const newPrice = parseFloat(priceStr);
+    const originalItem = items.find(item => item.id === itemId);
+    
+    if (!originalItem) return;
+
+    // Validar valor > 0
+    if (isNaN(newPrice) || newPrice <= 0) {
+      setItemPrices(prev => ({
+        ...prev,
+        [itemId]: originalItem.price.toFixed(2).replace('.', ','),
+      }));
+      setEditingItemPriceId(null);
+      return;
+    }
+
+    // Se não mudou, apenas sair do modo de edição
+    if (Math.abs(newPrice - originalItem.price) < 0.01) {
+      setEditingItemPriceId(null);
+      return;
+    }
+
+    // Recalcular unitPrice: unitPrice = totalPrice / quantity
+    const unitPrice = newPrice / originalItem.quantity;
+
+    // Salvar no backend
+    try {
+      setSavingItemId(itemId);
+      await itemsService.updateItemPrice(id as string, itemId, newPrice, unitPrice);
+      
+      // Atualizar estado local
+      setItems(prevItems =>
+        prevItems.map(item =>
+          item.id === itemId ? { ...item, price: newPrice } : item
+        )
+      );
+    } catch (error: any) {
+      console.error('Error updating item price:', error);
+      Alert.alert('Erro', error.message || 'Não foi possível atualizar o valor do item');
+      
+      // Reverter para o valor original em caso de erro
+      setItemPrices(prev => ({
+        ...prev,
+        [itemId]: originalItem.price.toFixed(2).replace('.', ','),
+      }));
+    } finally {
+      setSavingItemId(null);
+      setEditingItemNameId(null);
+    }
+  };
+
+  const handleItemQuantityChange = (itemId: string, newQty: string) => {
+    const cleaned = newQty.replace(/[^0-9]/g, '');
+    setItemQuantities(prev => ({
+      ...prev,
+      [itemId]: cleaned,
+    }));
+  };
+
+  const handleItemQuantityBlur = async (itemId: string) => {
+    const qtyStr = itemQuantities[itemId] || '0';
+    const newQuantity = parseInt(qtyStr, 10);
+    const originalItem = items.find(item => item.id === itemId);
+    
+    if (!originalItem) return;
+
+    if (isNaN(newQuantity) || newQuantity < 1) {
+      setItemQuantities(prev => ({
+        ...prev,
+        [itemId]: originalItem.quantity.toString(),
+      }));
+      setEditingItemQtyId(null);
+      return;
+    }
+
+    if (newQuantity === originalItem.quantity) {
+      setEditingItemQtyId(null);
+      return;
+    }
+
+    const unitPrice = originalItem.price / originalItem.quantity;
+    const totalPrice = unitPrice * newQuantity;
+
+    try {
+      setSavingItemId(itemId);
+      await itemsService.updateItemQuantity(id as string, itemId, newQuantity, totalPrice);
+      
+      setItems(prevItems =>
+        prevItems.map(item =>
+          item.id === itemId ? { ...item, quantity: newQuantity, price: totalPrice } : item
+        )
+      );
+    } catch (error: any) {
+      console.error('Error updating item quantity:', error);
+      Alert.alert('Erro', error.message || 'Não foi possível atualizar a quantidade do item');
+      
+      setItemQuantities(prev => ({
+        ...prev,
+        [itemId]: originalItem.quantity.toString(),
+      }));
+    } finally {
+      setSavingItemId(null);
+      setEditingItemQtyId(null);
     }
   };
 
@@ -198,26 +402,71 @@ export default function ScannedBillScreen() {
           {/* Lista de items */}
           {items.map((item, index) => (
             <View key={item.id} style={styles.itemCardWrapper}>
-              <TouchableOpacity
-                style={styles.itemCardMain}
-                onPress={() => setExpandedItemId(expandedItemId === item.id ? '' : item.id)}
-                activeOpacity={0.7}
-              >
+              <View style={styles.itemCardMain}>
                 <View style={styles.itemCardLeft}>
-                  <Text style={styles.itemCardName}>{item.name}</Text>
+                  <TextInput
+                    style={[
+                      styles.itemCardName,
+                      editingItemNameId === item.id && styles.itemCardNameFocused
+                    ]}
+                    value={itemNames[item.id] || item.name}
+                    onChangeText={(text) => handleItemNameChange(item.id, text)}
+                    onBlur={() => handleItemNameBlur(item.id)}
+                    onFocus={() => setEditingItemNameId(item.id)}
+                    placeholder="Nome do item"
+                    placeholderTextColor="#999"
+                    editable={true}
+                    underlineColorAndroid="transparent"
+                    selectionColor="#8B2E8F"
+                  />
+                  {savingItemId === item.id && (
+                    <ActivityIndicator size="small" color="#81007F" style={styles.savingItemIndicator} />
+                  )}
                 </View>
                 <View style={styles.itemCardRight}>
-                  <Text style={styles.itemCardQty}>{item.quantity}x</Text>
-                  <Text style={styles.itemCardAmount}>
-                    {formatCurrency(item.price)}
-                  </Text>
-                  <Ionicons
-                    name={expandedItemId === item.id ? 'chevron-up' : 'chevron-down'}
-                    size={20}
-                    color="#666"
+                  <TextInput
+                    style={[
+                      styles.itemCardQty,
+                      editingItemQtyId === item.id && styles.itemCardQtyFocused
+                    ]}
+                    value={itemQuantities[item.id] || item.quantity.toString()}
+                    onChangeText={(text) => handleItemQuantityChange(item.id, text)}
+                    onBlur={() => handleItemQuantityBlur(item.id)}
+                    onFocus={() => setEditingItemQtyId(item.id)}
+                    keyboardType="number-pad"
+                    placeholder="1"
+                    placeholderTextColor="#999"
+                    underlineColorAndroid="transparent"
+                    selectionColor="#8B2E8F"
                   />
+                  <Text style={styles.qtySuffix}>x</Text>
+                  <TextInput
+                    style={[
+                      styles.itemCardAmount,
+                      editingItemPriceId === item.id && styles.itemCardAmountFocused
+                    ]}
+                    value={itemPrices[item.id] || item.price.toFixed(2).replace('.', ',')}
+                    onChangeText={(text) => handleItemPriceChange(item.id, text)}
+                    onBlur={() => handleItemPriceBlur(item.id)}
+                    onFocus={() => setEditingItemPriceId(item.id)}
+                    keyboardType="numeric"
+                    placeholder="0,00"
+                    placeholderTextColor="#999"
+                    underlineColorAndroid="transparent"
+                    selectionColor="#8B2E8F"
+                  />
+                  <TouchableOpacity
+                    onPress={() => setExpandedItemId(expandedItemId === item.id ? '' : item.id)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name={expandedItemId === item.id ? 'chevron-up' : 'chevron-down'}
+                      size={20}
+                      color="#666"
+                    />
+                  </TouchableOpacity>
                 </View>
-              </TouchableOpacity>
+              </View>
 
               {/* Dropdown com checkboxes */}
               {expandedItemId === item.id && (
@@ -367,21 +616,80 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     backgroundColor: '#fff',
   },
-  itemCardLeft: {
-    flex: 1,
-    marginRight: 12,
-  },
-  itemCardName: {
-    fontSize: 15,
-    fontWeight: '400',
-    color: '#000',
-  },
   itemCardRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
+  itemCardLeft: {
+    flex: 1,
+    marginRight: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  itemCardName: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '400',
+    color: '#000',
+    padding: 0,
+    borderWidth: 0,
+    borderTopWidth: 0,
+    borderLeftWidth: 0,
+    borderRightWidth: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: 'transparent',
+    borderColor: 'transparent',
+    outlineWidth: 0,
+    shadowColor: '#8B2E8F',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  itemCardNameFocused: {
+    borderBottomColor: '#8B2E8F',
+    borderBottomWidth: 2,
+    borderWidth: 0,
+    borderTopWidth: 0,
+    borderLeftWidth: 0,
+    borderRightWidth: 0,
+  },
+  savingItemIndicator: {
+    marginLeft: 4,
+  },
   itemCardQty: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#000',
+    padding: 0,
+    margin: 0,
+    width: 25,
+    textAlign: 'center',
+    borderWidth: 0,
+    borderTopWidth: 0,
+    borderLeftWidth: 0,
+    borderRightWidth: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: 'transparent',
+    borderColor: 'transparent',
+    outlineWidth: 0,
+    shadowColor: '#8B2E8F',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  itemCardQtyFocused: {
+    borderBottomColor: '#8B2E8F',
+    borderBottomWidth: 2,
+    borderWidth: 0,
+    borderTopWidth: 0,
+    borderLeftWidth: 0,
+    borderRightWidth: 0,
+  },
+  qtySuffix: {
     fontSize: 14,
     fontWeight: '400',
     color: '#000',
@@ -390,8 +698,31 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#000',
-    minWidth: 75,
     textAlign: 'right',
+    padding: 0,
+    margin: 0,
+    width: 50,
+    borderWidth: 0,
+    borderTopWidth: 0,
+    borderLeftWidth: 0,
+    borderRightWidth: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: 'transparent',
+    borderColor: 'transparent',
+    outlineWidth: 0,
+    shadowColor: '#8B2E8F',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  itemCardAmountFocused: {
+    borderBottomColor: '#8B2E8F',
+    borderBottomWidth: 2,
+    borderWidth: 0,
+    borderTopWidth: 0,
+    borderLeftWidth: 0,
+    borderRightWidth: 0,
   },
   dropdownWrapper: {
     backgroundColor: '#F8F8F8',

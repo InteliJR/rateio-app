@@ -925,7 +925,11 @@ export class BillsService {
     } = {};
 
     if (updateBillItemDto.name !== undefined) {
-      updateData.name = updateBillItemDto.name;
+      const trimmedName = updateBillItemDto.name.trim();
+      if (!trimmedName) {
+        throw new BadRequestException('O nome do item não pode estar vazio');
+      }
+      updateData.name = trimmedName;
     }
 
     if (updateBillItemDto.quantity !== undefined) {

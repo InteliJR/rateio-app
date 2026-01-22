@@ -20,17 +20,15 @@ interface AddItemModalProps {
   onAdd: (item: Omit<BillItem, 'id' | 'assignedParticipants'>) => void;
 }
 
-type Step = 'selection' | 'product' | 'fee';
 
 export const AddItemModal: React.FC<AddItemModalProps> = ({ visible, onClose, onAdd }) => {
-  const [step, setStep] = useState<Step>('selection');
   const [name, setName] = useState('');
   const [quantity, setQuantity] = useState('');
   const [value, setValue] = useState('');
   const [errors, setErrors] = useState({ name: '', quantity: '', value: '' });
+  const [focusedField, setFocusedField] = useState<string | null>(null);
 
   const resetForm = () => {
-    setStep('selection');
     setName('');
     setQuantity('');
     setValue('');
@@ -80,16 +78,15 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ visible, onClose, on
     const newErrors = { name: '', quantity: '', value: '' };
     let isValid = true;
 
-    // Name is mandatory only for products, optional for fees
-    if (step === 'product' && !name.trim()) {
+    if (!name.trim()) {
       newErrors.name = 'Nome é obrigatório';
       isValid = false;
     }
 
-    if (step === 'product' && !quantity.trim()) {
+    if (!quantity.trim()) {
       newErrors.quantity = 'Quantidade é obrigatória';
       isValid = false;
-    } else if (step === 'product' && parseInt(quantity) <= 0) {
+    } else if (parseInt(quantity) <= 0) {
       newErrors.quantity = 'Quantidade deve ser maior que 0';
       isValid = false;
     }
@@ -110,97 +107,92 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ visible, onClose, on
     if (!validate()) return;
 
     const price = parseCurrency(value);
-    const qty = step === 'product' ? parseInt(quantity) : 1;
-
-    // Default name for fees if empty
-    let finalName = name.trim();
-    if (step === 'fee' && !finalName) {
-      finalName = 'Taxa/Couvert';
-    }
+    const qty = parseInt(quantity);
 
     onAdd({
-      name: finalName,
+      name: name.trim(),
       quantity: qty,
-      price: step === 'product' ? price * qty : price, // If fee, price is total value
+      price: price * qty,
     });
 
     handleClose();
   };
 
-  const renderSelection = () => (
-    <View style={styles.selectionContainer}>
-      <Text style={styles.title}>Adicionar Item</Text>
-
-      <TouchableOpacity
-        style={styles.optionButton}
-        onPress={() => setStep('product')}
-      >
-        <Ionicons name="fast-food-outline" size={24} color="#81007F" />
-        <Text style={styles.optionText}>Adicionar Produto</Text>
-        <Ionicons name="chevron-forward" size={24} color="#ccc" />
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.optionButton}
-        onPress={() => setStep('fee')}
-      >
-        <Ionicons name="receipt-outline" size={24} color="#81007F" />
-        <Text style={styles.optionText}>Adicionar Couvert/Taxa</Text>
-        <Ionicons name="chevron-forward" size={24} color="#ccc" />
-      </TouchableOpacity>
-    </View>
-  );
-
   const renderForm = () => (
     <View style={styles.formContainer}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => setStep('selection')} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
+        <TouchableOpacity onPress={handleClose} style={styles.backButton}>
+          <Ionicons name="close" size={24} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.title}>
-          {step === 'product' ? 'Novo Produto' : 'Nova Taxa'}
-        </Text>
+        <Text style={styles.title}>Novo Item</Text>
         <View style={{ width: 24 }} />
       </View>
 
       <Text style={styles.label}>Nome</Text>
       <TextInput
-        style={[styles.input, errors.name ? styles.inputError : null]}
+        style={[
+          styles.input,
+          errors.name ? styles.inputError : null,
+          focusedField === 'name' && styles.inputFocused
+        ]}
         placeholder="Ex: Coca-cola"
+        placeholderTextColor="rgba(0, 0, 0, 0.3)"
         value={name}
         onChangeText={(text) => {
           setName(text);
           if (errors.name) setErrors(prev => ({ ...prev, name: '' }));
         }}
+        onFocus={() => setFocusedField('name')}
+        onBlur={() => setFocusedField(null)}
+        editable={true}
+        underlineColorAndroid="transparent"
+        selectionColor="#8B2E8F"
+        importantForAutofill="no"
       />
       {errors.name ? <Text style={styles.errorText}>{errors.name}</Text> : null}
 
-      {step === 'product' && (
-        <>
-          <Text style={styles.label}>Quantidade</Text>
-          <TextInput
-            style={[styles.input, errors.quantity ? styles.inputError : null]}
-            placeholder="Ex: 2"
-            value={quantity}
-            onChangeText={(text) => {
-              setQuantity(text.replace(/[^0-9]/g, ''));
-              if (errors.quantity) setErrors(prev => ({ ...prev, quantity: '' }));
-            }}
-            keyboardType="numeric"
-          />
-          {errors.quantity ? <Text style={styles.errorText}>{errors.quantity}</Text> : null}
-        </>
-      )}
-
-      <Text style={styles.label}>
-        {step === 'product' ? 'Preço Unitário' : 'Valor'}
-      </Text>
+      <Text style={styles.label}>Quantidade</Text>
       <TextInput
-        style={[styles.input, errors.value ? styles.inputError : null]}
+        style={[
+          styles.input,
+          errors.quantity ? styles.inputError : null,
+          focusedField === 'quantity' && styles.inputFocused
+        ]}
+        placeholder="Ex: 2"
+        placeholderTextColor="rgba(0, 0, 0, 0.3)"
+        value={quantity}
+        onChangeText={(text) => {
+          setQuantity(text.replace(/[^0-9]/g, ''));
+          if (errors.quantity) setErrors(prev => ({ ...prev, quantity: '' }));
+        }}
+        onFocus={() => setFocusedField('quantity')}
+        onBlur={() => setFocusedField(null)}
+        keyboardType="numeric"
+        editable={true}
+        underlineColorAndroid="transparent"
+        selectionColor="#8B2E8F"
+        importantForAutofill="no"
+      />
+      {errors.quantity ? <Text style={styles.errorText}>{errors.quantity}</Text> : null}
+
+      <Text style={styles.label}>Preço Unitário</Text>
+      <TextInput
+        style={[
+          styles.input,
+          errors.value ? styles.inputError : null,
+          focusedField === 'value' && styles.inputFocused
+        ]}
         placeholder="R$ 0,00"
+        placeholderTextColor="rgba(0, 0, 0, 0.3)"
         value={value}
         onChangeText={handleValueChange}
+        onFocus={() => setFocusedField('value')}
+        onBlur={() => setFocusedField(null)}
         keyboardType="numeric"
+        editable={true}
+        underlineColorAndroid="transparent"
+        selectionColor="#8B2E8F"
+        importantForAutofill="no"
       />
       {errors.value ? <Text style={styles.errorText}>{errors.value}</Text> : null}
 
@@ -217,19 +209,18 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ visible, onClose, on
       animationType="slide"
       onRequestClose={handleClose}
     >
-      <TouchableWithoutFeedback onPress={handleClose}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              style={styles.modalContent}
-            >
-              <View style={styles.handle} />
-              {step === 'selection' ? renderSelection() : renderForm()}
-            </KeyboardAvoidingView>
-          </TouchableWithoutFeedback>
-        </View>
-      </TouchableWithoutFeedback>
+      <View style={styles.overlay}>
+        <TouchableWithoutFeedback onPress={handleClose}>
+          <View style={styles.overlayTouchable} />
+        </TouchableWithoutFeedback>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalContent}
+        >
+          <View style={styles.handle} />
+          {renderForm()}
+        </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 };
@@ -239,6 +230,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
+  },
+  overlayTouchable: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   modalContent: {
     backgroundColor: '#fff',
@@ -261,25 +259,6 @@ const styles = StyleSheet.create({
     color: '#333',
     textAlign: 'center',
     marginBottom: 24,
-  },
-  selectionContainer: {
-    gap: 16,
-  },
-  optionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#f8f8f8',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#eee',
-  },
-  optionText: {
-    flex: 1,
-    fontSize: 16,
-    color: '#333',
-    marginLeft: 12,
-    fontWeight: '500',
   },
   formContainer: {
     gap: 16,
@@ -304,6 +283,22 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     fontSize: 16,
+    backgroundColor: '#fff',
+    color: '#000',
+    outlineStyle: 'none',
+    outlineWidth: 0,
+    outlineColor: 'transparent',
+  },
+  inputFocused: {
+    borderColor: '#8B2E8F',
+    borderWidth: 1,
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    outlineStyle: 'none',
+    outlineWidth: 0,
+    outlineColor: 'transparent',
   },
   inputError: {
     borderColor: '#ff4444',

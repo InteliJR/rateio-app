@@ -1,5 +1,6 @@
 import billService from './bill.service';
 import { BillItem } from '../components/items/ItemCard';
+import { apiService } from './api.service';
 
 export interface ItemsServiceState {
   items: BillItem[];
@@ -35,27 +36,36 @@ class ItemsService {
     }
   }
 
-  async createItem(billId: string, item: Omit<BillItem, 'id' | 'assignedParticipants'>): Promise<BillItem[]> {
-    console.log('[ItemsService] createItem called for billId:', billId, 'Item:', item);
-    const currentItems = this.cache.get(billId) || await this.getItems(billId);
+  async createItem(billId: string, item: Omit<BillItem, 'id' | 'assignedParticipants'>): Promise<BillItem> {
+    const unitPrice = item.price / item.quantity;
+    const totalPrice = item.price;
 
-    // Create optimistic item
-    const newItem: BillItem = {
-      ...item,
-      id: Date.now().toString(),
-      assignedParticipants: []
-    };
-    console.log('[ItemsService] Optimistic item created:', newItem);
+    try {
+      const api = apiService.getApi();
+      const response = await api.post(`/bills/${billId}/items`, {
+        name: item.name,
+        quantity: item.quantity,
+        unitPrice,
+        totalPrice,
+      });
 
-    const newItems = [...currentItems, newItem];
-    this.cache.set(billId, newItems);
+      // Atualizar cache
+      const currentItems = this.cache.get(billId) || await this.getItems(billId);
+      const newItem: BillItem = {
+        id: response.data.id,
+        name: response.data.name,
+        quantity: response.data.quantity,
+        price: response.data.totalPrice,
+        assignedParticipants: [],
+      };
+      const updatedItems = [...currentItems, newItem];
+      this.cache.set(billId, updatedItems);
 
-    // Sync with backend
-    console.log('[ItemsService] Syncing with backend...');
-    await this.syncWithBackend(billId, newItems);
-    console.log('[ItemsService] Sync complete');
-
-    return newItems;
+      return newItem;
+    } catch (error: any) {
+      console.error('[ItemsService] Error creating item:', error);
+      throw new Error(error.response?.data?.message || error.message || 'Erro ao criar item');
+    }
   }
 
   async updateItem(billId: string, itemId: string, updates: Partial<BillItem>): Promise<BillItem[]> {
@@ -82,6 +92,117 @@ class ItemsService {
     await this.syncWithBackend(billId, newItems);
 
     return newItems;
+  }
+
+  async updateItemName(billId: string, itemId: string, name: string): Promise<BillItem> {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      throw new Error('O nome do item não pode estar vazio');
+    }
+
+    try {
+      const api = apiService.getApi();
+      const response = await api.patch(`/bills/${billId}/items/${itemId}`, {
+        name: trimmedName,
+      });
+
+      // Atualizar cache
+      const currentItems = this.cache.get(billId) || await this.getItems(billId);
+      const updatedItems = currentItems.map(item =>
+        item.id === itemId
+          ? {
+              ...item,
+              name: response.data.name,
+            }
+          : item
+      );
+      this.cache.set(billId, updatedItems);
+
+      // Retornar item atualizado no formato BillItem
+      const updatedItem = updatedItems.find(item => item.id === itemId);
+      if (!updatedItem) {
+        throw new Error('Item não encontrado após atualização');
+      }
+
+      return updatedItem;
+    } catch (error: any) {
+      console.error('[ItemsService] Error updating item name:', error);
+      throw new Error(error.response?.data?.message || error.message || 'Erro ao atualizar nome do item');
+    }
+  }
+
+  async updateItemPrice(billId: string, itemId: string, totalPrice: number, unitPrice: number): Promise<BillItem> {
+    if (totalPrice <= 0) {
+      throw new Error('O valor do item deve ser maior que zero');
+    }
+
+    try {
+      const api = apiService.getApi();
+      const response = await api.patch(`/bills/${billId}/items/${itemId}`, {
+        totalPrice,
+        unitPrice,
+      });
+
+      // Atualizar cache
+      const currentItems = this.cache.get(billId) || await this.getItems(billId);
+      const updatedItems = currentItems.map(item =>
+        item.id === itemId
+          ? {
+              ...item,
+              price: response.data.totalPrice,
+            }
+          : item
+      );
+      this.cache.set(billId, updatedItems);
+
+      const updatedItem = updatedItems.find(item => item.id === itemId);
+      if (!updatedItem) {
+        throw new Error('Item não encontrado após atualização');
+      }
+
+      return updatedItem;
+    } catch (error: any) {
+      console.error('[ItemsService] Error updating item price:', error);
+      throw new Error(error.response?.data?.message || error.message || 'Erro ao atualizar valor do item');
+    }
+  }
+
+  async updateItemQuantity(billId: string, itemId: string, quantity: number, totalPrice: number): Promise<BillItem> {
+    if (quantity < 1 || !Number.isInteger(quantity)) {
+      throw new Error('A quantidade deve ser um número inteiro maior ou igual a 1');
+    }
+
+    try {
+      const api = apiService.getApi();
+      const unitPrice = totalPrice / quantity;
+      const response = await api.patch(`/bills/${billId}/items/${itemId}`, {
+        quantity,
+        totalPrice,
+        unitPrice,
+      });
+
+      const currentItems = this.cache.get(billId) || await this.getItems(billId);
+      const updatedItems = currentItems.map(item =>
+        item.id === itemId
+          ? {
+              ...item,
+              quantity: response.data.quantity,
+              price: response.data.totalPrice,
+            }
+          : item
+      );
+      this.cache.set(billId, updatedItems);
+
+      const updatedItem = updatedItems.find(item => item.id === itemId);
+      if (!updatedItem) {
+        throw new Error('Item não encontrado após atualização');
+      }
+
+      return updatedItem;
+    } catch (error: any) {
+      console.error('[ItemsService] Error updating item quantity:', error);
+      throw new Error(error.response?.data?.message || error.message || 'Erro ao atualizar quantidade do item');
+    }
   }
 
   // Helper to sync changes via updateBill
