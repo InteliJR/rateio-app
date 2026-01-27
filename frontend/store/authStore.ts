@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { storageService } from "../services/storage.service";
 import { AuthState } from "../types/auth.types";
 import { authService } from "../services/auth.service";
+import { queryClient } from "../lib/queryClient";
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
@@ -15,6 +16,10 @@ export const useAuthStore = create<AuthState>((set) => ({
   login: async (email: string, password: string) => {
     set({ isLoading: true });
     try {
+      // Limpar cache do React Query antes de fazer login
+      // Isso garante que dados do usuário anterior não apareçam
+      queryClient.clear();
+      
       const response = await authService.login({ email, password });
 
       // Salvar tokens no storage
@@ -39,6 +44,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   register: async (name: string, email: string, password: string) => {
     set({ isLoading: true });
     try {
+      // Limpar cache do React Query antes de fazer registro
+      queryClient.clear();
+      
       const response = await authService.register({ name, email, password });
 
       // Salvar tokens e usuário (o backend retorna tokens na resposta)
@@ -63,6 +71,10 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: async () => {
     try {
+      // Limpar cache do React Query ao fazer logout
+      // Isso remove todos os dados em cache, incluindo as contas do usuário
+      queryClient.clear();
+      
       await authService.logout();
       await storageService.deleteItem("accessToken");
       await storageService.deleteItem("refreshToken");

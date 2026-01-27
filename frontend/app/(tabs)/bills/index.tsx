@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -11,7 +11,7 @@ import {
   TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import billService, { UploadBillResponse, BillFilters } from '../../../services/bill.service';
@@ -41,25 +41,34 @@ export default function BillsScreen() {
     return () => clearTimeout(timer);
   }, [searchText]);
 
-  // Construir filtros para a query
-  const filters: BillFilters = {};
-  if (debouncedSearch) filters.search = debouncedSearch;
-  
-  if (selectedDateFilter !== 'all') {
-    const now = new Date();
-    const startDate = new Date();
+  // Construir filtros para a query usando useMemo para estabilizar
+  const filters: BillFilters = useMemo(() => {
+    const result: BillFilters = {};
+    if (debouncedSearch) result.search = debouncedSearch;
     
-    switch (selectedDateFilter) {
-      case 'week':
-        startDate.setDate(now.getDate() - 7);
-        break;
-      case 'month':
-        startDate.setDate(now.getDate() - 30);
-        break;
+    if (selectedDateFilter !== 'all') {
+      const now = new Date();
+      const startDate = new Date();
+      
+      switch (selectedDateFilter) {
+        case 'week':
+          startDate.setDate(now.getDate() - 7);
+          break;
+        case 'month':
+          startDate.setDate(now.getDate() - 30);
+          break;
+      }
+      
+      result.startDate = startDate.toISOString();
     }
     
-    filters.startDate = startDate.toISOString();
-  }
+    return result;
+  }, [debouncedSearch, selectedDateFilter]);
+
+  // Estabilizar queryKey para evitar requisições desnecessárias
+  const queryKey = useMemo(() => {
+    return ['bills', debouncedSearch, selectedDateFilter];
+  }, [debouncedSearch, selectedDateFilter]);
 
   // React Query Infinite Query
   const {
@@ -72,7 +81,7 @@ export default function BillsScreen() {
     refetch,
     isRefetching
   } = useInfiniteQuery({
-    queryKey: ['bills', { ...filters, dateFilter: selectedDateFilter }],
+    queryKey,
     queryFn: ({ pageParam = 1 }) => billService.listBills(pageParam as number, 10, filters),
     getNextPageParam: (lastPage) => {
       if (lastPage.meta.page < lastPage.meta.totalPages) {
@@ -81,14 +90,8 @@ export default function BillsScreen() {
       return undefined;
     },
     initialPageParam: 1,
+    enabled: true, // Garantir que está habilitado
   });
-
-  // Atualizar dados ao focar na tela
-  useFocusEffect(
-    useCallback(() => {
-      refetch();
-    }, [refetch])
-  );
 
   // Flatten data for FlatList
   const allBills = data?.pages.flatMap(page => page.data) || [];

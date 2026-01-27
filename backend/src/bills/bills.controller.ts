@@ -14,6 +14,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { SkipThrottle } from '@nestjs/throttler';
 import { BillsService } from './bills.service';
 import { CreateBillDto } from './dto/create-bill.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
@@ -47,6 +48,7 @@ export class BillsController {
   /**
    * Listar contas do usuário com paginação, filtros e ordenação
    */
+  @SkipThrottle()
   @Get()
   findAll(
     @Request() req: any,
