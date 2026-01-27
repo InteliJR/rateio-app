@@ -165,6 +165,61 @@ export class BillsService {
   }
 
   /**
+   * Upload de imagem para conta existente + OCR
+   */
+  async uploadImage(
+    billId: string,
+    file: Express.Multer.File,
+    userId: string,
+  ) {
+    const bill = await this.prisma.bill.findFirst({
+      where: { id: billId, userId },
+    });
+
+    if (!bill) {
+      throw new NotFoundException('Conta não encontrada');
+    }
+
+    if (!file) {
+      throw new BadRequestException('Arquivo de imagem obrigatório');
+    }
+
+    // 1. Validar arquivo
+    if (!this.storage.validateFileType(file.mimetype)) {
+      throw new BadRequestException(
+        'Apenas imagens são permitidas (JPEG, PNG, WebP)',
+      );
+    }
+
+    if (!this.storage.validateFileSize(file.size)) {
+      throw new BadRequestException('Tamanho máximo: 10MB');
+    }
+
+    // 2. Upload da imagem para o S3
+    const { url, key } = await this.storage.uploadFile(file, 'bills');
+
+    // 3. Atualizar conta com imagem e status pendente
+    const updatedBill = await this.prisma.bill.update({
+      where: { id: billId },
+      data: {
+        imageUrl: url,
+        imageKey: key,
+        status: BillStatus.PENDING_OCR,
+      },
+    });
+
+    // 4. Iniciar processamento OCR assíncrono
+    this.processOcr(updatedBill.id, url).catch((error) => {
+      console.error(`❌ Erro no OCR da conta ${updatedBill.id}:`, error);
+    });
+
+    return {
+      ...updatedBill,
+      message: 'Imagem enviada. Processando OCR...',
+    };
+  }
+
+  /**
    * Processar OCR da imagem (chamado assincronamente)
    */
   private async processOcr(billId: string, imageUrl: string) {

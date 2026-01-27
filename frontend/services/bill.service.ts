@@ -167,6 +167,57 @@ class BillService {
   }
 
   /**
+   * Faz upload de uma imagem para uma conta existente
+   * @param billId - ID da conta existente
+   * @param imageUri - URI local da imagem otimizada
+   * @returns Dados da conta atualizada
+   */
+  async uploadBillImage(
+    billId: string,
+    imageUri: string
+  ): Promise<UploadBillResponse> {
+    try {
+      console.log(`[BillService] Iniciando upload de imagem para conta ${billId}...`);
+
+      if (!imageUri || imageUri.trim().length === 0) {
+        throw new Error('URI da imagem é obrigatória');
+      }
+
+      const formData = new FormData();
+      const uriParts = imageUri.split('/');
+      const filename = uriParts[uriParts.length - 1] || `bill-${Date.now()}.jpg`;
+
+      let mimeType = 'image/jpeg';
+      if (filename.toLowerCase().endsWith('.png')) mimeType = 'image/png';
+      else if (filename.toLowerCase().endsWith('.webp')) mimeType = 'image/webp';
+
+      formData.append('image', {
+        uri: imageUri,
+        name: filename,
+        type: mimeType,
+      } as any);
+
+      const api = apiService.getApi();
+      const response = await api.post<UploadBillResponse>(`/bills/${billId}/image`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        timeout: 60000,
+        transformRequest: (data) => data,
+      });
+
+      console.log('[BillService] Upload de imagem concluído:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('[BillService] Erro ao fazer upload de imagem:', error);
+      throw {
+        message: error.response?.data?.message || "Erro ao enviar imagem da conta",
+        statusCode: error.response?.status,
+      } as UploadBillError;
+    }
+  }
+
+  /**
    * Cria a configuração inicial da conta
    * @param config - Configuração inicial (participantes, nome, taxa)
    * @returns ID da conta criada
