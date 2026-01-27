@@ -37,6 +37,20 @@ export interface CreateBillSetupConfig {
   serviceFeePercentage: number;
 }
 
+export interface BillFilters {
+  status?: string;
+  startDate?: string;
+  endDate?: string;
+  search?: string;
+}
+
+export interface UpdateBillPayload {
+  status?: "PENDING_OCR" | "OCR_FAILED" | "REVIEWING" | "DIVIDING" | "COMPLETED";
+  establishmentName?: string;
+  totalAmount?: number;
+  items?: any[]; // Simplified for now
+}
+
 class BillService {
   /**
    * Faz upload de uma conta (imagem) para o servidor
@@ -65,7 +79,7 @@ class BillService {
       // Extrair nome do arquivo da URI
       const uriParts = imageUri.split('/');
       const filename = uriParts[uriParts.length - 1] || `bill-${Date.now()}.jpg`;
-      
+
       // Detectar tipo MIME correto
       let mimeType = 'image/jpeg'; // padrão
       if (filename.toLowerCase().endsWith('.png')) {
@@ -97,9 +111,9 @@ class BillService {
 
       // Fazer requisição com configurações otimizadas
       const api = apiService.getApi();
-      
+
       console.log('[BillService] Enviando requisição para /bills...');
-      
+
       const response = await api.post<UploadBillResponse>('/bills', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -208,7 +222,11 @@ class BillService {
    * @param limit - Itens por página (padrão: 10)
    * @returns Objeto com array de bills e metadados de paginação
    */
-  async listBills(page: number = 1, limit: number = 10): Promise<{
+  async listBills(
+    page: number = 1,
+    limit: number = 10,
+    filters?: BillFilters
+  ): Promise<{
     data: UploadBillResponse[];
     meta: {
       total: number;
@@ -225,6 +243,7 @@ class BillService {
           limit,
           sortBy: 'createdAt',
           sortOrder: 'desc',
+          ...filters,
         },
       });
       return response.data;

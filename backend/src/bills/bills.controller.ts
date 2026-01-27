@@ -14,6 +14,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { SkipThrottle } from '@nestjs/throttler';
 import { BillsService } from './bills.service';
 import { CreateBillDto } from './dto/create-bill.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
@@ -47,6 +48,7 @@ export class BillsController {
   /**
    * Listar contas do usuário com paginação, filtros e ordenação
    */
+  @SkipThrottle()
   @Get()
   findAll(
     @Request() req: any,
@@ -55,6 +57,7 @@ export class BillsController {
     @Query('status') status?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('search') search?: string,
     @Query('sortBy') sortBy?: string,
     @Query('sortOrder') sortOrder?: string,
   ) {
@@ -70,6 +73,7 @@ export class BillsController {
       status?: BillStatus;
       startDate?: Date;
       endDate?: Date;
+      search?: string;
       sortBy?: 'createdAt' | 'totalAmount';
       sortOrder?: 'asc' | 'desc';
     } = {};
@@ -93,6 +97,10 @@ export class BillsController {
       if (!isNaN(parsedEndDate.getTime())) {
         filters.endDate = parsedEndDate;
       }
+    }
+
+    if (search) {
+      filters.search = search;
     }
 
     // Validar e aplicar ordenação
