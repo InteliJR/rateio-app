@@ -12,39 +12,42 @@ class ItemsService {
   private cache: Map<string, BillItem[]> = new Map();
 
   async getItems(billId: string): Promise<BillItem[]> {
-    if (this.cache.has(billId)) {
-      return this.cache.get(billId)!;
-    }
+    // Sempre buscar do backend para garantir dados atualizados (especialmente após OCR)
+    // Não usar cache aqui para evitar dados desatualizados
 
     try {
       const bill = await billService.getBill(billId);
+      console.log('[ItemsService] Bill items from backend:', bill.items?.length || 0);
+
       // Backend returns items as { id, name, quantity, unitPrice, totalPrice }
       // No frontend, usamos:
       // - quantity: quantidade
       // - price: VALOR UNITÁRIO
       // O valor total do item é sempre calculado como quantity × price quando necessário.
-      const items: BillItem[] = (bill.items || []).map((item: any) => {
+      const items: BillItem[] = (bill.items || []).map((item: any, index: number) => {
         if (!item.id) {
-          console.warn('[ItemsService] Item sem ID do backend:', item);
-          throw new Error('Item sem ID retornado pelo backend');
+          console.warn('[ItemsService] Item sem ID do backend, usando index:', index);
         }
         return {
-          id: item.id, // Backend sempre retorna UUID
-          name: item.name,
-          quantity: item.quantity,
+          id: item.id || `temp-${index}`, // Prefer ID from backend, fallback to temp
+          name: item.name || `Item ${index + 1}`,
+          quantity: item.quantity || 1,
           // `price` representa o valor unitário no frontend
           price:
             typeof item.unitPrice === 'string'
               ? parseFloat(item.unitPrice)
-              : item.unitPrice,
+              : Number(item.unitPrice) || 0,
           assignedParticipants: []
         };
       });
 
+      console.log('[ItemsService] Mapped items:', items.length);
+
+      // Atualizar cache
       this.cache.set(billId, items);
       return items;
     } catch (error: any) {
-      console.error('Error fetching items:', error);
+      console.error('[ItemsService] Error fetching items:', error);
       throw new Error(error.message || 'Failed to fetch items');
     }
   }
@@ -116,12 +119,12 @@ class ItemsService {
       return newItems;
     } catch (error: any) {
       console.error('[ItemsService] Error deleting item:', error);
-      
+
       // Se o item não foi encontrado (404), limpar cache para forçar recarga
       if (error.response?.status === 404) {
         this.clearCache(billId);
       }
-      
+
       throw new Error(error.response?.data?.message || error.message || 'Erro ao deletar item');
     }
   }
@@ -143,9 +146,9 @@ class ItemsService {
       const updatedItems = currentItems.map(item =>
         item.id === itemId
           ? {
-              ...item,
-              name: response.data.name,
-            }
+            ...item,
+            name: response.data.name,
+          }
           : item
       );
       this.cache.set(billId, updatedItems);
@@ -159,12 +162,12 @@ class ItemsService {
       return updatedItem;
     } catch (error: any) {
       console.error('[ItemsService] Error updating item name:', error);
-      
+
       // Se o item não foi encontrado (404), limpar cache para forçar recarga
       if (error.response?.status === 404) {
         this.clearCache(billId);
       }
-      
+
       throw new Error(error.response?.data?.message || error.message || 'Erro ao atualizar nome do item');
     }
   }
@@ -198,14 +201,14 @@ class ItemsService {
       const updatedItems = currentItems.map((item) =>
         item.id === itemId
           ? {
-              ...item,
-              quantity: response.data.quantity,
-              // manter convenção: `price` = unitPrice no frontend
-              price:
-                typeof response.data.unitPrice === 'string'
-                  ? parseFloat(response.data.unitPrice)
-                  : response.data.unitPrice,
-            }
+            ...item,
+            quantity: response.data.quantity,
+            // manter convenção: `price` = unitPrice no frontend
+            price:
+              typeof response.data.unitPrice === 'string'
+                ? parseFloat(response.data.unitPrice)
+                : response.data.unitPrice,
+          }
           : item
       );
       this.cache.set(billId, updatedItems);
@@ -218,12 +221,12 @@ class ItemsService {
       return updatedItem;
     } catch (error: any) {
       console.error('[ItemsService] Error updating item price:', error);
-      
+
       // Se o item não foi encontrado (404), limpar cache para forçar recarga
       if (error.response?.status === 404) {
         this.clearCache(billId);
       }
-      
+
       throw new Error(error.response?.data?.message || error.message || 'Erro ao atualizar valor do item');
     }
   }
@@ -262,14 +265,14 @@ class ItemsService {
       const updatedItems = currentItems.map(item =>
         item.id === itemId
           ? {
-              ...item,
-              quantity: response.data.quantity,
-              // manter convenção: `price` = unitPrice no frontend
-              price:
-                typeof response.data.unitPrice === 'string'
-                  ? parseFloat(response.data.unitPrice)
-                  : response.data.unitPrice,
-            }
+            ...item,
+            quantity: response.data.quantity,
+            // manter convenção: `price` = unitPrice no frontend
+            price:
+              typeof response.data.unitPrice === 'string'
+                ? parseFloat(response.data.unitPrice)
+                : response.data.unitPrice,
+          }
           : item
       );
       this.cache.set(billId, updatedItems);
@@ -282,12 +285,12 @@ class ItemsService {
       return updatedItem;
     } catch (error: any) {
       console.error('[ItemsService] Error updating item quantity:', error);
-      
+
       // Se o item não foi encontrado (404), limpar cache para forçar recarga
       if (error.response?.status === 404) {
         this.clearCache(billId);
       }
-      
+
       throw new Error(error.response?.data?.message || error.message || 'Erro ao atualizar quantidade do item');
     }
   }

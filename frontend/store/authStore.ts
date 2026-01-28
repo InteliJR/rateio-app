@@ -110,22 +110,40 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         } catch (profileError: any) {
           console.error('[AuthStore] Failed to fetch profile:', profileError);
 
-          // Se o erro for 401 (Unauthorized), significa que o token é inválido e o refresh falhou/não foi possível
-          // Neste caso, NÃO devemos restaurar os tokens antigos, pois isso sobrescreveria o logout feito pelo interceptor
+          // Se o erro for 401 (Unauthorized), significa que o token é inválido
           if (profileError.response?.status === 401 || profileError.message?.includes('401')) {
             console.log('[AuthStore] Profile fetch returned 401, clearing tokens');
             await get().logout(); // Garante que limpamos tudo
             return; // Interrompe aqui, mantendo estado de deslogado
           }
 
-          // Para outros erros (ex: rede, 500), ainda podemos manter os tokens na memória
-          // pois o usuário pode estar apenas sem internet
-          console.log('[AuthStore] profile fetch failed with non-auth error, keeping local tokens');
+          // Para erros de rede (sem resposta do servidor), manter tokens mas não autenticar
+          // Isso evita problemas quando o servidor está temporariamente indisponível
+          const isNetworkError = !profileError.response || 
+                                 profileError.code === 'ECONNABORTED' ||
+                                 profileError.message?.includes('Network') ||
+                                 profileError.message?.includes('timeout');
+
+          if (isNetworkError) {
+            console.log('[AuthStore] Network error while fetching profile, keeping tokens but not authenticating');
+            set({
+              user: null,
+              accessToken,
+              refreshToken,
+              isAuthenticated: false, // Não autenticar se não conseguir validar
+              isLoading: false,
+            });
+            return;
+          }
+
+          // Para outros erros (ex: 500), tentar novamente após um delay
+          // ou manter tokens mas não autenticar
+          console.log('[AuthStore] Profile fetch failed with server error, keeping tokens but not authenticating');
           set({
             user: null,
             accessToken,
             refreshToken,
-            isAuthenticated: true,
+            isAuthenticated: false, // Não autenticar se não conseguir validar
             isLoading: false,
           });
         }

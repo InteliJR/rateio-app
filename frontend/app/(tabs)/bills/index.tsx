@@ -16,9 +16,6 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import billService, { UploadBillResponse, BillFilters } from '../../../services/bill.service';
 
-// Interface BillWithStatus removed as it conflicts with UploadBillResponse
-
-
 const DATE_FILTERS = [
   { id: 'all', label: 'Todos' },
   { id: 'week', label: 'Última semana' },

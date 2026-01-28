@@ -261,9 +261,21 @@ class BillService {
       console.log('[BillService] Upload de imagem concluído:', response);
       return response;
     } catch (error: any) {
-      console.error('[BillService] Erro ao fazer upload de imagem:', error);
+      console.error('[BillService] Erro ao fazer upload de imagem após todas as tentativas:', error);
+
+      // Mensagens de erro mais específicas
+      let errorMessage = "Erro ao enviar imagem da conta";
+
+      if (error.message?.includes('Network') || !error.response) {
+        errorMessage = "Erro de conexão. Verifique sua internet e tente novamente.";
+      } else if (error.code === 'ECONNABORTED') {
+        errorMessage = "Tempo limite excedido. Verifique sua conexão e tente novamente.";
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+
       throw {
-        message: error.response?.data?.message || "Erro ao enviar imagem da conta",
+        message: errorMessage,
         statusCode: error.response?.status,
       } as UploadBillError;
     }
@@ -417,6 +429,83 @@ class BillService {
       } as UploadBillError;
     }
   }
+
+  /**
+   * Finaliza a conta, salvando todas as divisões e taxas
+   * Muda o status para COMPLETED e bloqueia edições
+   * @param billId - ID da conta
+   * @param data - Dados de finalização (divisões e taxas)
+   * @returns Resumo da conta finalizada
+   */
+  async finalizeBill(billId: string, data: FinalizeBillPayload): Promise<FinalizeBillResponse> {
+    try {
+      console.log('[BillService] Finalizing bill:', billId, data);
+      const api = apiService.getApi();
+      const response = await api.post<FinalizeBillResponse>(
+        `/bills/${billId}/finalize`,
+        data
+      );
+      console.log('[BillService] Bill finalized successfully:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('[BillService] Error finalizing bill:', error);
+
+      // Tratar mensagem de erro que pode ser string ou array
+      let errorMessage = "Erro ao finalizar conta";
+
+      if (error.response?.data?.message) {
+        if (typeof error.response.data.message === 'string') {
+          errorMessage = error.response.data.message;
+        } else if (Array.isArray(error.response.data.message)) {
+          // Se for array, juntar todas as mensagens
+          errorMessage = error.response.data.message.join('\n');
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      throw {
+        message: errorMessage,
+        statusCode: error.response?.status,
+      } as UploadBillError;
+    }
+  }
+}
+
+export interface FinalizeBillPayload {
+  divisions: Array<{
+    billItemId: string;
+    participantId: string;
+    shareAmount: number;
+  }>;
+  fees: Array<{
+    type: 'SERVICE_PERCENTAGE' | 'SERVICE_FIXED' | 'COVER_CHARGE';
+    value: number;
+    description?: string;
+  }>;
+}
+
+export interface FinalizeBillResponse {
+  bill: UploadBillResponse;
+  summary: {
+    subtotal: number;
+    totalFees: number;
+    grandTotal: number;
+  };
+  participantTotals: Record<string, {
+    subtotal: number;
+    fees: number;
+    total: number;
+  }>;
+  fees: Array<{
+    id: string;
+    billId: string;
+    type: string;
+    description?: string;
+    value: number;
+    createdAt: string;
+    updatedAt: string;
+  }>;
 }
 
 export default new BillService();

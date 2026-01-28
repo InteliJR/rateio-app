@@ -245,15 +245,66 @@ export default function CameraScreen() {
       setUploadStage("processing");
       setUploadProgress(70);
       
-      // Simular progresso do OCR
-      const processingInterval = setInterval(() => {
-        setUploadProgress((prev) => Math.min(prev + 5, 95));
-      }, 400);
-
-      // Aguardar um pouco para dar tempo do OCR processar
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Aguardar OCR terminar de processar (polling)
+      let ocrCompleted = false;
+      let pollAttempts = 0;
+      const maxPollAttempts = 40; // Máximo 2 minutos (40 * 3s)
       
-      clearInterval(processingInterval);
+      const checkOcrStatus = async () => {
+        try {
+          const billData = await billService.getBill(uploadedBill.id);
+          console.log('[Camera] OCR Status check:', billData.status, 'Attempt:', pollAttempts);
+          
+          if (billData.status === 'REVIEWING' || billData.status === 'DIVIDING') {
+            // OCR terminou com sucesso
+            ocrCompleted = true;
+            setUploadProgress(100);
+            console.log('[Camera] OCR completed successfully');
+          } else if (billData.status === 'OCR_FAILED') {
+            // OCR falhou, mas ainda assim navegar
+            ocrCompleted = true;
+            setUploadProgress(100);
+            console.log('[Camera] OCR failed, but navigating anyway');
+          } else if (billData.status === 'PENDING_OCR') {
+            // Ainda processando
+            pollAttempts++;
+            if (pollAttempts >= maxPollAttempts) {
+              // Timeout - navegar mesmo assim
+              ocrCompleted = true;
+              setUploadProgress(95);
+              console.log('[Camera] OCR timeout, navigating anyway');
+            } else {
+              // Continuar polling
+              setUploadProgress(Math.min(70 + (pollAttempts * 0.5), 95));
+            }
+          }
+        } catch (error) {
+          console.error('[Camera] Error checking OCR status:', error);
+          pollAttempts++;
+          if (pollAttempts >= maxPollAttempts) {
+            ocrCompleted = true;
+          }
+        }
+      };
+      
+      // Primeira verificação imediata
+      await checkOcrStatus();
+      
+      // Polling a cada 3 segundos até OCR terminar ou timeout
+      const pollInterval = setInterval(async () => {
+        if (ocrCompleted) {
+          clearInterval(pollInterval);
+          return;
+        }
+        await checkOcrStatus();
+      }, 3000);
+      
+      // Aguardar OCR terminar ou timeout
+      while (!ocrCompleted && pollAttempts < maxPollAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+      
+      clearInterval(pollInterval);
       setUploadProgress(100);
 
       // Sucesso - navegar para tela de itens escaneados

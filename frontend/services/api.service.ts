@@ -83,17 +83,48 @@ class ApiService {
         if (error.response?.status === 401 && !originalRequest._retry) {
           // Se a requisição falhou no endpoint de refresh, fazer logout direto
           if (originalRequest.url?.includes("/auth/refresh")) {
+            console.log("[API] Refresh token endpoint failed, logging out");
             await this.handleLogout();
             return Promise.reject(error);
           }
 
+          // Evitar múltiplas tentativas simultâneas de refresh
+          if ((this as any)._isRefreshing) {
+            console.log("[API] Token refresh already in progress, waiting...");
+            // Aguardar o refresh atual terminar
+            return new Promise(async (resolve, reject) => {
+              const maxWait = 5000; // 5 segundos máximo
+              const startTime = Date.now();
+              const checkRefresh = setInterval(async () => {
+                if (!(this as any)._isRefreshing) {
+                  clearInterval(checkRefresh);
+                  // Retentar com novo token
+                  const newToken = await storageService.getItem("accessToken");
+                  if (newToken) {
+                    originalRequest.headers.Authorization = `Bearer ${newToken}`;
+                    resolve(this.api(originalRequest));
+                  } else {
+                    clearInterval(checkRefresh);
+                    reject(error);
+                  }
+                } else if (Date.now() - startTime > maxWait) {
+                  clearInterval(checkRefresh);
+                  reject(new Error("Token refresh timeout"));
+                }
+              }, 100);
+            });
+          }
+
           originalRequest._retry = true;
+          (this as any)._isRefreshing = true;
 
           try {
             const refreshToken = await storageService.getItem("refreshToken");
 
             if (!refreshToken) {
+              console.log("[API] No refresh token found, logging out");
               await this.handleLogout();
+              (this as any)._isRefreshing = false;
               return Promise.reject(error);
             }
 
@@ -115,6 +146,9 @@ class ApiService {
 
             console.log("[API] Token refreshed successfully");
 
+            // Marcar refresh como completo
+            (this as any)._isRefreshing = false;
+
             // Atualizar header da requisição original
             originalRequest.headers.Authorization = `Bearer ${accessToken}`;
 
@@ -122,6 +156,7 @@ class ApiService {
             return this.api(originalRequest);
           } catch (refreshError) {
             console.error("[API] Token refresh failed:", refreshError);
+            (this as any)._isRefreshing = false;
             await this.handleLogout();
             return Promise.reject(refreshError);
           }

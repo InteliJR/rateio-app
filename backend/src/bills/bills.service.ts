@@ -769,10 +769,20 @@ export class BillsService {
       0,
     );
 
-    // Persistir divisões
+    // Persistir divisões (usar upsert para evitar duplicatas)
+    // As divisões já podem ter sido criadas na tela de divisão
     for (const division of finalizeBillDto.divisions) {
-      await this.prisma.division.create({
-        data: {
+      await this.prisma.division.upsert({
+        where: {
+          billItemId_participantId: {
+            billItemId: division.billItemId,
+            participantId: division.participantId,
+          },
+        },
+        update: {
+          shareAmount: division.shareAmount,
+        },
+        create: {
           billItemId: division.billItemId,
           participantId: division.participantId,
           shareAmount: division.shareAmount,
@@ -781,6 +791,11 @@ export class BillsService {
     }
 
     // Persistir taxas e calcular valor total das taxas
+    // Deletar taxas existentes antes de criar novas (para evitar duplicatas)
+    await this.prisma.fee.deleteMany({
+      where: { billId: id },
+    });
+
     let totalFees = 0;
     const persistedFees: Awaited<ReturnType<typeof this.prisma.fee.create>>[] =
       [];
