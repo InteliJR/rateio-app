@@ -106,13 +106,14 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ visible, onClose, on
   const handleAdd = () => {
     if (!validate()) return;
 
-    const price = parseCurrency(value);
+    const unitPrice = parseCurrency(value);
     const qty = parseInt(quantity);
 
+    // No frontend, `price` representa o VALOR UNITÁRIO
     onAdd({
       name: name.trim(),
       quantity: qty,
-      price: price * qty,
+      price: unitPrice,
     });
 
     handleClose();

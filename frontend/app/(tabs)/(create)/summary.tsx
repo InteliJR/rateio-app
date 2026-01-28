@@ -36,65 +36,18 @@ interface BillSummaryData {
   participants: ParticipantSummary[];
 }
 
-// Dados mockados baseado na estrutura de scanned.tsx
-const MOCK_SUMMARY: BillSummaryData = {
-  billId: '1',
-  establishmentName: 'Conta 1',
-  totalAmount: 184,
-  itemsTotal: 184,
-  feesTotal: 4.62,
-  grandTotal: 188.62,
-  participants: [
-    {
-      name: 'Nome e Sobrenome 1',
-      totalAmount: 46.25,
-      items: [
-        { name: 'Suco de Laranja', amount: 12 },
-        { name: 'Batata Frita', amount: 21.25 },
-        { name: 'Sorvete', amount: 12 },
-      ],
-      fees: [{ name: 'Taxa de Serviço', amount: 4.62 }],
-      paysFee: true,
-    },
-    {
-      name: 'Nome e Sobrenome 2',
-      totalAmount: 50.00,
-      items: [
-        { name: 'Suco de Laranja', amount: 12 },
-        { name: 'Batata Frita', amount: 21.25 },
-        { name: 'Cerveja', amount: 7.50 },
-      ],
-      fees: [{ name: 'Taxa de Serviço', amount: 0 }],
-      paysFee: false,
-    },
-    {
-      name: 'Nome e Sobrenome 3',
-      totalAmount: 48.00,
-      items: [
-        { name: 'Suco de Laranja', amount: 12 },
-        { name: 'Batata Frita', amount: 21.25 },
-        { name: 'Sorvete', amount: 12 },
-      ],
-      fees: [{ name: 'Taxa de Serviço', amount: 4.62 }],
-      paysFee: true,
-    },
-    {
-      name: 'Nome e Sobrenome 4',
-      totalAmount: 20.00,
-      items: [
-        { name: 'Batata Frita', amount: 21.25 },
-        { name: 'Cerveja', amount: 7.50 },
-      ],
-      fees: [{ name: 'Taxa de Serviço', amount: 4.62 }],
-      paysFee: true,
-    },
-  ],
-};
-
 export default function SummaryScreen() {
   const router = useRouter();
   const { billName, items: itemsParam, participants: participantsParam } = useLocalSearchParams();
-  const [summary, setSummary] = useState<BillSummaryData>(MOCK_SUMMARY);
+  const [summary, setSummary] = useState<BillSummaryData>({
+    billId: '',
+    establishmentName: '',
+    totalAmount: 0,
+    itemsTotal: 0,
+    feesTotal: 0,
+    grandTotal: 0,
+    participants: [],
+  });
   const [expandedIndex, setExpandedIndex] = useState<number>(-1);
   const [serviceFeePercentage, setServiceFeePercentage] = useState(10); // 10% padrão
 
@@ -122,9 +75,12 @@ export default function SummaryScreen() {
         });
 
         // Somar itens por participante
+        // No frontend, `item.price` agora é o VALOR UNITÁRIO.
+        // O valor total do item = quantity × price.
         items.forEach((item: any) => {
           if (item.assignedParticipants && item.assignedParticipants.length > 0) {
-            const sharePerPerson = item.price / item.assignedParticipants.length;
+            const totalItemAmount = (item.price || 0) * (item.quantity || 1);
+            const sharePerPerson = totalItemAmount / item.assignedParticipants.length;
             item.assignedParticipants.forEach((personName: string) => {
               if (participantTotals[personName]) {
                 participantTotals[personName].itemsTotal += sharePerPerson;
@@ -281,7 +237,13 @@ export default function SummaryScreen() {
                   {/* Itens */}
                   {participant.items.map((item, itemIdx) => (
                     <View key={`item-${itemIdx}`} style={styles.dropdownItem}>
-                      <Text style={styles.dropdownItemText}>{item.name}</Text>
+                      <Text 
+                        style={styles.dropdownItemText}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
+                        {item.name}
+                      </Text>
                       <Text style={styles.dropdownItemAmount}>
                         {formatCurrency(item.amount)}
                       </Text>
@@ -461,6 +423,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F8F8',
     borderBottomWidth: 1,
     borderBottomColor: '#E8E8E8',
+    minHeight: 44,
   },
   dropdownFeeItem: {
     paddingTop: 8,
@@ -477,6 +440,8 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: '#666',
     flex: 1,
+    flexShrink: 1,
+    marginRight: 8,
   },
   dropdownFeeText: {
     fontSize: 13,
@@ -490,6 +455,7 @@ const styles = StyleSheet.create({
     color: '#8B2E8F',
     minWidth: 70,
     textAlign: 'right',
+    flexShrink: 0,
   },
   totalCardWrapper: {
     borderWidth: 1,

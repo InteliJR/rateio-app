@@ -18,15 +18,28 @@ class ItemsService {
 
     try {
       const bill = await billService.getBill(billId);
-      // Backend returns items as { name, quantity, unitPrice, totalPrice }
-      // We map to BillItem: { id, name, quantity, price (total), assignedParticipants }
-      const items: BillItem[] = (bill.items || []).map((item: any, index: number) => ({
-        id: item.id || index.toString(), // Prefer ID from backend if available
-        name: item.name,
-        quantity: item.quantity,
-        price: item.totalPrice,
-        assignedParticipants: []
-      }));
+      // Backend returns items as { id, name, quantity, unitPrice, totalPrice }
+      // No frontend, usamos:
+      // - quantity: quantidade
+      // - price: VALOR UNITÁRIO
+      // O valor total do item é sempre calculado como quantity × price quando necessário.
+      const items: BillItem[] = (bill.items || []).map((item: any) => {
+        if (!item.id) {
+          console.warn('[ItemsService] Item sem ID do backend:', item);
+          throw new Error('Item sem ID retornado pelo backend');
+        }
+        return {
+          id: item.id, // Backend sempre retorna UUID
+          name: item.name,
+          quantity: item.quantity,
+          // `price` representa o valor unitário no frontend
+          price:
+            typeof item.unitPrice === 'string'
+              ? parseFloat(item.unitPrice)
+              : item.unitPrice,
+          assignedParticipants: []
+        };
+      });
 
       this.cache.set(billId, items);
       return items;
@@ -36,9 +49,13 @@ class ItemsService {
     }
   }
 
-  async createItem(billId: string, item: Omit<BillItem, 'id' | 'assignedParticipants'>): Promise<BillItem> {
-    const unitPrice = item.price / item.quantity;
-    const totalPrice = item.price;
+  async createItem(
+    billId: string,
+    item: Omit<BillItem, 'id' | 'assignedParticipants'>
+  ): Promise<BillItem> {
+    // Aqui `item.price` já é o VALOR UNITÁRIO vindo do frontend
+    const unitPrice = item.price;
+    const totalPrice = item.price * item.quantity;
 
     try {
       const api = apiService.getApi();
@@ -55,7 +72,11 @@ class ItemsService {
         id: response.data.id,
         name: response.data.name,
         quantity: response.data.quantity,
-        price: response.data.totalPrice,
+        // No frontend `price` é sempre o valor unitário
+        price:
+          typeof response.data.unitPrice === 'string'
+            ? parseFloat(response.data.unitPrice)
+            : response.data.unitPrice,
         assignedParticipants: [],
       };
       const updatedItems = [...currentItems, newItem];
@@ -127,29 +148,52 @@ class ItemsService {
       return updatedItem;
     } catch (error: any) {
       console.error('[ItemsService] Error updating item name:', error);
+      
+      // Se o item não foi encontrado (404), limpar cache para forçar recarga
+      if (error.response?.status === 404) {
+        this.clearCache(billId);
+      }
+      
       throw new Error(error.response?.data?.message || error.message || 'Erro ao atualizar nome do item');
     }
   }
 
-  async updateItemPrice(billId: string, itemId: string, totalPrice: number, unitPrice: number): Promise<BillItem> {
-    if (totalPrice <= 0) {
-      throw new Error('O valor do item deve ser maior que zero');
+  /**
+   * Atualiza o PREÇO UNITÁRIO de um item.
+   * O total é sempre derivado como quantity × unitPrice.
+   */
+  async updateItemPrice(
+    billId: string,
+    itemId: string,
+    unitPrice: number
+  ): Promise<BillItem> {
+    if (unitPrice <= 0) {
+      throw new Error('O valor unitário do item deve ser maior que zero');
     }
 
     try {
       const api = apiService.getApi();
+      const currentItems = this.cache.get(billId) || (await this.getItems(billId));
+      const existing = currentItems.find((item) => item.id === itemId);
+      const quantity = existing?.quantity ?? 1;
+      const totalPrice = unitPrice * quantity;
+
       const response = await api.patch(`/bills/${billId}/items/${itemId}`, {
-        totalPrice,
         unitPrice,
+        totalPrice,
       });
 
-      // Atualizar cache
-      const currentItems = this.cache.get(billId) || await this.getItems(billId);
-      const updatedItems = currentItems.map(item =>
+      // Atualizar cache com quantity + unitPrice vindos do backend
+      const updatedItems = currentItems.map((item) =>
         item.id === itemId
           ? {
               ...item,
-              price: response.data.totalPrice,
+              quantity: response.data.quantity,
+              // manter convenção: `price` = unitPrice no frontend
+              price:
+                typeof response.data.unitPrice === 'string'
+                  ? parseFloat(response.data.unitPrice)
+                  : response.data.unitPrice,
             }
           : item
       );
@@ -163,31 +207,57 @@ class ItemsService {
       return updatedItem;
     } catch (error: any) {
       console.error('[ItemsService] Error updating item price:', error);
+      
+      // Se o item não foi encontrado (404), limpar cache para forçar recarga
+      if (error.response?.status === 404) {
+        this.clearCache(billId);
+      }
+      
       throw new Error(error.response?.data?.message || error.message || 'Erro ao atualizar valor do item');
     }
   }
 
-  async updateItemQuantity(billId: string, itemId: string, quantity: number, totalPrice: number): Promise<BillItem> {
+  /**
+   * Atualiza apenas a QUANTIDADE de um item.
+   * O valor unitário é mantido e o total é recalculado como quantity × unitPrice.
+   */
+  async updateItemQuantity(
+    billId: string,
+    itemId: string,
+    quantity: number
+  ): Promise<BillItem> {
     if (quantity < 1 || !Number.isInteger(quantity)) {
       throw new Error('A quantidade deve ser um número inteiro maior ou igual a 1');
     }
 
     try {
       const api = apiService.getApi();
-      const unitPrice = totalPrice / quantity;
+      const currentItems = this.cache.get(billId) || (await this.getItems(billId));
+      const existing = currentItems.find((item) => item.id === itemId);
+      if (!existing) {
+        throw new Error('Item não encontrado para atualização de quantidade');
+      }
+
+      // `existing.price` no frontend é sempre o valor unitário
+      const unitPrice = existing.price;
+      const totalPrice = unitPrice * quantity;
+
       const response = await api.patch(`/bills/${billId}/items/${itemId}`, {
         quantity,
         totalPrice,
         unitPrice,
       });
 
-      const currentItems = this.cache.get(billId) || await this.getItems(billId);
       const updatedItems = currentItems.map(item =>
         item.id === itemId
           ? {
               ...item,
               quantity: response.data.quantity,
-              price: response.data.totalPrice,
+              // manter convenção: `price` = unitPrice no frontend
+              price:
+                typeof response.data.unitPrice === 'string'
+                  ? parseFloat(response.data.unitPrice)
+                  : response.data.unitPrice,
             }
           : item
       );
@@ -201,19 +271,32 @@ class ItemsService {
       return updatedItem;
     } catch (error: any) {
       console.error('[ItemsService] Error updating item quantity:', error);
+      
+      // Se o item não foi encontrado (404), limpar cache para forçar recarga
+      if (error.response?.status === 404) {
+        this.clearCache(billId);
+      }
+      
       throw new Error(error.response?.data?.message || error.message || 'Erro ao atualizar quantidade do item');
     }
   }
 
   // Helper to sync changes via updateBill
   private async syncWithBackend(billId: string, items: BillItem[]) {
-    // Convert back to backend format: { name, quantity, unitPrice, totalPrice }
-    const payloadItems = items.map(item => ({
-      name: item.name,
-      quantity: item.quantity,
-      unitPrice: Number((item.price / item.quantity).toFixed(2)),
-      totalPrice: item.price
-    }));
+    // Converter de volta para o formato do backend: { name, quantity, unitPrice, totalPrice }
+    // No frontend:
+    // - quantity: quantidade
+    // - price: valor unitário
+    const payloadItems = items.map(item => {
+      const unitPrice = item.price;
+      const totalPrice = Number((unitPrice * item.quantity).toFixed(2));
+      return {
+        name: item.name,
+        quantity: item.quantity,
+        unitPrice,
+        totalPrice,
+      };
+    });
 
     console.log('[ItemsService] Sending payload to updateBill:', JSON.stringify(payloadItems, null, 2));
 
