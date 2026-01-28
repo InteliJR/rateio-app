@@ -5,25 +5,47 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Image,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { userService } from "../../services/user.service";
+import { API_URL } from "../../services/api.service";
 
 export default function ConfigScreen() {
   const router = useRouter();
   const [userName, setUserName] = React.useState("");
+  const [avatarUrl, setAvatarUrl] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    loadUserName();
+    loadUserData();
   }, []);
 
-  const loadUserName = async () => {
+  const buildAvatarUrl = (rawUrl: string | null | undefined): string | null => {
+    if (!rawUrl) return null;
+
+    if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
+      return rawUrl;
+    }
+
+    return `${API_URL}${rawUrl}`;
+  };
+
+  const loadUserData = async () => {
     try {
-      const name = await AsyncStorage.getItem("userName");
-      if (name) setUserName(name);
+      const profile = await userService.getProfile();
+      setUserName(profile.name);
+      setAvatarUrl(buildAvatarUrl(profile.avatarUrl));
+      await AsyncStorage.setItem("userName", profile.name);
     } catch (error) {
-      console.error("Erro ao carregar nome:", error);
+      console.error("Erro ao carregar dados do usuário:", error);
+      try {
+        const name = await AsyncStorage.getItem("userName");
+        if (name) setUserName(name);
+      } catch (storageError) {
+        console.error("Erro ao carregar nome do AsyncStorage:", storageError);
+      }
     }
   };
 
@@ -52,9 +74,13 @@ export default function ConfigScreen() {
         {/* Profile Section */}
         <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
-            <View style={styles.avatar}>
-              <Ionicons name="person" size={60} color="#FFF" />
-            </View>
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+            ) : (
+              <View style={styles.avatar}>
+                <Ionicons name="person" size={60} color="#FFF" />
+              </View>
+            )}
           </View>
           <Text style={styles.userName}>{userName || "Usuário"}</Text>
         </View>
@@ -127,6 +153,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 5,
+  },
+  avatarImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: "#e0e0e0",
   },
   userName: {
     fontSize: 24,

@@ -9,15 +9,18 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { userService } from "../../services/user.service";
+import { API_URL } from "../../services/api.service";
 
 export default function SecurityScreen() {
   const router = useRouter();
   const [userName, setUserName] = React.useState("");
+  const [avatarUrl, setAvatarUrl] = React.useState<string | null>(null);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -28,15 +31,38 @@ export default function SecurityScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   React.useEffect(() => {
-    loadUserName();
+    loadUserData();
   }, []);
 
-  const loadUserName = async () => {
+  const buildAvatarUrl = (rawUrl: string | null | undefined): string | null => {
+    if (!rawUrl) return null;
+
+    if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
+      return rawUrl;
+    }
+
+    return `${API_URL}${rawUrl}`;
+  };
+
+  const loadUserData = async () => {
     try {
-      const name = await AsyncStorage.getItem("userName");
-      if (name) setUserName(name);
+      // Tentar buscar do backend primeiro
+      const profile = await userService.getProfile();
+      setUserName(profile.name);
+      setAvatarUrl(buildAvatarUrl(profile.avatarUrl));
+
+      // Atualizar AsyncStorage para fallback
+      await AsyncStorage.setItem("userName", profile.name);
     } catch (error) {
-      console.error("Erro ao carregar nome:", error);
+      console.error("Erro ao carregar dados do usuário:", error);
+
+      // Fallback para AsyncStorage se API falhar
+      try {
+        const name = await AsyncStorage.getItem("userName");
+        if (name) setUserName(name);
+      } catch (storageError) {
+        console.error("Erro ao carregar nome do AsyncStorage:", storageError);
+      }
     }
   };
 
@@ -103,9 +129,13 @@ export default function SecurityScreen() {
         {/* Profile Section */}
         <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
-            <View style={styles.avatar}>
-              <Ionicons name="person" size={60} color="#FFF" />
-            </View>
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+            ) : (
+              <View style={styles.avatar}>
+                <Ionicons name="person" size={60} color="#FFF" />
+              </View>
+            )}
           </View>
           <Text style={styles.userName}>{userName || "Usuário"}</Text>
         </View>
@@ -282,6 +312,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 5,
+  },
+  avatarImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: "#e0e0e0",
   },
   userName: {
     fontSize: 24,
