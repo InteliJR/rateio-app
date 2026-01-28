@@ -27,6 +27,7 @@ export interface BillFilters {
   status?: BillStatus;
   startDate?: Date;
   endDate?: Date;
+  search?: string;
   sortBy?: BillSortField;
   sortOrder?: SortOrder;
 }
@@ -143,7 +144,7 @@ export class BillsService {
         } catch (participantError) {
           console.error('[BillsService] Erro ao criar participantes:', participantError);
           // Se falhar ao criar participantes, deletar a bill e fee criadas
-          await this.prisma.fee.deleteMany({ where: { billId: bill.id } }).catch(() => {});
+          await this.prisma.fee.deleteMany({ where: { billId: bill.id } }).catch(() => { });
           await this.prisma.bill.delete({ where: { id: bill.id } });
           throw new BadRequestException(
             `Erro ao criar participantes: ${participantError instanceof Error ? participantError.message : 'Erro desconhecido'}`,
@@ -161,6 +162,61 @@ export class BillsService {
         `Erro ao criar conta: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
       );
     }
+  }
+
+  /**
+   * Upload de imagem para conta existente + OCR
+   */
+  async uploadImage(
+    billId: string,
+    file: Express.Multer.File,
+    userId: string,
+  ) {
+    const bill = await this.prisma.bill.findFirst({
+      where: { id: billId, userId },
+    });
+
+    if (!bill) {
+      throw new NotFoundException('Conta não encontrada');
+    }
+
+    if (!file) {
+      throw new BadRequestException('Arquivo de imagem obrigatório');
+    }
+
+    // 1. Validar arquivo
+    if (!this.storage.validateFileType(file.mimetype)) {
+      throw new BadRequestException(
+        'Apenas imagens são permitidas (JPEG, PNG, WebP)',
+      );
+    }
+
+    if (!this.storage.validateFileSize(file.size)) {
+      throw new BadRequestException('Tamanho máximo: 10MB');
+    }
+
+    // 2. Upload da imagem para o S3
+    const { url, key } = await this.storage.uploadFile(file, 'bills');
+
+    // 3. Atualizar conta com imagem e status pendente
+    const updatedBill = await this.prisma.bill.update({
+      where: { id: billId },
+      data: {
+        imageUrl: url,
+        imageKey: key,
+        status: BillStatus.PENDING_OCR,
+      },
+    });
+
+    // 4. Iniciar processamento OCR assíncrono
+    this.processOcr(updatedBill.id, url).catch((error) => {
+      console.error(`❌ Erro no OCR da conta ${updatedBill.id}:`, error);
+    });
+
+    return {
+      ...updatedBill,
+      message: 'Imagem enviada. Processando OCR...',
+    };
   }
 
   /**
@@ -245,6 +301,13 @@ export class BillsService {
       if (filters.endDate) {
         where.createdAt.lte = filters.endDate;
       }
+    }
+
+    if (filters?.search) {
+      where.establishmentName = {
+        contains: filters.search,
+        mode: 'insensitive',
+      };
     }
 
     // Construir ordenação
@@ -504,6 +567,15 @@ export class BillsService {
     // Gerar nova URL pré-assinada (caso a antiga tenha expirado)
     const freshUrl = bill.imageKey ? await this.storage.getSignedUrl(bill.imageKey) : null;
 
+    // Mapear itens gerais da conta
+    const billItems = bill.items.map((item) => ({
+      id: item.id,
+      name: item.name,
+      quantity: item.quantity,
+      unitPrice: Number(item.unitPrice),
+      totalPrice: Number(item.totalPrice),
+    }));
+
     return {
       bill: {
         id: bill.id,
@@ -513,6 +585,7 @@ export class BillsService {
         createdAt: bill.createdAt,
         updatedAt: bill.updatedAt,
       },
+      items: billItems,
       participants,
       summary: {
         subtotal: Math.round(subtotal * 100) / 100,
