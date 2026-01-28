@@ -20,6 +20,7 @@ import billService from "../../../services/bill.service";
 
 const { width, height } = Dimensions.get("window");
 
+
 export default function CameraScreen() {
   const router = useRouter();
   const { id, participants } = useLocalSearchParams();

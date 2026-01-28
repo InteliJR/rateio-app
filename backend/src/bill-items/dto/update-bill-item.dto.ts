@@ -6,10 +6,14 @@ import {
   IsInt,
   Min,
   MaxLength,
+  IsNotEmpty,
+  ValidateIf,
 } from 'class-validator';
 
 export class UpdateBillItemDto {
   @IsOptional()
+  @ValidateIf((o) => o.name !== undefined)
+  @IsNotEmpty({ message: 'O nome não pode estar vazio' })
   @IsString({ message: 'O nome deve ser uma string' })
   @MaxLength(255, { message: 'O nome deve ter no máximo 255 caracteres' })
   name?: string;
