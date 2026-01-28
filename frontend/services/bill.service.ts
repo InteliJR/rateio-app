@@ -35,6 +35,9 @@ export interface CreateBillSetupConfig {
   participantCount: number;
   billName?: string;
   serviceFeePercentage: number;
+  coverChargeValue?: number;
+  coverChargeType?: 'total' | 'per_person';
+  participantNames?: string[];
 }
 
 export interface BillFilters {

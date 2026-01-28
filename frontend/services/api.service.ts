@@ -3,7 +3,7 @@
 import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
 import { storageService } from './storage.service';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+export const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 
 // Configurações de retry
 const RETRY_CONFIG = {

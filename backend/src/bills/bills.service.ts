@@ -127,6 +127,45 @@ export class BillsService {
         }
       }
 
+      // Adicionar couvert se houver
+      if (
+        createBillDto.coverChargeValue !== undefined &&
+        createBillDto.coverChargeValue !== null &&
+        !isNaN(Number(createBillDto.coverChargeValue)) &&
+        Number(createBillDto.coverChargeValue) > 0
+      ) {
+        try {
+          const couvertType = createBillDto.coverChargeType || 'per_person';
+          const participantCount = Number(createBillDto.participantCount) || 1;
+          
+          // Se for valor total, dividir entre participantes. Se for por pessoa, usar valor direto.
+          const valuePerPerson = couvertType === 'total' 
+            ? Number(createBillDto.coverChargeValue) / participantCount 
+            : Number(createBillDto.coverChargeValue);
+          
+          const description = couvertType === 'total' 
+            ? 'Couvert (valor total dividido)' 
+            : 'Couvert por pessoa';
+
+          await this.prisma.fee.create({
+            data: {
+              billId: bill.id,
+              type: 'COVER_CHARGE',
+              value: valuePerPerson,
+              description,
+            },
+          });
+        } catch (feeError) {
+          console.error('[BillsService] Erro ao criar couvert:', feeError);
+          // Se falhar ao criar couvert, deletar fees e bill criadas
+          await this.prisma.fee.deleteMany({ where: { billId: bill.id } }).catch(() => { });
+          await this.prisma.bill.delete({ where: { id: bill.id } });
+          throw new BadRequestException(
+            `Erro ao criar couvert: ${feeError instanceof Error ? feeError.message : 'Erro desconhecido'}`,
+          );
+        }
+      }
+
       // Adicionar participantes iniciais
       if (
         createBillDto.participantCount !== undefined &&
@@ -136,9 +175,12 @@ export class BillsService {
       ) {
         try {
           const participantCount = Number(createBillDto.participantCount);
+          const participantNames = createBillDto.participantNames || [];
+          
           const participants = Array.from({ length: participantCount }, (_, i) => ({
             billId: bill.id,
-            name: `Pessoa ${i + 1}`,
+            // Usar nome fornecido se existir, senão usar nome padrão
+            name: participantNames[i]?.trim() || `Pessoa ${i + 1}`,
           }));
           await this.prisma.participant.createMany({ data: participants });
         } catch (participantError) {

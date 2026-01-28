@@ -55,6 +55,11 @@ export default function ScannedBillScreen() {
     {},
   );
 
+  // Estados de edição de participantes
+  const [editingParticipantId, setEditingParticipantId] = useState<string | null>(null);
+  const [participantNameInput, setParticipantNameInput] = useState<string>("");
+  const [savingParticipantId, setSavingParticipantId] = useState<string | null>(null);
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const saveTimeoutsRef = useRef<{ [key: string]: any }>({});
 
@@ -893,6 +898,79 @@ export default function ScannedBillScreen() {
   };
 
   /**
+   * Inicia edição do nome do participante
+   */
+  const startEditingParticipant = (participant: Participant) => {
+    if (isCompleted) return;
+    setEditingParticipantId(participant.id);
+    setParticipantNameInput(participant.name);
+  };
+
+  /**
+   * Cancela edição do participante
+   */
+  const cancelEditingParticipant = () => {
+    setEditingParticipantId(null);
+    setParticipantNameInput("");
+  };
+
+  /**
+   * Salva novo nome do participante
+   */
+  const saveParticipantName = async (participantId: string) => {
+    const newName = participantNameInput.trim();
+    if (!newName) {
+      Alert.alert("Erro", "O nome não pode estar vazio");
+      return;
+    }
+
+    const participant = participants.find(p => p.id === participantId);
+    if (!participant) return;
+
+    // Se o nome não mudou, apenas cancelar edição
+    if (newName === participant.name) {
+      cancelEditingParticipant();
+      return;
+    }
+
+    try {
+      setSavingParticipantId(participantId);
+      
+      // Atualizar no backend
+      await participantsService.updateParticipant(participantId, newName);
+      
+      // Atualizar nome nos itens que tinham esse participante atribuído
+      const oldName = participant.name;
+      setItems((prevItems) =>
+        prevItems.map((item) => ({
+          ...item,
+          assignedParticipants: item.assignedParticipants.map((name) =>
+            name === oldName ? newName : name
+          ),
+        }))
+      );
+
+      // Atualizar lista de participantes local
+      setParticipants((prev) =>
+        prev.map((p) =>
+          p.id === participantId ? { ...p, name: newName } : p
+        )
+      );
+
+      console.log("[Scanned] Participant name updated:", participantId, "->", newName);
+    } catch (error: any) {
+      console.error("Error updating participant name:", error);
+      Alert.alert(
+        "Erro",
+        error.message || "Não foi possível atualizar o nome do participante"
+      );
+    } finally {
+      setSavingParticipantId(null);
+      cancelEditingParticipant();
+    }
+  };
+
+  /**
    * IMPORTANTE:
    * - No frontend, o campo `price` do BillItem representa o VALOR UNITÁRIO.
    * - O total da conta deve ser a soma de (quantidade × valor unitário) para cada item.
@@ -1196,41 +1274,95 @@ export default function ScannedBillScreen() {
                                   participant.name,
                                 );
                               const isSaving = savingDivisions === item.id;
+                              const isEditingThis = editingParticipantId === participant.id;
+                              const isSavingName = savingParticipantId === participant.id;
+                              
                               return (
-                                <TouchableOpacity
+                                <View
                                   key={participant.id || idx}
                                   style={styles.checkboxRow}
-                                  onPress={() =>
-                                    toggleParticipant(item.id, participant.name)
-                                  }
-                                  activeOpacity={0.6}
-                                  disabled={isSaving || isCompleted}
                                 >
-                                  <View
-                                    style={[
-                                      styles.checkbox,
-                                      isAssigned && styles.checkboxActive,
-                                    ]}
+                                  <TouchableOpacity
+                                    style={styles.checkboxTouchable}
+                                    onPress={() =>
+                                      toggleParticipant(item.id, participant.name)
+                                    }
+                                    activeOpacity={0.6}
+                                    disabled={isSaving || isCompleted || isEditingThis}
                                   >
-                                    {isAssigned && (
-                                      <Ionicons
-                                        name="checkmark"
-                                        size={10}
-                                        color="#8B2E8F"
+                                    <View
+                                      style={[
+                                        styles.checkbox,
+                                        isAssigned && styles.checkboxActive,
+                                      ]}
+                                    >
+                                      {isAssigned && (
+                                        <Ionicons
+                                          name="checkmark"
+                                          size={10}
+                                          color="#8B2E8F"
+                                        />
+                                      )}
+                                    </View>
+                                  </TouchableOpacity>
+                                  
+                                  {isEditingThis ? (
+                                    <View style={styles.participantEditContainer}>
+                                      <TextInput
+                                        style={styles.participantEditInput}
+                                        value={participantNameInput}
+                                        onChangeText={setParticipantNameInput}
+                                        autoFocus
+                                        selectTextOnFocus
+                                        editable={!isSavingName}
                                       />
-                                    )}
-                                  </View>
-                                  <Text style={styles.participantName}>
-                                    {participant.name}
-                                  </Text>
-                                  {isSaving && (
+                                      <TouchableOpacity
+                                        style={styles.participantEditButton}
+                                        onPress={() => saveParticipantName(participant.id)}
+                                        disabled={isSavingName}
+                                      >
+                                        {isSavingName ? (
+                                          <ActivityIndicator size="small" color="#8B2E8F" />
+                                        ) : (
+                                          <Ionicons name="checkmark" size={18} color="#10b981" />
+                                        )}
+                                      </TouchableOpacity>
+                                      <TouchableOpacity
+                                        style={styles.participantEditButton}
+                                        onPress={cancelEditingParticipant}
+                                        disabled={isSavingName}
+                                      >
+                                        <Ionicons name="close" size={18} color="#ef4444" />
+                                      </TouchableOpacity>
+                                    </View>
+                                  ) : (
+                                    <TouchableOpacity
+                                      style={styles.participantNameContainer}
+                                      onPress={() => startEditingParticipant(participant)}
+                                      disabled={isCompleted}
+                                    >
+                                      <Text style={styles.participantName}>
+                                        {participant.name}
+                                      </Text>
+                                      {!isCompleted && (
+                                        <Ionicons
+                                          name="pencil"
+                                          size={14}
+                                          color="#999"
+                                          style={{ marginLeft: 8 }}
+                                        />
+                                      )}
+                                    </TouchableOpacity>
+                                  )}
+                                  
+                                  {isSaving && !isEditingThis && (
                                     <ActivityIndicator
                                       size="small"
                                       color="#8B2E8F"
                                       style={{ marginLeft: 8 }}
                                     />
                                   )}
-                                </TouchableOpacity>
+                                </View>
                               );
                             })
                           )}
@@ -1620,10 +1752,38 @@ const styles = StyleSheet.create({
     borderColor: "#8B2E8F",
     backgroundColor: "#F1E4F2",
   },
+  checkboxTouchable: {
+    padding: 4,
+  },
   participantName: {
     fontSize: 14,
     color: "#333",
     flex: 1,
+  },
+  participantNameContainer: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  participantEditContainer: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  participantEditInput: {
+    flex: 1,
+    fontSize: 14,
+    color: "#333",
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#8B2E8F",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  participantEditButton: {
+    padding: 4,
   },
   footerRow: {
     flexDirection: "row",

@@ -1,5 +1,10 @@
-import { IsOptional, IsString, IsNumber, Min, Max, IsInt } from 'class-validator';
+import { IsOptional, IsString, IsNumber, Min, Max, IsInt, IsArray, ArrayMinSize, ValidateNested, IsIn, IsBoolean } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
+
+class ParticipantNameDto {
+  @IsString()
+  name: string;
+}
 
 export class CreateBillDto {
   @IsOptional()
@@ -22,4 +27,19 @@ export class CreateBillDto {
   @Min(0)
   @Max(100)
   serviceFeePercentage?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  coverChargeValue?: number;
+
+  @IsOptional()
+  @IsIn(['total', 'per_person'])
+  coverChargeType?: 'total' | 'per_person';
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  participantNames?: string[];
 }

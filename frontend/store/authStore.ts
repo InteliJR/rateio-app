@@ -5,6 +5,7 @@ import { storageService } from "../services/storage.service";
 import { AuthState } from "../types/auth.types";
 import { authService } from "../services/auth.service";
 import { queryClient } from "../lib/queryClient";
+import { useBillStore } from "./billStore";
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
@@ -69,6 +70,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Limpar cache do React Query ao fazer logout
       // Isso remove todos os dados em cache, incluindo as contas do usuário
       queryClient.clear();
+      
+      // Limpar o store de contas
+      useBillStore.getState().clearBills();
       
       await authService.logout();
       await storageService.deleteItem("accessToken");

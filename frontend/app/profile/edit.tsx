@@ -43,11 +43,14 @@ export default function EditProfileScreen() {
 
     // Se o backend já devolve uma URL absoluta (ex: S3), usamos como está
     if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
-      return rawUrl;
+      // Adicionar timestamp para evitar cache
+      const separator = rawUrl.includes('?') ? '&' : '?';
+      return `${rawUrl}${separator}t=${Date.now()}`;
     }
 
     // Caso seja uma URL relativa (ex: /uploads/avatars/...), prefixar com a base da API
-    return `${API_URL}${rawUrl}`;
+    // Adicionar timestamp para evitar cache
+    return `${API_URL}${rawUrl}?t=${Date.now()}`;
   };
 
   const loadUserData = async () => {

@@ -65,8 +65,8 @@ export default function SummaryScreen() {
   const { addBill } = useBillStore();
   const [summary, setSummary] = useState<BillSummaryData>(EMPTY_SUMMARY);
   const [expandedIndex, setExpandedIndex] = useState<number>(0); // Inicia com o primeiro participante expandido
-  const [serviceFeePercentage, setServiceFeePercentage] = useState(10); // 10% padrão
-  const [couvertPerPerson, setCouvertPerPerson] = useState(5.00); // R$ 5,00 por pessoa (padrão)
+  const [serviceFeePercentage, setServiceFeePercentage] = useState(0); // Será carregado do backend
+  const [couvertPerPerson, setCouvertPerPerson] = useState(0); // Será carregado do backend
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [billStatus, setBillStatus] = useState<string>('DIVIDING');
@@ -99,17 +99,42 @@ export default function SummaryScreen() {
         console.log('[Summary] Bill is already completed - read-only mode');
       }
 
-      // 2. Buscar itens da conta
+      // 2. Buscar taxas (fees) da conta - SERVICE_PERCENTAGE e COVER_CHARGE
+      const feesResponse = await feesService.findAllByBill(id as string);
+      console.log("[Summary] Fees data:", feesResponse);
+      
+      // feesResponse pode ser um array ou um objeto { billId, fees: [...], totalFixed, totalPercentage }
+      const feesData = Array.isArray(feesResponse) ? feesResponse : ((feesResponse as any).fees || []);
+      
+      // Extrair taxa de serviço e couvert dos dados do backend
+      const serviceFee = feesData.find((f: any) => f.type === 'SERVICE_PERCENTAGE');
+      const coverCharge = feesData.find((f: any) => f.type === 'COVER_CHARGE');
+      
+      const actualServiceFeePercentage = serviceFee ? Number(serviceFee.value) : 0;
+      // O backend já salva o valor POR PESSOA do couvert (já dividido se foi "total")
+      const couvertPerPersonFromBackend = coverCharge ? Number(coverCharge.value) : 0;
+      
+      console.log("[Summary] Service fee percentage:", actualServiceFeePercentage);
+      console.log("[Summary] Couvert per person (from backend):", couvertPerPersonFromBackend);
+      
+      // Atualizar estados com valores do backend
+      setServiceFeePercentage(actualServiceFeePercentage);
+      setCouvertPerPerson(couvertPerPersonFromBackend);
+
+      // 3. Buscar itens da conta
       const itemsData = await itemsService.getItems(id as string);
       console.log("[Summary] Items data:", itemsData);
 
-      // 3. Buscar participantes
+      // 4. Buscar participantes
       const participantsData = await participantsService.getParticipantsByBill(
         id as string,
       );
       console.log("[Summary] Participants data:", participantsData);
+      
+      // O couvert por pessoa já vem calculado do backend (não precisamos dividir)
+      console.log("[Summary] Couvert per person:", couvertPerPersonFromBackend);
 
-      // 4. Buscar divisões (divisions) - aqui está o cálculo real de quanto cada um paga
+      // 5. Buscar divisões (divisions) - aqui está o cálculo real de quanto cada um paga
       const divisionsData = await divisionsService.findAllByBill(id as string);
       console.log("[Summary] Divisions data:", divisionsData);
       console.log("[Summary] Divisions count:", divisionsData.length);
@@ -127,8 +152,8 @@ export default function SummaryScreen() {
               subtotal: 0,
               items: [],
               fees: [],
-              couvert: round2(couvertPerPerson),
-              totalAmount: round2(couvertPerPerson),
+              couvert: couvertPerPersonFromBackend,
+              totalAmount: couvertPerPersonFromBackend,
               paysFee: true,
               paysCouvert: true,
             };
@@ -156,7 +181,7 @@ export default function SummaryScreen() {
         return;
       }
 
-      // 5. Organizar dados por participante
+      // 6. Organizar dados por participante
       const participantSummaries: ParticipantSummary[] = participantsData.map(
         (participant: Participant) => {
           // Encontrar todas as divisões deste participante
@@ -176,11 +201,11 @@ export default function SummaryScreen() {
 
           const subtotal = round2(items.reduce((sum, item) => sum + item.amount, 0));
 
-          // Calcular taxa de serviço (10% do subtotal) com arredondamento
-          const serviceFee = round2((subtotal * serviceFeePercentage) / 100);
+          // Calcular taxa de serviço com valor do backend
+          const serviceFeeAmount = round2((subtotal * actualServiceFeePercentage) / 100);
 
-          // Couvert fixo por pessoa (buscar do backend futuramente)
-          const couvert = round2(couvertPerPerson);
+          // Couvert já vem calculado por pessoa do backend
+          const couvert = couvertPerPersonFromBackend;
 
           return {
             id: participant.id,
@@ -188,11 +213,11 @@ export default function SummaryScreen() {
             subtotal,
             items,
             fees:
-              serviceFee > 0
-                ? [{ name: "Taxa de Serviço", amount: serviceFee }]
+              serviceFeeAmount > 0
+                ? [{ name: "Taxa de Serviço", amount: serviceFeeAmount }]
                 : [],
             couvert,
-            totalAmount: round2(subtotal + serviceFee + couvert),
+            totalAmount: round2(subtotal + serviceFeeAmount + couvert),
             paysFee: true, // Padrão: todos pagam taxa
             paysCouvert: true, // Padrão: todos pagam couvert
           };
