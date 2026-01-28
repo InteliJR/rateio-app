@@ -19,16 +19,28 @@ export class DivisionsService {
    * Validar que o item pertence a uma conta do usuário
    */
   private async validateBillItemOwnership(billItemId: string, userId: string) {
+    console.log('[DivisionsService] Validating bill item ownership:', { billItemId, userId });
+    
     const billItem = await this.prisma.billItem.findUnique({
       where: { id: billItemId },
       include: { bill: true },
     });
 
     if (!billItem) {
+      console.error('[DivisionsService] Bill item not found:', billItemId);
       throw new NotFoundException('Item não encontrado');
     }
 
+    console.log('[DivisionsService] Bill item found:', { 
+      id: billItem.id, 
+      name: billItem.name, 
+      billId: billItem.billId,
+      billUserId: billItem.bill.userId,
+      requestUserId: userId
+    });
+
     if (billItem.bill.userId !== userId) {
+      console.error('[DivisionsService] User does not own this bill item');
       throw new ForbiddenException('Você não tem acesso a este item');
     }
 

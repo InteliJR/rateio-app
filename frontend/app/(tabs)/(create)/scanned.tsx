@@ -215,8 +215,12 @@ export default function ScannedBillScreen() {
     const item = items.find(i => i.id === itemId);
     if (!item) {
       console.error('[Scanned] Item not found:', itemId);
+      console.error('[Scanned] Available items:', items.map(i => ({ id: i.id, name: i.name })));
+      Alert.alert('Erro', 'Item não encontrado. Tente recarregar a página.');
       return;
     }
+    
+    console.log('[Scanned] Toggling participant:', participantName, 'for item:', itemId, 'Item name:', item.name);
 
     const isAssigned = item.assignedParticipants.includes(participantName);
 
@@ -280,6 +284,7 @@ export default function ScannedBillScreen() {
             shareAmount: shareAmount,
           }));
 
+          console.log('[Scanned] Creating batch divisions for item:', itemId, 'with divisions:', divisions);
           await divisionsService.createBatch(itemId, divisions);
           console.log('[Scanned] Divisions recalculated after removal for item:', itemId, 'Share amount:', shareAmount);
         }
@@ -310,6 +315,7 @@ export default function ScannedBillScreen() {
           shareAmount: shareAmount,
         }));
 
+        console.log('[Scanned] Creating batch divisions for item:', itemId, 'with divisions:', divisions);
         await divisionsService.createBatch(itemId, divisions);
         console.log('[Scanned] Divisions recalculated for item:', itemId, 'Share amount:', shareAmount);
       }

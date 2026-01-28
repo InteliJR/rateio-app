@@ -236,9 +236,21 @@ export default function SummaryScreen() {
       validateCalculations(summaryData);
     } catch (error: any) {
       console.error("[Summary] Error loading data:", error);
+      // Garantir que a mensagem seja sempre uma string
+      let errorMessage = "Não foi possível carregar o resumo da conta";
+      if (error.message) {
+        if (typeof error.message === 'string') {
+          errorMessage = error.message;
+        } else if (Array.isArray(error.message)) {
+          errorMessage = error.message.join('\n');
+        } else {
+          errorMessage = String(error.message);
+        }
+      }
+      
       Alert.alert(
         "Erro",
-        error.message || "Não foi possível carregar o resumo da conta",
+        errorMessage,
       );
     } finally {
       setLoading(false);
@@ -585,10 +597,10 @@ export default function SummaryScreen() {
 
               // 6. Mostrar sucesso e navegar
               Alert.alert(
-                '✅ Conta Finalizada!',
+                'Conta Finalizada!',
                 `${summary.establishmentName || 'Conta'} foi salva com sucesso.\n\n` +
-                `💰 Total: ${formatCurrency(result.summary.grandTotal)}\n` +
-                `👥 ${summary.participants.length} participante${summary.participants.length > 1 ? 's' : ''}\n\n` +
+                `Total: ${formatCurrency(result.summary.grandTotal)}\n` +
+                `${summary.participants.length} participante${summary.participants.length > 1 ? 's' : ''}\n\n` +
                 `A conta está disponível no seu histórico.`,
                 [
                   {
@@ -602,9 +614,23 @@ export default function SummaryScreen() {
               );
             } catch (error: any) {
               console.error('[Summary] Error finalizing bill:', error);
+              
+              // Garantir que a mensagem seja sempre uma string
+              let errorMessage = 'Não foi possível finalizar a conta. Tente novamente.';
+              
+              if (error.message) {
+                if (typeof error.message === 'string') {
+                  errorMessage = error.message;
+                } else if (Array.isArray(error.message)) {
+                  errorMessage = error.message.join('\n');
+                } else {
+                  errorMessage = String(error.message);
+                }
+              }
+              
               Alert.alert(
                 'Erro ao Finalizar',
-                error.message || 'Não foi possível finalizar a conta. Tente novamente.',
+                errorMessage,
                 [{ text: 'OK' }]
               );
             } finally {

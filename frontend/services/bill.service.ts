@@ -474,8 +474,23 @@ class BillService {
       return response.data;
     } catch (error: any) {
       console.error('[BillService] Error finalizing bill:', error);
+      
+      // Tratar mensagem de erro que pode ser string ou array
+      let errorMessage = "Erro ao finalizar conta";
+      
+      if (error.response?.data?.message) {
+        if (typeof error.response.data.message === 'string') {
+          errorMessage = error.response.data.message;
+        } else if (Array.isArray(error.response.data.message)) {
+          // Se for array, juntar todas as mensagens
+          errorMessage = error.response.data.message.join('\n');
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       throw {
-        message: error.response?.data?.message || "Erro ao finalizar conta",
+        message: errorMessage,
         statusCode: error.response?.status,
       } as UploadBillError;
     }
