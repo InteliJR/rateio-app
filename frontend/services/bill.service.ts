@@ -37,6 +37,65 @@ export interface CreateBillSetupConfig {
   serviceFeePercentage: number;
 }
 
+export interface BillFilters {
+  status?: string;
+  startDate?: string;
+  endDate?: string;
+  search?: string;
+}
+
+export interface UpdateBillPayload {
+  status?: "PENDING_OCR" | "OCR_FAILED" | "REVIEWING" | "DIVIDING" | "COMPLETED";
+  establishmentName?: string;
+  totalAmount?: number;
+  items?: any[]; // Simplified for now
+}
+
+export interface BillSummaryResponse {
+  bill: {
+    id: string;
+    status: string;
+    establishmentName: string;
+    imageUrl: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+  items: Array<{
+    id: string;
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    totalPrice: number;
+  }>;
+  participants: Array<{
+    id: string;
+    name: string;
+    subtotal: number;
+    fees: number;
+    total: number;
+    items: Array<{
+      id: string;
+      name: string;
+      quantity: number;
+      unitPrice: number;
+      totalPrice: number;
+      shareAmount: number;
+    }>;
+    feeDetails: Array<{
+      id: string;
+      type: string;
+      description: string | null;
+      originalValue: number;
+      participantShare: number;
+    }>;
+  }>;
+  summary: {
+    subtotal: number;
+    totalFees: number;
+    total: number;
+  };
+}
+
 class BillService {
   /**
    * Faz upload de uma conta (imagem) para o servidor
@@ -65,7 +124,7 @@ class BillService {
       // Extrair nome do arquivo da URI
       const uriParts = imageUri.split('/');
       const filename = uriParts[uriParts.length - 1] || `bill-${Date.now()}.jpg`;
-      
+
       // Detectar tipo MIME correto
       let mimeType = 'image/jpeg'; // padrão
       if (filename.toLowerCase().endsWith('.png')) {
@@ -97,9 +156,9 @@ class BillService {
 
       // Fazer requisição com configurações otimizadas
       const api = apiService.getApi();
-      
+
       console.log('[BillService] Enviando requisição para /bills...');
-      
+
       const response = await api.post<UploadBillResponse>('/bills', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -149,6 +208,57 @@ class BillService {
 
       console.error('[BillService] Erro processado:', billError);
       throw billError;
+    }
+  }
+
+  /**
+   * Faz upload de uma imagem para uma conta existente
+   * @param billId - ID da conta existente
+   * @param imageUri - URI local da imagem otimizada
+   * @returns Dados da conta atualizada
+   */
+  async uploadBillImage(
+    billId: string,
+    imageUri: string
+  ): Promise<UploadBillResponse> {
+    try {
+      console.log(`[BillService] Iniciando upload de imagem para conta ${billId}...`);
+
+      if (!imageUri || imageUri.trim().length === 0) {
+        throw new Error('URI da imagem é obrigatória');
+      }
+
+      const formData = new FormData();
+      const uriParts = imageUri.split('/');
+      const filename = uriParts[uriParts.length - 1] || `bill-${Date.now()}.jpg`;
+
+      let mimeType = 'image/jpeg';
+      if (filename.toLowerCase().endsWith('.png')) mimeType = 'image/png';
+      else if (filename.toLowerCase().endsWith('.webp')) mimeType = 'image/webp';
+
+      formData.append('image', {
+        uri: imageUri,
+        name: filename,
+        type: mimeType,
+      } as any);
+
+      const api = apiService.getApi();
+      const response = await api.post<UploadBillResponse>(`/bills/${billId}/image`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        timeout: 60000,
+        transformRequest: (data) => data,
+      });
+
+      console.log('[BillService] Upload de imagem concluído:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('[BillService] Erro ao fazer upload de imagem:', error);
+      throw {
+        message: error.response?.data?.message || "Erro ao enviar imagem da conta",
+        statusCode: error.response?.status,
+      } as UploadBillError;
     }
   }
 
@@ -208,7 +318,11 @@ class BillService {
    * @param limit - Itens por página (padrão: 10)
    * @returns Objeto com array de bills e metadados de paginação
    */
-  async listBills(page: number = 1, limit: number = 10): Promise<{
+  async listBills(
+    page: number = 1,
+    limit: number = 10,
+    filters?: BillFilters
+  ): Promise<{
     data: UploadBillResponse[];
     meta: {
       total: number;
@@ -225,6 +339,7 @@ class BillService {
           limit,
           sortBy: 'createdAt',
           sortOrder: 'desc',
+          ...filters,
         },
       });
       return response.data;
@@ -282,10 +397,10 @@ class BillService {
    * @param billId - ID da conta
    * @returns Resumo com participantes e seus valores
    */
-  async getSummary(billId: string) {
+  async getSummary(billId: string): Promise<BillSummaryResponse> {
     try {
       const api = apiService.getApi();
-      const response = await api.get(`/bills/${billId}/summary`);
+      const response = await api.get<BillSummaryResponse>(`/bills/${billId}/summary`);
       return response.data;
     } catch (error: any) {
       console.error('[BillService] Erro ao buscar summary:', error);

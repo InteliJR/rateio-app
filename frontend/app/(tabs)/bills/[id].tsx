@@ -5,9 +5,9 @@ import {
   View,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,13 +34,14 @@ interface BillDetail {
 }
 
 
+import billService, { BillSummaryResponse } from '../../../services/bill.service';
 
 export default function BillDetail() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
-  const [bill, setBill] = useState<BillDetail | null>(null);
+  const [data, setData] = useState<BillSummaryResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [expandedIndex, setExpandedIndex] = useState<number>(0);
+  const [expandedParticipantId, setExpandedParticipantId] = useState<string | null>(null);
 
   useEffect(() => {
     loadBillDetails();
@@ -50,39 +51,7 @@ export default function BillDetail() {
     try {
       setLoading(true);
       const response = await billService.getSummary(id as string);
-      
-      // Mapear resposta da API agrupando por item (não por participante)
-      const itemMap = new Map<string, { item: any; people: BillPerson[] }>();
-      
-      response.participants.forEach(participant => {
-        participant.items.forEach(item => {
-          if (!itemMap.has(item.name)) {
-            itemMap.set(item.name, {
-              item: item,
-              people: []
-            });
-          }
-          itemMap.get(item.name)!.people.push({
-            name: participant.name,
-            amount: item.shareAmount
-          });
-        });
-      });
-
-      const billItems: BillItem[] = Array.from(itemMap.values()).map(({ item, people }) => ({
-        description: item.name,
-        amount: item.totalPrice,
-        quantity: item.quantity,
-        people
-      }));
-
-      setBill({
-        id: response.bill.id,
-        establishmentName: response.bill.establishmentName,
-        totalAmount: response.summary.total,
-        createdAt: response.bill.createdAt,
-        items: billItems,
-      });
+      setData(response);
     } catch (err) {
       console.error('Erro ao carregar conta:', err);
     } finally {
@@ -91,11 +60,19 @@ export default function BillDetail() {
   };
 
   const formatCurrency = (value?: number): string => {
-    if (!value) return 'R$ 0,00';
+    if (value === undefined || value === null) return 'R$ 0,00';
     return `R$ ${value.toLocaleString('pt-BR', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
+  };
+
+  const toggleParticipant = (participantId: string) => {
+    if (expandedParticipantId === participantId) {
+      setExpandedParticipantId(null);
+    } else {
+      setExpandedParticipantId(participantId);
+    }
   };
 
   if (loading) {
@@ -109,7 +86,7 @@ export default function BillDetail() {
     );
   }
 
-  if (!bill) {
+  if (!data) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
@@ -119,11 +96,9 @@ export default function BillDetail() {
     );
   }
 
-  const items = bill.items || [];
-
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView 
+    <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
+      <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
@@ -137,66 +112,113 @@ export default function BillDetail() {
             >
               <Ionicons name="chevron-back" size={22} color="#000" />
             </TouchableOpacity>
-            <Text style={styles.titleText}>{bill.establishmentName}</Text>
+            <Text style={styles.titleText}>{data.bill.establishmentName || 'Detalhes'}</Text>
             <TouchableOpacity style={styles.editButton}>
               <Text style={styles.editButtonText}>Editar</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Lista de Itens */}
-          {items.map((item, index) => (
-            <View key={`item-${index}`} style={styles.itemCardWrapper}>
+          {/* Aviso de Falha (Se houver) */}
+          {data.bill.status === 'OCR_FAILED' && (
+            <View style={styles.warningCard}>
+              <MaterialCommunityIcons name="alert-circle-outline" size={24} color="#D32F2F" />
+              <View style={styles.warningContent}>
+                <Text style={styles.warningTitle}>Falha no processamento</Text>
+                <Text style={styles.warningText}>
+                  Não foi possível ler os itens da nota automaticamente. Por favor, verifique os valores ou edite manualmente.
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Seção de Itens da Conta */}
+          <Text style={styles.sectionTitle}>Itens da Conta</Text>
+          <View style={styles.sectionCard}>
+            {(data.items || []).map((item, index) => (
+              <View key={item.id} style={[
+                styles.itemRow,
+                index < (data.items || []).length - 1 && styles.borderBottom
+              ]}>
+                <View style={styles.itemInfo}>
+                  <Text style={styles.itemName}>{item.name}</Text>
+                  <Text style={styles.itemQty}>{item.quantity}x {formatCurrency(item.unitPrice)}</Text>
+                </View>
+                <Text style={styles.itemTotal}>{formatCurrency(item.totalPrice)}</Text>
+              </View>
+            ))}
+            <View style={styles.divider} />
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Subtotal</Text>
+              <Text style={styles.totalValue}>{formatCurrency(data.summary?.subtotal)}</Text>
+            </View>
+          </View>
+
+          {/* Seção de Participantes */}
+          <Text style={styles.sectionTitle}>Por Pessoa</Text>
+          {(data.participants || []).map((participant) => (
+            <View key={participant.id} style={styles.participantCardWrapper}>
               <TouchableOpacity
-                style={styles.itemCardMain}
-                onPress={() =>
-                  setExpandedIndex(expandedIndex === index ? -1 : index)
-                }
+                style={styles.participantHeader}
+                onPress={() => toggleParticipant(participant.id)}
                 activeOpacity={0.7}
               >
-                <View style={styles.itemCardLeft}>
-                  <Text style={styles.itemCardName}>{item.description}</Text>
-                </View>
-                <View style={styles.itemCardRight}>
-                  <Text style={styles.itemCardQty}>{item.quantity}x</Text>
-                  <Text style={styles.itemCardAmount}>
-                    {formatCurrency(item.amount)}
+                <Text style={styles.participantName}>{participant.name}</Text>
+                <View style={styles.participantHeaderRight}>
+                  <Text style={styles.participantTotal}>
+                    {formatCurrency(participant.total)}
                   </Text>
                   <MaterialCommunityIcons
-                    name={
-                      expandedIndex === index && item.people && item.people.length > 0
-                        ? "chevron-down"
-                        : "chevron-right"
-                    }
+                    name={expandedParticipantId === participant.id ? "chevron-up" : "chevron-down"}
                     size={20}
                     color="#666"
                   />
                 </View>
               </TouchableOpacity>
 
-              {/* Dropdown com lista de pessoas */}
-              {expandedIndex === index &&
-                item.people &&
-                item.people.length > 0 && (
-                  <View style={styles.dropdownWrapper}>
-                    {item.people.map((person, idx) => (
-                      <View key={`person-${idx}`} style={styles.dropdownItem}>
-                        <Text style={styles.dropdownItemText}>{person.name}</Text>
-                        <Text style={styles.dropdownItemAmount}>
-                          {formatCurrency(person.amount)}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
+              {expandedParticipantId === participant.id && (
+                <View style={styles.participantDetails}>
+                  {/* Itens do participante */}
+                  {(participant.items || []).map((item) => (
+                    <View key={item.id} style={styles.detailRow}>
+                      <Text style={styles.detailText}>{item.name} ({item.quantity > 1 ? `${item.quantity}x` : '1x'})</Text>
+                      <Text style={styles.detailValue}>{formatCurrency(item.shareAmount)}</Text>
+                    </View>
+                  ))}
+
+                  {/* Taxas do participante */}
+                  {participant.feeDetails && participant.feeDetails.length > 0 && (
+                    <>
+                      <View style={styles.detailDivider} />
+                      {participant.feeDetails.map((fee) => (
+                        <View key={fee.id} style={styles.detailRow}>
+                          <Text style={styles.detailTextFee}>
+                            {fee.type === 'SERVICE_PERCENTAGE' ? 'Serviço' :
+                              fee.type === 'COVER_CHARGE' ? 'Couvert' : 'Taxa'}
+                          </Text>
+                          <Text style={styles.detailValueFee}>{formatCurrency(fee.participantShare)}</Text>
+                        </View>
+                      ))}
+                    </>
+                  )}
+                </View>
+              )}
             </View>
           ))}
 
-          {/* Card do Total */}
-          <View style={styles.totalCardWrapper}>
-            <Text style={styles.totalCardLabel}>Valor Total</Text>
-            <Text style={styles.totalCardAmount}>
-              {formatCurrency(bill.totalAmount)}
-            </Text>
+          {/* Resumo Final */}
+          <View style={styles.finalSummaryCard}>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Subtotal</Text>
+              <Text style={styles.summaryValue}>{formatCurrency(data.summary.subtotal)}</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Taxas / Serviço</Text>
+              <Text style={styles.summaryValue}>{formatCurrency(data.summary.totalFees)}</Text>
+            </View>
+            <View style={[styles.summaryRow, styles.marginTop]}>
+              <Text style={styles.finalTotalLabel}>Total Geral</Text>
+              <Text style={styles.finalTotalValue}>{formatCurrency(data.summary.total)}</Text>
+            </View>
           </View>
 
           {/* Botão Reutilizar Conta */}
@@ -212,10 +234,21 @@ export default function BillDetail() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F2F2F7', // iOS background gray
   },
   scrollContent: {
-    paddingBottom: 20,
+    paddingBottom: 40,
+  },
+  titleSection: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginHorizontal: -16,
+    marginBottom: 12,
+    backgroundColor: '#FFFFFF', // Header should merge with nav bar visual if possible, or stay white
+    gap: 4,
   },
   backButton: {
     width: 40,
@@ -229,16 +262,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-  },
-  titleSection: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-    paddingVertical: 12,
-    marginBottom: 12,
-    backgroundColor: '#FFFFFF',
-    gap: 4,
   },
   titleText: {
     fontSize: 18,
@@ -259,109 +282,169 @@ const styles = StyleSheet.create({
     color: '#8B2E8F',
   },
   contentContainer: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 0,
     paddingBottom: 8,
-    gap: 10,
-    backgroundColor: '#FFFFFF',
+    gap: 16,
   },
-  itemCardWrapper: {
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 10,
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginLeft: 4,
+    marginBottom: -4,
+  },
+  sectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
   },
-  itemCardMain: {
+  itemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
+    paddingVertical: 8,
   },
-  itemCardLeft: {
-    flex: 1,
-    marginRight: 12,
+  borderBottom: {
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#E5E5EA',
   },
-  itemCardName: {
-    fontSize: 15,
-    fontWeight: '400',
-    color: '#000',
-  },
-  itemCardRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  itemCardQty: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: '#000',
-  },
-  itemCardAmount: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#000',
-    minWidth: 75,
-    textAlign: 'right',
-  },
-  dropdownWrapper: {
-    backgroundColor: '#F8F8F8',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-  },
-  dropdownItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#F8F8F8',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E8E8E8',
-  },
-  dropdownItemText: {
-    fontSize: 13,
-    fontWeight: '400',
-    color: '#666',
+  itemInfo: {
     flex: 1,
   },
-  dropdownItemAmount: {
+  itemName: {
+    fontSize: 15,
+    color: '#000',
+    marginBottom: 2,
+  },
+  itemQty: {
     fontSize: 13,
+    color: '#8E8E93',
+  },
+  itemTotal: {
+    fontSize: 15,
     fontWeight: '500',
-    color: '#8B2E8F',
-    minWidth: 70,
-    textAlign: 'right',
+    color: '#000',
   },
-  totalCardWrapper: {
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+  divider: {
+    height: 1,
+    backgroundColor: '#E5E5EA',
+    marginVertical: 12,
+  },
+  totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    marginTop: 6,
   },
-  totalCardLabel: {
-    fontSize: 15,
-    fontWeight: '400',
-    color: '#000',
-  },
-  totalCardAmount: {
+  totalLabel: {
     fontSize: 15,
     fontWeight: '600',
+    color: '#333',
+  },
+  totalValue: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+  },
+  participantCardWrapper: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  participantHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+  },
+  participantName: {
+    fontSize: 16,
+    fontWeight: '500',
     color: '#000',
+  },
+  participantHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  participantTotal: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#8B2E8F',
+  },
+  participantDetails: {
+    backgroundColor: '#F9F9F9',
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5EA',
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  detailText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  detailValue: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+  },
+  detailDivider: {
+    height: 1,
+    backgroundColor: '#E5E5EA',
+    marginVertical: 8,
+  },
+  detailTextFee: {
+    fontSize: 13,
+    color: '#666',
+  },
+  detailValueFee: {
+    fontSize: 13,
+    color: '#666',
+  },
+  finalSummaryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 8,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  marginTop: {
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5EA',
+    paddingTop: 8,
+  },
+  summaryLabel: {
+    fontSize: 15,
+    color: '#666',
+  },
+  summaryValue: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#333',
+  },
+  finalTotalLabel: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#000',
+  },
+  finalTotalValue: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#8B2E8F',
   },
   reuseButton: {
-    marginHorizontal: 0,
-    marginTop: 24,
-    marginBottom: 0,
+    marginTop: 16,
     paddingVertical: 14,
-    paddingHorizontal: 16,
     backgroundColor: '#8B2E8F',
     borderRadius: 28,
     alignItems: 'center',
@@ -393,5 +476,29 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#333',
     textAlign: 'center',
+  },
+  warningCard: {
+    backgroundColor: '#FFEBEE',
+    borderWidth: 1,
+    borderColor: '#FFCDD2',
+    borderRadius: 8,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  warningContent: {
+    flex: 1,
+  },
+  warningTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#D32F2F',
+    marginBottom: 2,
+  },
+  warningText: {
+    fontSize: 13,
+    color: '#B71C1C',
+    lineHeight: 18,
   },
 });
