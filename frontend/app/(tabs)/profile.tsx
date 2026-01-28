@@ -13,6 +13,7 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { authService } from "../../services/auth.service";
 import { userService } from "../../services/user.service";
+import { API_URL } from "../../services/api.service";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function ProfileScreen() {
@@ -28,6 +29,16 @@ export default function ProfileScreen() {
     }, [])
   );
 
+  const buildAvatarUrl = (rawUrl: string | null | undefined): string | null => {
+    if (!rawUrl) return null;
+
+    if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
+      return rawUrl;
+    }
+
+    return `${API_URL}${rawUrl}`;
+  };
+
   const loadUserData = async () => {
     try {
       setLoading(true);
@@ -35,11 +46,8 @@ export default function ProfileScreen() {
       setUserName(profile.name);
       setUserEmail(profile.email);
       
-      // Construir URL completa do avatar
-      const fullAvatarUrl = profile.avatarUrl 
-        ? `http://localhost:3000${profile.avatarUrl}` 
-        : null;
-      setUserAvatarUrl(fullAvatarUrl);
+      // Construir URL completa do avatar (S3 ou local)
+      setUserAvatarUrl(buildAvatarUrl(profile.avatarUrl));
       
       // Atualizar AsyncStorage para compatibilidade
       await AsyncStorage.setItem("userName", profile.name);

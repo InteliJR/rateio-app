@@ -15,6 +15,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { userService } from "../../services/user.service";
+import { API_URL } from "../../services/api.service";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import * as ImagePicker from "expo-image-picker";
@@ -37,6 +38,18 @@ export default function EditProfileScreen() {
     loadUserData();
   }, []);
 
+  const buildAvatarUrl = (rawUrl: string | null | undefined): string | null => {
+    if (!rawUrl) return null;
+
+    // Se o backend já devolve uma URL absoluta (ex: S3), usamos como está
+    if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
+      return rawUrl;
+    }
+
+    // Caso seja uma URL relativa (ex: /uploads/avatars/...), prefixar com a base da API
+    return `${API_URL}${rawUrl}`;
+  };
+
   const loadUserData = async () => {
     try {
       setInitialLoading(true);
@@ -45,11 +58,8 @@ export default function EditProfileScreen() {
       setEmail(profile.email);
       setCreatedAt(profile.createdAt);
       
-      // Construir URL completa do avatar
-      const fullAvatarUrl = profile.avatarUrl 
-        ? `http://localhost:3000${profile.avatarUrl}` 
-        : null;
-      setAvatarUrl(fullAvatarUrl);
+      // Construir URL completa do avatar (S3 ou local)
+      setAvatarUrl(buildAvatarUrl(profile.avatarUrl));
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
       Alert.alert("Erro", "Não foi possível carregar seus dados");
@@ -83,10 +93,8 @@ export default function EditProfileScreen() {
       console.log('[EDIT] Upload response:', updatedProfile);
       console.log('[EDIT] Avatar URL from backend:', updatedProfile.avatarUrl);
       
-      // Construir URL completa do avatar
-      const fullAvatarUrl = updatedProfile.avatarUrl 
-        ? `http://localhost:3000${updatedProfile.avatarUrl}` 
-        : null;
+      // Construir URL completa do avatar (S3 ou local)
+      const fullAvatarUrl = buildAvatarUrl(updatedProfile.avatarUrl);
       console.log('[EDIT] Full avatar URL:', fullAvatarUrl);
       setAvatarUrl(fullAvatarUrl);
       
