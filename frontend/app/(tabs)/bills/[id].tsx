@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Ionicons } from '@expo/vector-icons';
-import billService from '../../../services/bill.service';
+import billService, { BillSummaryResponse } from '../../../services/bill.service';
 
 interface BillPerson {
   name: string;
@@ -32,9 +32,6 @@ interface BillDetail {
   createdAt: string;
   items?: BillItem[];
 }
-
-
-import billService, { BillSummaryResponse } from '../../../services/bill.service';
 
 export default function BillDetail() {
   const { id } = useLocalSearchParams();

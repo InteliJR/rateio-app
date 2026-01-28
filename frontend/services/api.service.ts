@@ -1,9 +1,20 @@
 // mobile/services/api.service.ts
 
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
 import { storageService } from './storage.service';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+
+// Configurações de retry
+const RETRY_CONFIG = {
+  maxRetries: 3,
+  retryDelay: 1000, // 1 segundo inicial
+  retryableStatuses: [408, 500, 502, 503, 504], // Status codes que devem ser retentados
+  retryableErrors: ['ECONNABORTED', 'ETIMEDOUT', 'ENOTFOUND', 'ENETUNREACH', 'ERR_NETWORK'],
+};
+
+// Função de delay com backoff exponencial
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 class ApiService {
   private api: AxiosInstance;
@@ -133,6 +144,89 @@ class ApiService {
 
   getApi() {
     return this.api;
+  }
+
+  /**
+   * Verifica se o erro é retentável
+   */
+  private isRetryableError(error: AxiosError): boolean {
+    // Erro de rede (sem resposta)
+    if (!error.response) {
+      const errorCode = (error as any).code;
+      return RETRY_CONFIG.retryableErrors.some(code => 
+        errorCode === code || error.message?.includes('Network')
+      );
+    }
+    
+    // Erro com status retentável
+    return RETRY_CONFIG.retryableStatuses.includes(error.response.status);
+  }
+
+  /**
+   * Executa uma requisição com retry automático
+   */
+  async requestWithRetry<T>(
+    config: AxiosRequestConfig,
+    customRetries?: number
+  ): Promise<T> {
+    const maxRetries = customRetries ?? RETRY_CONFIG.maxRetries;
+    let lastError: AxiosError | null = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 0) {
+          const backoffDelay = RETRY_CONFIG.retryDelay * Math.pow(2, attempt - 1);
+          console.log(`[API] Retry attempt ${attempt}/${maxRetries} after ${backoffDelay}ms...`);
+          await delay(backoffDelay);
+        }
+
+        const response = await this.api.request<T>(config);
+        
+        if (attempt > 0) {
+          console.log(`[API] Request succeeded on retry attempt ${attempt}`);
+        }
+        
+        return response.data;
+      } catch (error) {
+        lastError = error as AxiosError;
+        
+        // Se não é retentável ou é a última tentativa, lança o erro
+        if (!this.isRetryableError(lastError) || attempt === maxRetries) {
+          if (attempt > 0) {
+            console.error(`[API] All ${maxRetries} retry attempts failed`);
+          }
+          throw error;
+        }
+        
+        console.warn(`[API] Request failed (attempt ${attempt + 1}/${maxRetries + 1}):`, {
+          url: config.url,
+          error: lastError.message,
+          code: (lastError as any).code,
+        });
+      }
+    }
+
+    throw lastError;
+  }
+
+  /**
+   * POST com retry automático - ideal para uploads
+   */
+  async postWithRetry<T>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig,
+    customRetries?: number
+  ): Promise<T> {
+    return this.requestWithRetry<T>(
+      {
+        method: 'POST',
+        url,
+        data,
+        ...config,
+      },
+      customRetries
+    );
   }
 }
 

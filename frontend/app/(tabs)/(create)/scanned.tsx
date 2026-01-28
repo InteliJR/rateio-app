@@ -19,7 +19,6 @@ import billService from '../../../services/bill.service';
 import itemsService from '../../../services/items.service';
 import participantsService, { Participant } from '../../../services/participants.service';
 
-
 export default function ScannedBillScreen() {
   const { id, participants: participantsParam } = useLocalSearchParams();
   const router = useRouter();
@@ -33,6 +32,8 @@ export default function ScannedBillScreen() {
   const [billStatus, setBillStatus] = useState<'PENDING_OCR' | 'OCR_FAILED' | 'REVIEWING' | 'DIVIDING' | 'COMPLETED' | null>(null);
   const [processingOcr, setProcessingOcr] = useState(false);
   const [savingName, setSavingName] = useState(false);
+
+  // Estados de edição inline
   const [editingItemNameId, setEditingItemNameId] = useState<string | null>(null);
   const [editingItemPriceId, setEditingItemPriceId] = useState<string | null>(null);
   const [editingItemQtyId, setEditingItemQtyId] = useState<string | null>(null);
@@ -40,7 +41,9 @@ export default function ScannedBillScreen() {
   const [itemNames, setItemNames] = useState<Record<string, string>>({});
   const [itemPrices, setItemPrices] = useState<Record<string, string>>({});
   const [itemQuantities, setItemQuantities] = useState<Record<string, string>>({});
-  const saveTimeoutsRef = useRef<Record<string, NodeJS.Timeout>>({});
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const saveTimeoutsRef = useRef<{ [key: string]: any }>({});
 
   useEffect(() => {
     loadBillData();
@@ -106,7 +109,6 @@ export default function ScannedBillScreen() {
           // Se for erro 429 (Too Many Requests), aumentar intervalo
           if (error.response?.status === 429 || error.message?.includes('Too Many Requests')) {
             console.warn('Rate limit atingido no polling, aguardando mais tempo...');
-            // Não fazer nada, o intervalo já está adequado
           }
           // Continuar tentando mesmo com erro até o limite
         }
@@ -228,13 +230,20 @@ export default function ScannedBillScreen() {
     }
   };
 
-  const deleteItem = (itemId: string) => {
-    setItems(items.filter(item => item.id !== itemId));
-    if (expandedItemId === itemId) {
-      setExpandedItemId('');
+  const deleteItem = async (itemId: string) => {
+    try {
+      await itemsService.deleteItem(id as string, itemId);
+      setItems(items.filter(item => item.id !== itemId));
+      if (expandedItemId === itemId) {
+        setExpandedItemId('');
+      }
+    } catch (error: any) {
+      console.error('Error deleting item:', error);
+      Alert.alert('Erro', error.message || 'Não foi possível remover o item');
     }
   };
 
+  // === FUNÇÕES DE EDIÇÃO DE NOME ===
   const handleItemNameChange = (itemId: string, newName: string) => {
     setItemNames(prev => ({
       ...prev,
@@ -251,17 +260,10 @@ export default function ScannedBillScreen() {
 
     const trimmedName = itemNames[itemId]?.trim();
     
-    // Validar que nome não está vazio
+    // Validar que nome não está vazio - mostrar alerta e manter em modo edição
     if (!trimmedName) {
-      // Reverter para o valor original
-      const originalItem = items.find(item => item.id === itemId);
-      if (originalItem) {
-        setItemNames(prev => ({
-          ...prev,
-          [itemId]: originalItem.name,
-        }));
-      }
-      setEditingItemNameId(null);
+      Alert.alert('Atenção', 'O nome do item não pode ficar vazio');
+      // Manter o foco no campo para o usuário digitar
       return;
     }
 
@@ -298,7 +300,6 @@ export default function ScannedBillScreen() {
         // Tratar erro 429 (Too Many Requests)
         if (error.response?.status === 429 || error.message?.includes('Too Many Requests')) {
           errorMessage = 'Muitas requisições. Aguarde um momento e tente novamente.';
-          // Aguardar um pouco antes de permitir nova tentativa
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
         
@@ -324,6 +325,7 @@ export default function ScannedBillScreen() {
     saveTimeoutsRef.current[itemId] = timeoutId;
   };
 
+  // === FUNÇÕES DE EDIÇÃO DE PREÇO ===
   const handleItemPriceChange = (itemId: string, newPrice: string) => {
     // Permitir apenas números, vírgula e ponto
     const cleaned = newPrice.replace(/[^0-9,.]/g, '').replace(',', '.');
@@ -378,7 +380,6 @@ export default function ScannedBillScreen() {
       } catch (error: any) {
         console.error('Error updating item price:', error);
         
-        // Extrair mensagem de erro mais amigável
         let errorMessage = 'Não foi possível atualizar o valor do item';
         if (error.response?.data?.message) {
           errorMessage = error.response.data.message;
@@ -386,14 +387,11 @@ export default function ScannedBillScreen() {
           errorMessage = error.message;
         }
         
-        // Tratar erro 429 (Too Many Requests)
         if (error.response?.status === 429 || error.message?.includes('Too Many Requests')) {
           errorMessage = 'Muitas requisições. Aguarde um momento e tente novamente.';
-          // Aguardar um pouco antes de permitir nova tentativa
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
         
-        // Só mostrar alert se não for erro 404
         if (error.response?.status !== 404) {
           Alert.alert('Erro', errorMessage);
         }
@@ -407,17 +405,18 @@ export default function ScannedBillScreen() {
         setSavingItemId(null);
         setEditingItemPriceId(null);
       }
-    }, 500); // Debounce de 500ms
+    }, 500);
 
     saveTimeoutsRef.current[itemId] = timeoutId;
   };
 
+  // === FUNÇÕES DE EDIÇÃO DE QUANTIDADE ===
   const handleItemQuantityChange = (itemId: string, newQty: string) => {
     // Permitir campo vazio durante a edição, apenas remover caracteres não numéricos
     const cleaned = newQty.replace(/[^0-9]/g, '');
     setItemQuantities(prev => ({
       ...prev,
-      [itemId]: cleaned, // Pode ser string vazia durante a edição
+      [itemId]: cleaned,
     }));
   };
 
@@ -448,7 +447,7 @@ export default function ScannedBillScreen() {
       return;
     }
 
-    // Salvar nova QUANTIDADE no backend (preço unitário é mantido)
+    // Salvar nova QUANTIDADE no backend
     const timeoutId = setTimeout(async () => {
       try {
         setSavingItemId(itemId);
@@ -462,7 +461,6 @@ export default function ScannedBillScreen() {
       } catch (error: any) {
         console.error('Error updating item quantity:', error);
         
-        // Extrair mensagem de erro mais amigável
         let errorMessage = 'Não foi possível atualizar a quantidade do item';
         if (error.response?.data?.message) {
           errorMessage = error.response.data.message;
@@ -470,14 +468,11 @@ export default function ScannedBillScreen() {
           errorMessage = error.message;
         }
         
-        // Tratar erro 429 (Too Many Requests)
         if (error.response?.status === 429 || error.message?.includes('Too Many Requests')) {
           errorMessage = 'Muitas requisições. Aguarde um momento e tente novamente.';
-          // Aguardar um pouco antes de permitir nova tentativa
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
         
-        // Só mostrar alert se não for erro 404
         if (error.response?.status !== 404) {
           Alert.alert('Erro', errorMessage);
         }
@@ -490,7 +485,7 @@ export default function ScannedBillScreen() {
         setSavingItemId(null);
         setEditingItemQtyId(null);
       }
-    }, 500); // Debounce de 500ms
+    }, 500);
 
     saveTimeoutsRef.current[itemId] = timeoutId;
   };
@@ -499,6 +494,7 @@ export default function ScannedBillScreen() {
     router.push({
       pathname: '/(tabs)/(create)/summary',
       params: {
+        billId: id as string,
         billName: billName,
         items: JSON.stringify(items),
         participants: JSON.stringify(participants),
@@ -568,196 +564,190 @@ export default function ScannedBillScreen() {
               </TouchableOpacity>
             </View>
 
-          {/* Mensagem de processamento OCR */}
-          {processingOcr && (
-            <View style={styles.processingContainer}>
-              <ActivityIndicator size="large" color="#81007F" />
-              <Text style={styles.processingText}>
-                Processando imagem e reconhecendo itens...
-              </Text>
-              <Text style={styles.processingSubtext}>
-                Isso pode levar alguns segundos
-              </Text>
-            </View>
-          )}
+            {/* Mensagem de processamento OCR */}
+            {processingOcr && (
+              <View style={styles.processingContainer}>
+                <ActivityIndicator size="large" color="#81007F" />
+                <Text style={styles.processingText}>
+                  Processando imagem e reconhecendo itens...
+                </Text>
+                <Text style={styles.processingSubtext}>
+                  Isso pode levar alguns segundos
+                </Text>
+              </View>
+            )}
 
-          {/* Mensagem quando OCR falhou */}
-          {billStatus === 'OCR_FAILED' && items.length === 0 && (
-            <View style={styles.errorContainer}>
-              <Ionicons name="alert-circle-outline" size={48} color="#FF6B6B" />
-              <Text style={styles.errorTitle}>Não foi possível reconhecer os itens</Text>
-              <Text style={styles.errorText}>
-                Você pode adicionar os itens manualmente usando o botão "+ Item"
-              </Text>
-            </View>
-          )}
+            {/* Mensagem quando OCR falhou */}
+            {billStatus === 'OCR_FAILED' && items.length === 0 && (
+              <View style={styles.errorContainer}>
+                <Ionicons name="alert-circle-outline" size={48} color="#FF6B6B" />
+                <Text style={styles.errorTitle}>Não foi possível reconhecer os itens</Text>
+                <Text style={styles.errorText}>
+                  Você pode adicionar os itens manualmente usando o botão "+ Item"
+                </Text>
+              </View>
+            )}
 
-          {/* Lista de items */}
-          {!processingOcr && items.map((item, index) => (
-            <View key={item.id} style={styles.itemCardWrapper}>
-              <View style={styles.itemCardMain}>
-                <View style={styles.itemCardLeft}>
-                  <View style={[styles.inputWrapper, styles.nameInputWrapper]}>
-                    {editingItemNameId === item.id ? (
-                      <TextInput
-                        style={[
-                          styles.itemCardName,
-                          styles.itemCardNameFocused
-                        ]}
-                        value={itemNames[item.id] || item.name}
-                        onChangeText={(text) => handleItemNameChange(item.id, text)}
-                        onBlur={() => handleItemNameBlur(item.id)}
-                        placeholder="Nome do item"
-                        placeholderTextColor="#999"
-                        editable={true}
-                        underlineColorAndroid="transparent"
-                        selectionColor="#8B2E8F"
-                        multiline={false}
-                        numberOfLines={1}
-                      />
-                    ) : (
-                      <TouchableOpacity
-                        style={styles.itemCardNameContainer}
-                        onPress={() => setEditingItemNameId(item.id)}
-                        activeOpacity={0.7}
-                      >
-                        <Text
-                          style={styles.itemCardNameText}
+            {/* Lista de items */}
+            {!processingOcr && items.map((item, index) => (
+              <View key={item.id} style={styles.itemCardWrapper}>
+                <View style={styles.itemCardMain}>
+                  <View style={styles.itemCardLeft}>
+                    <View style={[styles.inputWrapper, styles.nameInputWrapper]}>
+                      {editingItemNameId === item.id ? (
+                        <TextInput
+                          style={[
+                            styles.itemCardName,
+                            styles.itemCardNameFocused
+                          ]}
+                          value={itemNames[item.id] !== undefined ? itemNames[item.id] : item.name}
+                          onChangeText={(text) => handleItemNameChange(item.id, text)}
+                          onBlur={() => handleItemNameBlur(item.id)}
+                          placeholder="Nome do item"
+                          placeholderTextColor="#999"
+                          editable={true}
+                          underlineColorAndroid="transparent"
+                          selectionColor="#8B2E8F"
+                          multiline={false}
                           numberOfLines={1}
-                          ellipsizeMode="tail"
-                        >
-                          {itemNames[item.id] || item.name}
-                        </Text>
-                        <Ionicons 
-                          name="create-outline" 
-                          size={14} 
-                          color="#8B2E8F" 
-                          style={styles.editIconInContainer}
                         />
-                      </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity
+                          style={styles.itemCardNameContainer}
+                          onPress={() => setEditingItemNameId(item.id)}
+                          activeOpacity={0.7}
+                        >
+                          <Text
+                            style={styles.itemCardNameText}
+                            numberOfLines={1}
+                            ellipsizeMode="tail"
+                          >
+                            {itemNames[item.id] !== undefined ? itemNames[item.id] : item.name}
+                          </Text>
+                          <Ionicons 
+                            name="create-outline" 
+                            size={14} 
+                            color="#8B2E8F" 
+                            style={styles.editIconInContainer}
+                          />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                    {savingItemId === item.id && (
+                      <ActivityIndicator size="small" color="#81007F" style={styles.savingItemIndicator} />
                     )}
                   </View>
-                  {savingItemId === item.id && (
-                    <ActivityIndicator size="small" color="#81007F" style={styles.savingItemIndicator} />
-                  )}
-                </View>
-                <View style={styles.itemCardRight}>
-                  <View style={styles.inputWrapper}>
-                    <TextInput
-                      style={[
-                        styles.itemCardQty,
-                        editingItemQtyId === item.id && styles.itemCardQtyFocused,
-                        editingItemQtyId !== item.id && styles.itemCardQtyEditable
-                      ]}
-                      value={itemQuantities[item.id] !== undefined ? itemQuantities[item.id] : item.quantity.toString()}
-                      onChangeText={(text) => handleItemQuantityChange(item.id, text)}
-                      onBlur={() => handleItemQuantityBlur(item.id)}
-                      onFocus={() => setEditingItemQtyId(item.id)}
-                      keyboardType="number-pad"
-                      placeholder="1"
-                      placeholderTextColor="#999"
-                      underlineColorAndroid="transparent"
-                      selectionColor="#8B2E8F"
-                    />
-                  </View>
-                  <Text style={styles.qtySuffix}>x</Text>
-                  <View style={styles.inputWrapper}>
-                    <TextInput
-                      style={[
-                        styles.itemCardAmount,
-                        editingItemPriceId === item.id && styles.itemCardAmountFocused,
-                        editingItemPriceId !== item.id && styles.itemCardAmountEditable
-                      ]}
-                      value={itemPrices[item.id] || item.price.toFixed(2).replace('.', ',')}
-                      onChangeText={(text) => handleItemPriceChange(item.id, text)}
-                      onBlur={() => handleItemPriceBlur(item.id)}
-                      onFocus={() => setEditingItemPriceId(item.id)}
-                      keyboardType="numeric"
-                      placeholder="0,00"
-                      placeholderTextColor="#999"
-                      underlineColorAndroid="transparent"
-                      selectionColor="#8B2E8F"
-                    />
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => setExpandedItemId(expandedItemId === item.id ? '' : item.id)}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons
-                      name={expandedItemId === item.id ? 'chevron-up' : 'chevron-down'}
-                      size={20}
-                      color="#666"
-                    />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Dropdown com checkboxes */}
-              {expandedItemId === item.id && (
-                <View style={styles.dropdownWrapper}>
-                  <ScrollView
-                    style={styles.checkboxesScroll}
-                    scrollEnabled={true}
-                    showsVerticalScrollIndicator={true}
-                  >
-                    <View style={styles.checkboxesList}>
-                      {participants.map((participant, idx) => {
-                        const isAssigned = item.assignedParticipants.includes(participant);
-                        return (
-                          <TouchableOpacity
-                            key={idx}
-                            style={styles.checkboxRow}
-                            onPress={() => toggleParticipant(item.id, participant)}
-                            activeOpacity={0.6}
-                          >
-                            <View style={[styles.checkbox, isAssigned && styles.checkboxActive]}>
-                              {isAssigned && (
-                                <Ionicons name="checkmark" size={10} color="#8B2E8F" />
-                              )}
-                            </View>
-                            <Text style={styles.participantName}>{participant}</Text>
-                          </TouchableOpacity>
-                        );
-                      })}
+                  <View style={styles.itemCardRight}>
+                    <View style={styles.inputWrapper}>
+                      <TextInput
+                        style={[
+                          styles.itemCardQty,
+                          editingItemQtyId === item.id && styles.itemCardQtyFocused,
+                          editingItemQtyId !== item.id && styles.itemCardQtyEditable
+                        ]}
+                        value={itemQuantities[item.id] !== undefined ? itemQuantities[item.id] : item.quantity.toString()}
+                        onChangeText={(text) => handleItemQuantityChange(item.id, text)}
+                        onBlur={() => handleItemQuantityBlur(item.id)}
+                        onFocus={() => setEditingItemQtyId(item.id)}
+                        keyboardType="number-pad"
+                        placeholder="1"
+                        placeholderTextColor="#999"
+                        underlineColorAndroid="transparent"
+                        selectionColor="#8B2E8F"
+                      />
                     </View>
-                  </ScrollView>
-
-                  {/* Buttons Footer Row */}
-                  <View style={styles.footerRow}>
+                    <Text style={styles.qtySuffix}>x</Text>
+                    <View style={styles.inputWrapper}>
+                      <TextInput
+                        style={[
+                          styles.itemCardAmount,
+                          editingItemPriceId === item.id && styles.itemCardAmountFocused,
+                          editingItemPriceId !== item.id && styles.itemCardAmountEditable
+                        ]}
+                        value={itemPrices[item.id] || item.price.toFixed(2).replace('.', ',')}
+                        onChangeText={(text) => handleItemPriceChange(item.id, text)}
+                        onBlur={() => handleItemPriceBlur(item.id)}
+                        onFocus={() => setEditingItemPriceId(item.id)}
+                        keyboardType="numeric"
+                        placeholder="0,00"
+                        placeholderTextColor="#999"
+                        underlineColorAndroid="transparent"
+                        selectionColor="#8B2E8F"
+                      />
+                    </View>
                     <TouchableOpacity
-                      style={styles.deleteIconButton}
-                      onPress={() => deleteItem(item.id)}
+                      onPress={() => setExpandedItemId(expandedItemId === item.id ? '' : item.id)}
+                      activeOpacity={0.7}
                     >
-                      <MaterialCommunityIcons name="trash-can-outline" size={20} color="#999" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.addItemButton}
-                      onPress={() => setIsModalVisible(true)}
-                    >
-                      <Text style={styles.addItemButtonLabel}>Adicionar</Text>
+                      <Ionicons
+                        name={expandedItemId === item.id ? 'chevron-up' : 'chevron-down'}
+                        size={20}
+                        color="#666"
+                      />
                     </TouchableOpacity>
                   </View>
                 </View>
-              )}
-            </View>
-          ))}
 
-          {/* Card do Total - só mostrar se não estiver processando e houver itens */}
-          {!processingOcr && items.length > 0 && (
-            <View style={styles.totalCardWrapper}>
-              <Text style={styles.totalCardLabel}>Total:</Text>
-              <Text style={styles.totalCardAmount}>{formatCurrency(calculateTotal())}</Text>
-            </View>
-          )}
+                {/* Dropdown com checkboxes */}
+                {expandedItemId === item.id && (
+                  <View style={styles.dropdownWrapper}>
+                    <ScrollView
+                      style={styles.checkboxesScroll}
+                      scrollEnabled={true}
+                      showsVerticalScrollIndicator={true}
+                    >
+                      <View style={styles.checkboxesList}>
+                        {participants.map((participant, idx) => {
+                          const isAssigned = item.assignedParticipants.includes(participant);
+                          return (
+                            <TouchableOpacity
+                              key={idx}
+                              style={styles.checkboxRow}
+                              onPress={() => toggleParticipant(item.id, participant)}
+                              activeOpacity={0.6}
+                            >
+                              <View style={[styles.checkbox, isAssigned && styles.checkboxActive]}>
+                                {isAssigned && (
+                                  <Ionicons name="checkmark" size={10} color="#8B2E8F" />
+                                )}
+                              </View>
+                              <Text style={styles.participantName}>{participant}</Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </ScrollView>
 
-          {/* Botão Visualizar Resumo - só mostrar se não estiver processando e houver itens */}
-          {!processingOcr && items.length > 0 && (
-            <TouchableOpacity style={styles.summaryBtn} onPress={handleSummary}>
-              <Text style={styles.summaryBtnText}>Visualizar resumo</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </ScrollView>
+                    {/* Buttons Footer Row */}
+                    <View style={styles.footerRow}>
+                      <TouchableOpacity
+                        style={styles.deleteIconButton}
+                        onPress={() => deleteItem(item.id)}
+                      >
+                        <MaterialCommunityIcons name="trash-can-outline" size={20} color="#999" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              </View>
+            ))}
+
+            {/* Card do Total - só mostrar se não estiver processando e houver itens */}
+            {!processingOcr && items.length > 0 && (
+              <View style={styles.totalCardWrapper}>
+                <Text style={styles.totalCardLabel}>Total:</Text>
+                <Text style={styles.totalCardAmount}>{formatCurrency(calculateTotal())}</Text>
+              </View>
+            )}
+
+            {/* Botão Visualizar Resumo - só mostrar se não estiver processando e houver itens */}
+            {!processingOcr && items.length > 0 && (
+              <TouchableOpacity style={styles.summaryBtn} onPress={handleSummary}>
+                <Text style={styles.summaryBtnText}>Visualizar resumo</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </ScrollView>
       )}
 
       <AddItemModal
@@ -780,25 +770,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   scrollContent: {
-    paddingBottom: 20,
+    flexGrow: 1,
+    paddingBottom: 32,
   },
   contentContainer: {
+    flex: 1,
+    paddingTop: 16,
     paddingHorizontal: 20,
-    paddingTop: 0,
-    paddingBottom: 8,
-    gap: 10,
-    backgroundColor: '#fff',
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    marginBottom: 12,
+    justifyContent: 'space-between',
+    marginBottom: 18,
   },
   billNameContainer: {
-    flex: 1,
     flexDirection: 'row',
+    flex: 1,
     alignItems: 'center',
     marginRight: 12,
   },
@@ -833,53 +821,50 @@ const styles = StyleSheet.create({
   savingIndicator: {
     marginLeft: 8,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#000',
-  },
   addItemBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: 'transparent',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderWidth: 1.5,
-    borderColor: '#8B2E8F',
-    borderRadius: 16,
+    borderColor: '#81007F',
   },
   addItemBtnText: {
-    color: '#8B2E8F',
-    fontSize: 12,
+    color: '#81007F',
     fontWeight: '600',
+    fontSize: 14,
   },
   itemCardWrapper: {
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 10,
-    overflow: 'hidden',
     backgroundColor: '#fff',
+    borderRadius: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    overflow: 'hidden',
   },
   itemCardMain: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    justifyContent: 'space-between',
+    paddingLeft: 16,
+    paddingRight: 12,
+    paddingVertical: 18,
     backgroundColor: '#fff',
   },
   itemCardRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    flexShrink: 0, // Não permite que este container encolha
-    maxWidth: '45%', // Limita o tamanho máximo para garantir espaço para o nome
+    gap: 10,
+    flexShrink: 0,
   },
   itemCardLeft: {
     flex: 1,
-    marginRight: 12,
+    marginRight: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    minWidth: 100,
-    flexShrink: 1, // Permite encolher se necessário
+    gap: 6,
+    minWidth: 0,
+    flexShrink: 1,
   },
   inputWrapper: {
     flexDirection: 'row',
@@ -890,7 +875,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     overflow: 'hidden',
-    alignSelf: 'stretch', // Garante que ocupe toda a altura disponível
+    alignSelf: 'stretch',
     flexShrink: 1,
     marginLeft: 0,
   },
@@ -910,7 +895,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'transparent',
     borderColor: 'transparent',
-    outlineWidth: 0,
     minHeight: 20,
     minWidth: 0,
     textAlign: 'left',
@@ -939,14 +923,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minWidth: 0,
     paddingLeft: 0,
-    paddingRight: 20,
+    paddingRight: 0,
     borderBottomWidth: 1,
     borderBottomColor: '#E8D5EA',
     borderStyle: 'dashed',
     paddingBottom: 2,
   },
   itemCardNameText: {
-    flex: 1,
+    flexShrink: 1,
     fontSize: 14,
     fontWeight: '400',
     color: '#000',
@@ -957,14 +941,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 0,
     top: '50%',
-    marginTop: -7, // Metade do tamanho do ícone para centralizar verticalmente
+    marginTop: -7,
     opacity: 0.5,
-    pointerEvents: 'none', // Permite que o toque passe através do ícone
     width: 16,
     height: 16,
   },
   editIconInContainer: {
-    marginLeft: 4,
+    marginLeft: 12,
     opacity: 0.5,
     flexShrink: 0,
   },
@@ -986,16 +969,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'transparent',
     borderColor: 'transparent',
-    outlineWidth: 0,
   },
   itemCardQtyEditable: {
-    borderBottomColor: '#E8D5EA',
-    borderBottomWidth: 1,
-    borderStyle: 'dashed',
-    backgroundColor: '#FAF9FA',
-    paddingHorizontal: 2,
-    paddingVertical: 2,
-    borderRadius: 4,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   itemCardQtyFocused: {
     borderBottomColor: '#8B2E8F',
@@ -1023,16 +1002,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'transparent',
     borderColor: 'transparent',
-    outlineWidth: 0,
   },
   itemCardAmountEditable: {
-    borderBottomColor: '#E8D5EA',
-    borderBottomWidth: 1,
-    borderStyle: 'dashed',
-    backgroundColor: '#FAF9FA',
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    borderRadius: 4,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
   itemCardAmountFocused: {
     borderBottomColor: '#8B2E8F',
@@ -1043,102 +1018,93 @@ const styles = StyleSheet.create({
   dropdownWrapper: {
     backgroundColor: '#F8F8F8',
     borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
+    borderTopColor: '#E8E8E8',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
   checkboxesScroll: {
-    maxHeight: 160,
+    maxHeight: 140,
   },
   checkboxesList: {
-    paddingRight: 8,
+    gap: 8,
   },
   checkboxRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
     gap: 10,
   },
   checkbox: {
     width: 18,
     height: 18,
-    borderWidth: 1.3,
-    borderColor: '#ccc',
-    borderRadius: 3,
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: '#999',
     backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   checkboxActive: {
     borderColor: '#8B2E8F',
-    backgroundColor: '#fff',
+    backgroundColor: '#F1E4F2',
   },
   participantName: {
-    fontSize: 13,
-    fontWeight: '400',
-    color: '#555',
+    fontSize: 14,
+    color: '#333',
+    flex: 1,
   },
   footerRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    justifyContent: 'space-between',
+    marginTop: 12,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#E8E8E8',
-    gap: 12,
   },
   deleteIconButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 6,
   },
   addItemButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 20,
-    borderWidth: 1.5,
-    borderColor: '#8B2E8F',
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: '#F1E4F2',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
   },
   addItemButtonLabel: {
+    color: '#81007F',
     fontSize: 13,
-    fontWeight: '500',
-    color: '#8B2E8F',
+    fontWeight: '600',
   },
   totalCardWrapper: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
-    marginTop: 6,
+    borderColor: '#E5E5E5',
   },
   totalCardLabel: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '400',
-    color: '#000',
+    color: '#333',
+    marginBottom: 4,
   },
   totalCardAmount: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
     color: '#000',
   },
   summaryBtn: {
-    marginHorizontal: 0,
-    marginTop: 24,
-    marginBottom: 0,
+    backgroundColor: '#81007F',
+    borderRadius: 25,
     paddingVertical: 14,
-    paddingHorizontal: 16,
-    backgroundColor: '#8B2E8F',
-    borderRadius: 28,
+    paddingHorizontal: 24,
     alignItems: 'center',
-    justifyContent: 'center',
+    marginTop: 16,
   },
   summaryBtnText: {
-    color: '#ffff00',
+    color: '#FFD700',
     fontSize: 16,
     fontWeight: '600',
   },

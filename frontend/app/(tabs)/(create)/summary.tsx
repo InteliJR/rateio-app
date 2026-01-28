@@ -7,11 +7,13 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Ionicons } from '@expo/vector-icons';
 import { useBillStore } from '../../../store/billStore';
+import billService from '../../../services/bill.service';
 
 interface ParticipantSummary {
   name: string;
@@ -39,7 +41,8 @@ interface BillSummaryData {
 
 export default function SummaryScreen() {
   const router = useRouter();
-  const { billName, items: itemsParam, participants: participantsParam } = useLocalSearchParams();
+  const { billId, billName, items: itemsParam, participants: participantsParam } = useLocalSearchParams();
+  const [saving, setSaving] = useState(false);
   const [summary, setSummary] = useState<BillSummaryData>({
     billId: '',
     establishmentName: '',
@@ -111,7 +114,7 @@ export default function SummaryScreen() {
         }, 0);
 
         setSummary({
-          billId: '1',
+          billId: (billId as string) || '',
           establishmentName: (billName && typeof billName === 'string' ? billName : 'Conta') as string,
           totalAmount: itemsTotal,
           itemsTotal,
@@ -174,13 +177,35 @@ export default function SummaryScreen() {
     });
   };
 
-  const handleSave = () => {
-    Alert.alert('Sucesso', 'Conta dividida e salva!', [
-      {
-        text: 'OK',
-        onPress: () => router.push('/(tabs)/bills'),
-      },
-    ]);
+  const handleSave = async () => {
+    if (!billId) {
+      Alert.alert('Erro', 'ID da conta não encontrado');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      console.log('[Summary] Salvando conta:', billId);
+
+      // Atualizar status da conta para COMPLETED
+      await billService.updateBill(billId as string, {
+        status: 'COMPLETED',
+        totalAmount: summary.grandTotal,
+      });
+
+      console.log('[Summary] Conta salva com sucesso!');
+      Alert.alert('Sucesso', 'Conta dividida e salva!', [
+        {
+          text: 'OK',
+          onPress: () => router.push('/(tabs)/bills'),
+        },
+      ]);
+    } catch (error) {
+      console.error('[Summary] Erro ao salvar conta:', error);
+      Alert.alert('Erro', 'Não foi possível salvar a conta. Tente novamente.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -284,8 +309,16 @@ export default function SummaryScreen() {
           </View>
 
           {/* Botão Salvar */}
-          <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-            <Text style={styles.saveButtonText}>Salvar</Text>
+          <TouchableOpacity 
+            style={[styles.saveButton, saving && styles.saveButtonDisabled]} 
+            onPress={handleSave}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.saveButtonText}>Salvar</Text>
+            )}
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -491,6 +524,10 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 48,
+  },
+  saveButtonDisabled: {
+    opacity: 0.7,
   },
   saveButtonText: {
     fontSize: 16,

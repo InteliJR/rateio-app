@@ -104,15 +104,26 @@ class ItemsService {
   }
 
   async deleteItem(billId: string, itemId: string): Promise<BillItem[]> {
-    const currentItems = this.cache.get(billId) || await this.getItems(billId);
+    try {
+      const api = apiService.getApi();
+      await api.delete(`/bills/${billId}/items/${itemId}`);
 
-    const newItems = currentItems.filter(item => item.id !== itemId);
+      // Atualizar cache
+      const currentItems = this.cache.get(billId) || await this.getItems(billId);
+      const newItems = currentItems.filter(item => item.id !== itemId);
+      this.cache.set(billId, newItems);
 
-    this.cache.set(billId, newItems);
-
-    await this.syncWithBackend(billId, newItems);
-
-    return newItems;
+      return newItems;
+    } catch (error: any) {
+      console.error('[ItemsService] Error deleting item:', error);
+      
+      // Se o item não foi encontrado (404), limpar cache para forçar recarga
+      if (error.response?.status === 404) {
+        this.clearCache(billId);
+      }
+      
+      throw new Error(error.response?.data?.message || error.message || 'Erro ao deletar item');
+    }
   }
 
   async updateItemName(billId: string, itemId: string, name: string): Promise<BillItem> {

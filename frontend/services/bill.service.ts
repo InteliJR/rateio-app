@@ -154,30 +154,32 @@ class BillService {
         console.log('[BillService] Nome do estabelecimento adicionado:', establishmentName);
       }
 
-      // Fazer requisição com configurações otimizadas
-      const api = apiService.getApi();
-
+      // Fazer requisição com retry automático para uploads
       console.log('[BillService] Enviando requisição para /bills...');
 
-      const response = await api.post<UploadBillResponse>('/bills', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          // Permitir que o Axios defina o boundary automaticamente
+      const response = await apiService.postWithRetry<UploadBillResponse>(
+        '/bills',
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+          timeout: 60000, // 60 segundos - aumentado para dar tempo para OCR
+          transformRequest: (data, headers) => {
+            // Não transformar FormData - deixar o Axios gerenciar
+            return data;
+          },
         },
-        timeout: 60000, // 60 segundos - aumentado para dar tempo para OCR
-        transformRequest: (data, headers) => {
-          // Não transformar FormData - deixar o Axios gerenciar
-          return data;
-        },
-      });
+        3 // máximo de 3 retentativas
+      );
 
       console.log('[BillService] Upload concluído com sucesso:', {
-        billId: response.data.id,
-        status: response.data.status,
-        message: response.data.message,
+        billId: response.id,
+        status: response.status,
+        message: response.message,
       });
 
-      return response.data;
+      return response;
     } catch (error: any) {
       console.error('[BillService] Erro ao fazer upload:', error);
 
@@ -242,17 +244,22 @@ class BillService {
         type: mimeType,
       } as any);
 
-      const api = apiService.getApi();
-      const response = await api.post<UploadBillResponse>(`/bills/${billId}/image`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
+      // Usar retry automático para upload de imagem
+      const response = await apiService.postWithRetry<UploadBillResponse>(
+        `/bills/${billId}/image`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+          timeout: 60000,
+          transformRequest: (data) => data,
         },
-        timeout: 60000,
-        transformRequest: (data) => data,
-      });
+        3 // máximo de 3 retentativas
+      );
 
-      console.log('[BillService] Upload de imagem concluído:', response.data);
-      return response.data;
+      console.log('[BillService] Upload de imagem concluído:', response);
+      return response;
     } catch (error: any) {
       console.error('[BillService] Erro ao fazer upload de imagem:', error);
       throw {
