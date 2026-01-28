@@ -243,20 +243,64 @@ class BillService {
       } as any);
 
       const api = apiService.getApi();
-      const response = await api.post<UploadBillResponse>(`/bills/${billId}/image`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        timeout: 60000,
-        transformRequest: (data) => data,
-      });
+      
+      // Tentar fazer upload com retry em caso de erro de rede
+      let lastError: any = null;
+      const maxRetries = 3;
+      const retryDelay = 2000; // 2 segundos
+      
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`[BillService] Tentativa ${attempt}/${maxRetries} de upload de imagem...`);
+          
+          const response = await api.post<UploadBillResponse>(`/bills/${billId}/image`, formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+            timeout: 60000,
+            transformRequest: (data) => data,
+          });
 
-      console.log('[BillService] Upload de imagem concluído:', response.data);
-      return response.data;
+          console.log('[BillService] Upload de imagem concluído:', response.data);
+          return response.data;
+        } catch (error: any) {
+          lastError = error;
+          
+          // Se for erro de rede e ainda tiver tentativas, aguardar e tentar novamente
+          if (
+            attempt < maxRetries &&
+            (error.message?.includes('Network') || 
+             error.code === 'ECONNABORTED' || 
+             !error.response)
+          ) {
+            console.warn(`[BillService] Erro de rede na tentativa ${attempt}, aguardando ${retryDelay}ms antes de tentar novamente...`);
+            await new Promise(resolve => setTimeout(resolve, retryDelay * attempt)); // Backoff exponencial
+            continue;
+          }
+          
+          // Se não for erro de rede ou já tentou todas as vezes, lançar erro
+          throw error;
+        }
+      }
+      
+      // Se chegou aqui, todas as tentativas falharam
+      throw lastError;
     } catch (error: any) {
-      console.error('[BillService] Erro ao fazer upload de imagem:', error);
+      console.error('[BillService] Erro ao fazer upload de imagem após todas as tentativas:', error);
+      
+      // Mensagens de erro mais específicas
+      let errorMessage = "Erro ao enviar imagem da conta";
+      
+      if (error.message?.includes('Network') || !error.response) {
+        errorMessage = "Erro de conexão. Verifique sua internet e tente novamente.";
+      } else if (error.code === 'ECONNABORTED') {
+        errorMessage = "Tempo limite excedido. Verifique sua conexão e tente novamente.";
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
       throw {
-        message: error.response?.data?.message || "Erro ao enviar imagem da conta",
+        message: errorMessage,
         statusCode: error.response?.status,
       } as UploadBillError;
     }

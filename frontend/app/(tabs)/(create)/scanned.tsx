@@ -91,51 +91,29 @@ export default function ScannedBillScreen() {
       console.log('[Scanned] Items data:', JSON.stringify(itemsData, null, 2));
       
       // 3. Carregar participantes
-      let participantsData = await participantsService.getParticipantsByBill(id as string);
-      console.log('[Scanned] Participants loaded:', participantsData.length);
-      
-      // Se não houver participantes, criar 2 participantes padrão automaticamente
-      if (participantsData.length === 0) {
-        console.log('[Scanned] No participants found, creating default participants');
-        try {
-          // Criar 2 participantes padrão
-          const defaultParticipants = await Promise.all([
-            participantsService.createParticipant(id as string, 'Pessoa 1'),
-            participantsService.createParticipant(id as string, 'Pessoa 2'),
-          ]);
-          participantsData = defaultParticipants;
-          console.log('[Scanned] Default participants created:', participantsData.length);
-        } catch (error: any) {
-          console.error('[Scanned] Error creating default participants:', error);
-          Alert.alert(
-            'Erro',
-            'Não foi possível criar participantes. Por favor, adicione participantes manualmente.',
-            [
-              {
-                text: 'Adicionar Participantes',
-                onPress: () => {
-                  router.replace({
-                    pathname: '/(tabs)/(create)/participants',
-                    params: { 
-                      id: id as string,
-                      participantCount: '2'
-                    },
-                  });
-                },
-              },
-              {
-                text: 'Cancelar',
-                style: 'cancel',
-                onPress: () => router.back(),
-              },
-            ]
-          );
-          setLoading(false);
-          return;
+      try {
+        const participantsData = await participantsService.getParticipantsByBill(id as string);
+        console.log('[Scanned] Participants loaded:', participantsData.length);
+        console.log('[Scanned] Participants data:', JSON.stringify(participantsData, null, 2));
+        
+        if (participantsData.length === 0) {
+          console.warn('[Scanned] No participants found for this bill');
+          console.warn('[Scanned] Bill ID:', id);
+          console.warn('[Scanned] Bill status:', billData.status);
+          // Não criar automaticamente - o usuário deve ter passado pelo fluxo correto
         }
+        
+        setParticipants(participantsData);
+      } catch (error: any) {
+        console.error('[Scanned] Error loading participants:', error);
+        console.error('[Scanned] Error details:', {
+          message: error.message,
+          statusCode: error.statusCode,
+          response: error.response,
+        });
+        // Continuar mesmo com erro - pode não haver participantes ainda
+        setParticipants([]);
       }
-      
-      setParticipants(participantsData);
       
       // 4. Carregar divisões existentes (assignments)
       let divisionsData: any[] = [];
