@@ -23,9 +23,18 @@ export default function ProfileScreen() {
   const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Ref para evitar chamadas duplicadas
+  const lastLoadTime = React.useRef<number>(0);
+  const MIN_LOAD_INTERVAL = 5000; // 5 segundos entre carregamentos
+
   useFocusEffect(
     React.useCallback(() => {
-      loadUserData();
+      const now = Date.now();
+      // Só carregar se passou tempo suficiente desde última chamada
+      if (now - lastLoadTime.current > MIN_LOAD_INTERVAL) {
+        lastLoadTime.current = now;
+        loadUserData();
+      }
     }, [])
   );
 

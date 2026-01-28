@@ -9,7 +9,7 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 const RETRY_CONFIG = {
   maxRetries: 3,
   retryDelay: 1000, // 1 segundo inicial
-  retryableStatuses: [408, 500, 502, 503, 504], // Status codes que devem ser retentados
+  retryableStatuses: [408, 429, 500, 502, 503, 504], // Status codes que devem ser retentados (incluindo 429)
   retryableErrors: ['ECONNABORTED', 'ETIMEDOUT', 'ENOTFOUND', 'ENETUNREACH', 'ERR_NETWORK'],
 };
 
@@ -78,6 +78,42 @@ class ApiService {
           data: error.response?.data,
           message: error.message,
         });
+
+        // Retry para Network Errors (sem resposta do servidor)
+        if (!error.response && error.message === 'Network Error') {
+          const retryCount = originalRequest._networkRetryCount || 0;
+          
+          if (retryCount < RETRY_CONFIG.maxRetries) {
+            originalRequest._networkRetryCount = retryCount + 1;
+            
+            // Backoff exponencial: 1s, 2s, 4s
+            const waitTime = RETRY_CONFIG.retryDelay * Math.pow(2, retryCount);
+            console.log(`[API] Network error. Retrying in ${waitTime}ms... (attempt ${retryCount + 1}/${RETRY_CONFIG.maxRetries})`);
+            
+            await delay(waitTime);
+            return this.api(originalRequest);
+          } else {
+            console.error("[API] Max retries reached for network error");
+          }
+        }
+
+        // Retry para erros 429 (Too Many Requests)
+        if (error.response?.status === 429) {
+          const retryCount = originalRequest._retryCount || 0;
+          
+          if (retryCount < RETRY_CONFIG.maxRetries) {
+            originalRequest._retryCount = retryCount + 1;
+            
+            // Backoff exponencial: 2s, 4s, 8s
+            const waitTime = RETRY_CONFIG.retryDelay * Math.pow(2, retryCount);
+            console.log(`[API] Rate limited. Retrying in ${waitTime}ms... (attempt ${retryCount + 1}/${RETRY_CONFIG.maxRetries})`);
+            
+            await delay(waitTime);
+            return this.api(originalRequest);
+          } else {
+            console.error("[API] Max retries reached for rate limit");
+          }
+        }
 
         // Se erro for 401 e não for uma tentativa de refresh
         if (error.response?.status === 401 && !originalRequest._retry) {
@@ -188,11 +224,11 @@ class ApiService {
     // Erro de rede (sem resposta)
     if (!error.response) {
       const errorCode = (error as any).code;
-      return RETRY_CONFIG.retryableErrors.some(code => 
+      return RETRY_CONFIG.retryableErrors.some(code =>
         errorCode === code || error.message?.includes('Network')
       );
     }
-    
+
     // Erro com status retentável
     return RETRY_CONFIG.retryableStatuses.includes(error.response.status);
   }
@@ -216,15 +252,15 @@ class ApiService {
         }
 
         const response = await this.api.request<T>(config);
-        
+
         if (attempt > 0) {
           console.log(`[API] Request succeeded on retry attempt ${attempt}`);
         }
-        
+
         return response.data;
       } catch (error) {
         lastError = error as AxiosError;
-        
+
         // Se não é retentável ou é a última tentativa, lança o erro
         if (!this.isRetryableError(lastError) || attempt === maxRetries) {
           if (attempt > 0) {
@@ -232,7 +268,7 @@ class ApiService {
           }
           throw error;
         }
-        
+
         console.warn(`[API] Request failed (attempt ${attempt + 1}/${maxRetries + 1}):`, {
           url: config.url,
           error: lastError.message,

@@ -64,7 +64,7 @@ export default function SummaryScreen() {
   const { id } = useLocalSearchParams();
   const { addBill } = useBillStore();
   const [summary, setSummary] = useState<BillSummaryData>(EMPTY_SUMMARY);
-  const [expandedIndex, setExpandedIndex] = useState<number>(-1);
+  const [expandedIndex, setExpandedIndex] = useState<number>(0); // Inicia com o primeiro participante expandido
   const [serviceFeePercentage, setServiceFeePercentage] = useState(10); // 10% padrão
   const [couvertPerPerson, setCouvertPerPerson] = useState(5.00); // R$ 5,00 por pessoa (padrão)
   const [loading, setLoading] = useState(true);
