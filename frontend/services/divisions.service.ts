@@ -92,11 +92,35 @@ class DivisionsService {
   async findAllByBill(billId: string): Promise<Division[]> {
     try {
       const api = apiService.getApi();
-      const response = await api.get<Division[]>('/divisions', {
+      const response = await api.get<any>('/divisions', {
         params: { billId },
       });
-      return response.data;
+      
+      // Backend retorna: { billId, items: [{ billItem, divisions: [], totalDivided }], totalDivisions }
+      // Precisamos extrair todas as divisões de todos os itens
+      if (response.data && typeof response.data === 'object') {
+        if ('items' in response.data && Array.isArray(response.data.items)) {
+          const allDivisions: Division[] = [];
+          response.data.items.forEach((itemGroup: any) => {
+            if (itemGroup && itemGroup.divisions && Array.isArray(itemGroup.divisions)) {
+              // Cada divisão já tem a estrutura correta: { id, billItemId, participantId, shareAmount, ... }
+              allDivisions.push(...itemGroup.divisions);
+            }
+          });
+          return allDivisions;
+        } else if (Array.isArray(response.data)) {
+          // Fallback: se for array direto
+          return response.data;
+        }
+      }
+      
+      return [];
     } catch (error: any) {
+      // Se não houver divisões, retornar array vazio em vez de erro
+      if (error.response?.status === 404 || error.response?.status === 400) {
+        console.log('[DivisionsService] No divisions found for bill:', billId);
+        return [];
+      }
       throw {
         message: error.response?.data?.message || 'Erro ao buscar divisões',
         statusCode: error.response?.status,

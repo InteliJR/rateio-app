@@ -11,26 +11,38 @@ class ItemsService {
   private cache: Map<string, BillItem[]> = new Map();
 
   async getItems(billId: string): Promise<BillItem[]> {
-    if (this.cache.has(billId)) {
-      return this.cache.get(billId)!;
-    }
-
+    // Sempre buscar do backend para garantir dados atualizados (especialmente após OCR)
+    // Não usar cache aqui para evitar dados desatualizados
+    
     try {
       const bill = await billService.getBill(billId);
+      console.log('[ItemsService] Bill items from backend:', bill.items?.length || 0);
+      console.log('[ItemsService] Bill items data:', JSON.stringify(bill.items, null, 2));
+      
       // Backend returns items as { name, quantity, unitPrice, totalPrice }
       // We map to BillItem: { id, name, quantity, price (total), assignedParticipants }
-      const items: BillItem[] = (bill.items || []).map((item: any, index: number) => ({
-        id: item.id || index.toString(), // Prefer ID from backend if available
-        name: item.name,
-        quantity: item.quantity,
-        price: item.totalPrice,
-        assignedParticipants: []
-      }));
+      const items: BillItem[] = (bill.items || []).map((item: any, index: number) => {
+        // Converter totalPrice para número (pode vir como string do backend)
+        const totalPrice = typeof item.totalPrice === 'string' 
+          ? parseFloat(item.totalPrice) 
+          : Number(item.totalPrice) || 0;
+        
+        return {
+          id: item.id || index.toString(), // Prefer ID from backend if available
+          name: item.name || `Item ${index + 1}`,
+          quantity: item.quantity || 1,
+          price: totalPrice,
+          assignedParticipants: []
+        };
+      });
 
+      console.log('[ItemsService] Mapped items:', items.length);
+      
+      // Atualizar cache
       this.cache.set(billId, items);
       return items;
     } catch (error: any) {
-      console.error('Error fetching items:', error);
+      console.error('[ItemsService] Error fetching items:', error);
       throw new Error(error.message || 'Failed to fetch items');
     }
   }

@@ -17,7 +17,7 @@ import billService, { UploadBillResponse } from '../../../services/bill.service'
 import { useBillStore } from '../../../store/billStore';
 
 interface BillWithStatus extends UploadBillResponse {
-  status?: 'pending' | 'completed' | 'cancelled';
+  status: UploadBillResponse['status'];
 }
 
 const DATE_FILTERS = [

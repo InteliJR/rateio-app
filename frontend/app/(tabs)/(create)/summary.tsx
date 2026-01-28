@@ -112,6 +112,49 @@ export default function SummaryScreen() {
       // 4. Buscar divisões (divisions) - aqui está o cálculo real de quanto cada um paga
       const divisionsData = await divisionsService.findAllByBill(id as string);
       console.log("[Summary] Divisions data:", divisionsData);
+      console.log("[Summary] Divisions count:", divisionsData.length);
+
+      // Se não há divisões, mostrar mensagem mas permitir visualizar dados básicos
+      if (divisionsData.length === 0) {
+        console.warn("[Summary] No divisions found. Showing basic info without participant breakdown.");
+        
+        // Criar resumo básico sem divisões
+        const participantSummaries: ParticipantSummary[] = participantsData.map(
+          (participant: Participant) => {
+            return {
+              id: participant.id,
+              name: participant.name,
+              subtotal: 0,
+              items: [],
+              fees: [],
+              couvert: round2(couvertPerPerson),
+              totalAmount: round2(couvertPerPerson),
+              paysFee: true,
+              paysCouvert: true,
+            };
+          }
+        );
+
+        const summaryData: BillSummaryData = {
+          billId: id as string,
+          establishmentName: billData.establishmentName || "Conta",
+          totalAmount: 0,
+          itemsTotal: 0,
+          feesTotal: 0,
+          grandTotal: round2(participantSummaries.reduce((sum, p) => sum + p.couvert, 0)),
+          participants: participantSummaries,
+        };
+
+        setSummary(summaryData);
+        setLoading(false);
+        
+        Alert.alert(
+          "Atenção",
+          "Nenhuma divisão encontrada. Atribua participantes aos itens na tela anterior para ver o resumo completo.",
+          [{ text: "OK" }]
+        );
+        return;
+      }
 
       // 5. Organizar dados por participante
       const participantSummaries: ParticipantSummary[] = participantsData.map(
