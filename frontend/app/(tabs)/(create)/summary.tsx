@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { Ionicons } from '@expo/vector-icons';
 import { useBillStore } from '../../../store/billStore';
 
 interface ParticipantSummary {
@@ -194,8 +195,9 @@ export default function SummaryScreen() {
             <TouchableOpacity
               style={styles.backButton}
               onPress={() => router.back()}
+              activeOpacity={0.7}
             >
-              <Text style={styles.backButtonText}>‹</Text>
+              <Ionicons name="chevron-back" size={22} color="#000" />
             </TouchableOpacity>
             <Text style={styles.titleText}>
               {billName || summary.establishmentName}
@@ -307,17 +309,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   backButton: {
-    width: 32,
-    height: 32,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFF',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingLeft: 2,
-  },
-  backButtonText: {
-    fontSize: 28,
-    fontWeight: '300',
-    color: '#000',
-    lineHeight: 28,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   titleSection: {
     flexDirection: 'row',

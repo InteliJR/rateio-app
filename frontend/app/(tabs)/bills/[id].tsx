@@ -10,6 +10,30 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { Ionicons } from '@expo/vector-icons';
+import billService from '../../../services/bill.service';
+
+interface BillPerson {
+  name: string;
+  amount: number;
+}
+
+interface BillItem {
+  description: string;
+  amount: number;
+  quantity?: number;
+  people?: BillPerson[];
+}
+
+interface BillDetail {
+  id: string;
+  establishmentName: string;
+  totalAmount: number;
+  createdAt: string;
+  items?: BillItem[];
+}
+
+
 import billService, { BillSummaryResponse } from '../../../services/bill.service';
 
 export default function BillDetail() {
@@ -84,8 +108,9 @@ export default function BillDetail() {
             <TouchableOpacity
               style={styles.backButton}
               onPress={() => router.back()}
+              activeOpacity={0.7}
             >
-              <Text style={styles.backButtonText}>‹</Text>
+              <Ionicons name="chevron-back" size={22} color="#000" />
             </TouchableOpacity>
             <Text style={styles.titleText}>{data.bill.establishmentName || 'Detalhes'}</Text>
             <TouchableOpacity style={styles.editButton}>
@@ -226,17 +251,17 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   backButton: {
-    width: 32,
-    height: 32,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFF',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingLeft: 2,
-  },
-  backButtonText: {
-    fontSize: 28,
-    fontWeight: 400,
-    color: '#000',
-    lineHeight: 28,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   titleText: {
     fontSize: 18,
