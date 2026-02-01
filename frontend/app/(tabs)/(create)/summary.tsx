@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   Text,
@@ -9,11 +9,13 @@ import {
   Alert,
   ActivityIndicator,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useBillStore } from '../../../store/billStore';
+import { useLocalSearchParams, useRouter } from "expo-router";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { useBillStore } from "../../../store/billStore";
 import divisionsService from "../../../services/divisions.service";
-import billService, { FinalizeBillPayload } from "../../../services/bill.service";
+import billService, {
+  FinalizeBillPayload,
+} from "../../../services/bill.service";
 import itemsService from "../../../services/items.service";
 import participantsService, {
   Participant,
@@ -50,8 +52,8 @@ interface BillSummaryData {
 
 // Inicialização vazia - será preenchido com dados reais do backend
 const EMPTY_SUMMARY: BillSummaryData = {
-  billId: '',
-  establishmentName: '',
+  billId: "",
+  establishmentName: "",
   totalAmount: 0,
   itemsTotal: 0,
   feesTotal: 0,
@@ -69,7 +71,7 @@ export default function SummaryScreen() {
   const [couvertPerPerson, setCouvertPerPerson] = useState(0); // Será carregado do backend
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [billStatus, setBillStatus] = useState<string>('DIVIDING');
+  const [billStatus, setBillStatus] = useState<string>("DIVIDING");
   const [isCompleted, setIsCompleted] = useState(false);
 
   useEffect(() => {
@@ -90,33 +92,47 @@ export default function SummaryScreen() {
       // 1. Buscar informações da conta
       const billData = await billService.getBill(id as string);
       console.log("[Summary] Bill data:", billData);
-      
+
       // Verificar status da conta
       setBillStatus(billData.status);
-      setIsCompleted(billData.status === 'COMPLETED');
-      
-      if (billData.status === 'COMPLETED') {
-        console.log('[Summary] Bill is already completed - read-only mode');
+      setIsCompleted(billData.status === "COMPLETED");
+
+      if (billData.status === "COMPLETED") {
+        console.log("[Summary] Bill is already completed - read-only mode");
       }
 
       // 2. Buscar taxas (fees) da conta - SERVICE_PERCENTAGE e COVER_CHARGE
       const feesResponse = await feesService.findAllByBill(id as string);
       console.log("[Summary] Fees data:", feesResponse);
-      
+
       // feesResponse pode ser um array ou um objeto { billId, fees: [...], totalFixed, totalPercentage }
-      const feesData = Array.isArray(feesResponse) ? feesResponse : ((feesResponse as any).fees || []);
-      
+      const feesData = Array.isArray(feesResponse)
+        ? feesResponse
+        : (feesResponse as any).fees || [];
+
       // Extrair taxa de serviço e couvert dos dados do backend
-      const serviceFee = feesData.find((f: any) => f.type === 'SERVICE_PERCENTAGE');
-      const coverCharge = feesData.find((f: any) => f.type === 'COVER_CHARGE');
-      
-      const actualServiceFeePercentage = serviceFee ? Number(serviceFee.value) : 0;
+      const serviceFee = feesData.find(
+        (f: any) => f.type === "SERVICE_PERCENTAGE",
+      );
+      const coverCharge = feesData.find((f: any) => f.type === "COVER_CHARGE");
+
+      const actualServiceFeePercentage = serviceFee
+        ? Number(serviceFee.value)
+        : 0;
       // O backend já salva o valor POR PESSOA do couvert (já dividido se foi "total")
-      const couvertPerPersonFromBackend = coverCharge ? Number(coverCharge.value) : 0;
-      
-      console.log("[Summary] Service fee percentage:", actualServiceFeePercentage);
-      console.log("[Summary] Couvert per person (from backend):", couvertPerPersonFromBackend);
-      
+      const couvertPerPersonFromBackend = coverCharge
+        ? Number(coverCharge.value)
+        : 0;
+
+      console.log(
+        "[Summary] Service fee percentage:",
+        actualServiceFeePercentage,
+      );
+      console.log(
+        "[Summary] Couvert per person (from backend):",
+        couvertPerPersonFromBackend,
+      );
+
       // Atualizar estados com valores do backend
       setServiceFeePercentage(actualServiceFeePercentage);
       setCouvertPerPerson(couvertPerPersonFromBackend);
@@ -130,7 +146,7 @@ export default function SummaryScreen() {
         id as string,
       );
       console.log("[Summary] Participants data:", participantsData);
-      
+
       // O couvert por pessoa já vem calculado do backend (não precisamos dividir)
       console.log("[Summary] Couvert per person:", couvertPerPersonFromBackend);
 
@@ -141,8 +157,10 @@ export default function SummaryScreen() {
 
       // Se não há divisões, mostrar mensagem mas permitir visualizar dados básicos
       if (divisionsData.length === 0) {
-        console.warn("[Summary] No divisions found. Showing basic info without participant breakdown.");
-        
+        console.warn(
+          "[Summary] No divisions found. Showing basic info without participant breakdown.",
+        );
+
         // Criar resumo básico sem divisões
         const participantSummaries: ParticipantSummary[] = participantsData.map(
           (participant: Participant) => {
@@ -157,7 +175,7 @@ export default function SummaryScreen() {
               paysFee: true,
               paysCouvert: true,
             };
-          }
+          },
         );
 
         const summaryData: BillSummaryData = {
@@ -166,17 +184,19 @@ export default function SummaryScreen() {
           totalAmount: 0,
           itemsTotal: 0,
           feesTotal: 0,
-          grandTotal: round2(participantSummaries.reduce((sum, p) => sum + p.couvert, 0)),
+          grandTotal: round2(
+            participantSummaries.reduce((sum, p) => sum + p.couvert, 0),
+          ),
           participants: participantSummaries,
         };
 
         setSummary(summaryData);
         setLoading(false);
-        
+
         Alert.alert(
           "Atenção",
           "Nenhuma divisão encontrada. Atribua participantes aos itens na tela anterior para ver o resumo completo.",
-          [{ text: "OK" }]
+          [{ text: "OK" }],
         );
         return;
       }
@@ -199,10 +219,14 @@ export default function SummaryScreen() {
             };
           });
 
-          const subtotal = round2(items.reduce((sum, item) => sum + item.amount, 0));
+          const subtotal = round2(
+            items.reduce((sum, item) => sum + item.amount, 0),
+          );
 
           // Calcular taxa de serviço com valor do backend
-          const serviceFeeAmount = round2((subtotal * actualServiceFeePercentage) / 100);
+          const serviceFeeAmount = round2(
+            (subtotal * actualServiceFeePercentage) / 100,
+          );
 
           // Couvert já vem calculado por pessoa do backend
           const couvert = couvertPerPersonFromBackend;
@@ -226,15 +250,15 @@ export default function SummaryScreen() {
 
       // 6. Calcular totais com arredondamento correto
       const itemsTotal = round2(
-        participantSummaries.reduce((sum, p) => sum + p.subtotal, 0)
+        participantSummaries.reduce((sum, p) => sum + p.subtotal, 0),
       );
       const feesTotal = round2(
         participantSummaries.reduce((sum, p) => {
           return sum + (p.fees?.reduce((s, f) => s + f.amount, 0) || 0);
-        }, 0)
+        }, 0),
       );
       const couvertTotal = round2(
-        participantSummaries.reduce((sum, p) => sum + p.couvert, 0)
+        participantSummaries.reduce((sum, p) => sum + p.couvert, 0),
       );
 
       const summaryData: BillSummaryData = {
@@ -264,27 +288,24 @@ export default function SummaryScreen() {
       // Garantir que a mensagem seja sempre uma string
       let errorMessage = "Não foi possível carregar o resumo da conta";
       if (error.message) {
-        if (typeof error.message === 'string') {
+        if (typeof error.message === "string") {
           errorMessage = error.message;
         } else if (Array.isArray(error.message)) {
-          errorMessage = error.message.join('\n');
+          errorMessage = error.message.join("\n");
         } else {
           errorMessage = String(error.message);
         }
       }
-      
-      Alert.alert(
-        "Erro",
-        errorMessage,
-      );
+
+      Alert.alert("Erro", errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
   const formatCurrency = (value?: number): string => {
-    if (!value) return 'R$ 0,00';
-    return `R$ ${value.toLocaleString('pt-BR', {
+    if (!value) return "R$ 0,00";
+    return `R$ ${value.toLocaleString("pt-BR", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
@@ -302,7 +323,9 @@ export default function SummaryScreen() {
 
     // 1. Validar cada participante: subtotal + taxa + couvert = total
     summary.participants.forEach((p, index) => {
-      const serviceFee = p.paysFee ? round2((p.subtotal * serviceFeePercentage) / 100) : 0;
+      const serviceFee = p.paysFee
+        ? round2((p.subtotal * serviceFeePercentage) / 100)
+        : 0;
       const couvertAmount = p.paysCouvert ? p.couvert : 0;
       const expectedTotal = round2(p.subtotal + serviceFee + couvertAmount);
       const actualTotal = round2(p.totalAmount);
@@ -310,7 +333,7 @@ export default function SummaryScreen() {
       if (Math.abs(expectedTotal - actualTotal) > 0.01) {
         errors.push(
           `Participante ${index + 1} (${p.name}): ` +
-          `esperado ${expectedTotal.toFixed(2)}, atual ${actualTotal.toFixed(2)}`
+            `esperado ${expectedTotal.toFixed(2)}, atual ${actualTotal.toFixed(2)}`,
         );
         isValid = false;
       }
@@ -318,14 +341,14 @@ export default function SummaryScreen() {
 
     // 2. Validar soma de subtotais
     const expectedItemsTotal = round2(
-      summary.participants.reduce((sum, p) => sum + p.subtotal, 0)
+      summary.participants.reduce((sum, p) => sum + p.subtotal, 0),
     );
     const actualItemsTotal = round2(summary.itemsTotal);
 
     if (Math.abs(expectedItemsTotal - actualItemsTotal) > 0.01) {
       errors.push(
         `Subtotal geral: esperado ${expectedItemsTotal.toFixed(2)}, ` +
-        `atual ${actualItemsTotal.toFixed(2)}`
+          `atual ${actualItemsTotal.toFixed(2)}`,
       );
       isValid = false;
     }
@@ -335,14 +358,14 @@ export default function SummaryScreen() {
       summary.participants.reduce((sum, p) => {
         const fee = p.fees?.reduce((s, f) => s + f.amount, 0) || 0;
         return sum + fee;
-      }, 0)
+      }, 0),
     );
     const actualFeesTotal = round2(summary.feesTotal);
 
     if (Math.abs(expectedFeesTotal - actualFeesTotal) > 0.01) {
       errors.push(
         `Taxa total: esperado ${expectedFeesTotal.toFixed(2)}, ` +
-        `atual ${actualFeesTotal.toFixed(2)}`
+          `atual ${actualFeesTotal.toFixed(2)}`,
       );
       isValid = false;
     }
@@ -351,41 +374,41 @@ export default function SummaryScreen() {
     const expectedCouvertTotal = round2(
       summary.participants.reduce((sum, p) => {
         return sum + (p.paysCouvert ? p.couvert : 0);
-      }, 0)
+      }, 0),
     );
 
     // 5. Validar total geral
     const expectedGrandTotal = round2(
-      expectedItemsTotal + expectedFeesTotal + expectedCouvertTotal
+      expectedItemsTotal + expectedFeesTotal + expectedCouvertTotal,
     );
     const actualGrandTotal = round2(summary.grandTotal);
 
     if (Math.abs(expectedGrandTotal - actualGrandTotal) > 0.01) {
       errors.push(
         `Total geral: esperado ${expectedGrandTotal.toFixed(2)}, ` +
-        `atual ${actualGrandTotal.toFixed(2)}`
+          `atual ${actualGrandTotal.toFixed(2)}`,
       );
       isValid = false;
     }
 
     // 6. Validar soma de totais individuais = total geral
     const sumOfIndividualTotals = round2(
-      summary.participants.reduce((sum, p) => sum + p.totalAmount, 0)
+      summary.participants.reduce((sum, p) => sum + p.totalAmount, 0),
     );
 
     if (Math.abs(sumOfIndividualTotals - actualGrandTotal) > 0.01) {
       errors.push(
         `Soma dos totais individuais (${sumOfIndividualTotals.toFixed(2)}) ` +
-        `não bate com total geral (${actualGrandTotal.toFixed(2)})`
+          `não bate com total geral (${actualGrandTotal.toFixed(2)})`,
       );
       isValid = false;
     }
 
     if (!isValid) {
-      console.error('[Summary] Validation errors:', errors);
+      console.error("[Summary] Validation errors:", errors);
     } else {
-      console.log('[Summary] ✓ All calculations validated successfully');
-      console.log('[Summary] Validation details:', {
+      console.log("[Summary] ✓ All calculations validated successfully");
+      console.log("[Summary] Validation details:", {
         itemsTotal: actualItemsTotal.toFixed(2),
         feesTotal: actualFeesTotal.toFixed(2),
         couvertTotal: expectedCouvertTotal.toFixed(2),
@@ -400,9 +423,9 @@ export default function SummaryScreen() {
   const toggleParticipantFee = (index: number) => {
     if (isCompleted) {
       Alert.alert(
-        'Conta Finalizada',
-        'Esta conta já foi finalizada e não pode ser editada.',
-        [{ text: 'OK' }]
+        "Conta Finalizada",
+        "Esta conta já foi finalizada e não pode ser editada.",
+        [{ text: "OK" }],
       );
       return;
     }
@@ -433,14 +456,14 @@ export default function SummaryScreen() {
       const newFeesTotal = round2(
         updatedParticipants.reduce((sum, p) => {
           return sum + (p.fees?.reduce((s, f) => s + f.amount, 0) || 0);
-        }, 0)
+        }, 0),
       );
 
       const couvertTotal = round2(
         updatedParticipants.reduce(
           (sum, p) => sum + (p.paysCouvert ? p.couvert : 0),
-          0
-        )
+          0,
+        ),
       );
 
       const newSummary = {
@@ -460,9 +483,9 @@ export default function SummaryScreen() {
   const toggleParticipantCouvert = (index: number) => {
     if (isCompleted) {
       Alert.alert(
-        'Conta Finalizada',
-        'Esta conta já foi finalizada e não pode ser editada.',
-        [{ text: 'OK' }]
+        "Conta Finalizada",
+        "Esta conta já foi finalizada e não pode ser editada.",
+        [{ text: "OK" }],
       );
       return;
     }
@@ -489,14 +512,14 @@ export default function SummaryScreen() {
       const newFeesTotal = round2(
         updatedParticipants.reduce((sum, p) => {
           return sum + (p.fees?.reduce((s, f) => s + f.amount, 0) || 0);
-        }, 0)
+        }, 0),
       );
 
       const couvertTotal = round2(
         updatedParticipants.reduce(
           (sum, p) => sum + (p.paysCouvert ? p.couvert : 0),
-          0
-        )
+          0,
+        ),
       );
 
       const newSummary = {
@@ -516,9 +539,9 @@ export default function SummaryScreen() {
   const handleFinalize = async () => {
     if (isCompleted) {
       Alert.alert(
-        'Conta já finalizada',
-        'Esta conta já foi finalizada e não pode ser editada.',
-        [{ text: 'OK' }]
+        "Conta já finalizada",
+        "Esta conta já foi finalizada e não pode ser editada.",
+        [{ text: "OK" }],
       );
       return;
     }
@@ -528,9 +551,9 @@ export default function SummaryScreen() {
     // Validar que há participantes
     if (summary.participants.length === 0) {
       Alert.alert(
-        'Erro',
-        'É necessário ter pelo menos um participante para finalizar a conta.',
-        [{ text: 'OK' }]
+        "Erro",
+        "É necessário ter pelo menos um participante para finalizar a conta.",
+        [{ text: "OK" }],
       );
       return;
     }
@@ -539,38 +562,40 @@ export default function SummaryScreen() {
     const isValid = validateCalculations(summary);
     if (!isValid) {
       Alert.alert(
-        'Erro nos Cálculos',
-        'Há inconsistências nos cálculos. Verifique os valores e tente novamente.',
-        [{ text: 'OK' }]
+        "Erro nos Cálculos",
+        "Há inconsistências nos cálculos. Verifique os valores e tente novamente.",
+        [{ text: "OK" }],
       );
       return;
     }
 
     // Confirmar finalização
     Alert.alert(
-      'Finalizar Conta',
-      'Após finalizar, a conta não poderá mais ser editada. Deseja continuar?',
+      "Finalizar Conta",
+      "Após finalizar, a conta não poderá mais ser editada. Deseja continuar?",
       [
-        { text: 'Cancelar', style: 'cancel' },
+        { text: "Cancelar", style: "cancel" },
         {
-          text: 'Finalizar',
-          style: 'default',
+          text: "Finalizar",
+          style: "default",
           onPress: async () => {
             try {
               setSaving(true);
-              console.log('[Summary] Starting finalization...');
+              console.log("[Summary] Starting finalization...");
 
               // 1. Buscar todas as divisões existentes
-              const divisionsData = await divisionsService.findAllByBill(id as string);
-              console.log('[Summary] Divisions to save:', divisionsData.length);
+              const divisionsData = await divisionsService.findAllByBill(
+                id as string,
+              );
+              console.log("[Summary] Divisions to save:", divisionsData.length);
 
               // 2. Preparar array de taxas
-              const fees: FinalizeBillPayload['fees'] = [];
+              const fees: FinalizeBillPayload["fees"] = [];
 
               // Taxa de serviço (SERVICE_PERCENTAGE)
               if (serviceFeePercentage > 0) {
                 fees.push({
-                  type: 'SERVICE_PERCENTAGE',
+                  type: "SERVICE_PERCENTAGE",
                   value: serviceFeePercentage,
                   description: `Taxa de Serviço (${serviceFeePercentage}%)`,
                 });
@@ -578,17 +603,20 @@ export default function SummaryScreen() {
 
               // Couvert para cada participante que paga
               const participantsPayingCouvert = summary.participants.filter(
-                (p) => p.paysCouvert
+                (p) => p.paysCouvert,
               );
-              if (participantsPayingCouvert.length > 0 && couvertPerPerson > 0) {
+              if (
+                participantsPayingCouvert.length > 0 &&
+                couvertPerPerson > 0
+              ) {
                 fees.push({
-                  type: 'COVER_CHARGE',
+                  type: "COVER_CHARGE",
                   value: couvertPerPerson * participantsPayingCouvert.length,
-                  description: `Couvert (${participantsPayingCouvert.length} pessoa${participantsPayingCouvert.length > 1 ? 's' : ''})`,
+                  description: `Couvert (${participantsPayingCouvert.length} pessoa${participantsPayingCouvert.length > 1 ? "s" : ""})`,
                 });
               }
 
-              console.log('[Summary] Fees to save:', fees);
+              console.log("[Summary] Fees to save:", fees);
 
               // 3. Preparar payload de finalização
               const finalizePayload: FinalizeBillPayload = {
@@ -600,70 +628,72 @@ export default function SummaryScreen() {
                 fees,
               };
 
-              console.log('[Summary] Finalize payload:', finalizePayload);
+              console.log("[Summary] Finalize payload:", finalizePayload);
 
               // 4. Chamar endpoint de finalização
               const result = await billService.finalizeBill(
                 id as string,
-                finalizePayload
+                finalizePayload,
               );
 
-              console.log('[Summary] Finalization result:', result);
+              console.log("[Summary] Finalization result:", result);
 
               // 5. Atualizar estado local
               setIsCompleted(true);
-              setBillStatus('COMPLETED');
+              setBillStatus("COMPLETED");
 
               // 5.5. Atualizar estado global (Zustand) para garantir que apareça na lista
               if (result.bill) {
-                console.log('[Summary] Adding finalized bill to global state');
+                console.log("[Summary] Adding finalized bill to global state");
                 addBill(result.bill);
               }
 
               // 6. Mostrar sucesso e navegar
               Alert.alert(
-                'Conta Finalizada!',
-                `${summary.establishmentName || 'Conta'} foi salva com sucesso.\n\n` +
-                `Total: ${formatCurrency(result.summary.grandTotal)}\n` +
-                `${summary.participants.length} participante${summary.participants.length > 1 ? 's' : ''}\n\n` +
-                `A conta está disponível no seu histórico.`,
+                "Conta Finalizada!",
+                `${summary.establishmentName || "Conta"} foi salva com sucesso.\n\n` +
+                  `Total: ${formatCurrency(result.summary.grandTotal)}\n` +
+                  `${summary.participants.length} participante${summary.participants.length > 1 ? "s" : ""}\n\n` +
+                  `A conta está disponível no seu histórico.`,
                 [
                   {
-                    text: 'Ver Histórico',
+                    text: "Ver Histórico",
                     onPress: () => {
-                      console.log('[Summary] Navigating to bills list...');
-                      router.push('/(tabs)/bills');
+                      console.log(
+                        "[Summary] Navigating to bills list and resetting create stack...",
+                      );
+                      // Primeiro ir para a tela inicial da aba de criação para limpar o stack
+                      // Depois navegar para a aba de histórico
+                      router.dismissAll();
+                      router.replace("/(tabs)/bills");
                     },
                   },
-                ]
+                ],
               );
             } catch (error: any) {
-              console.error('[Summary] Error finalizing bill:', error);
-              
+              console.error("[Summary] Error finalizing bill:", error);
+
               // Garantir que a mensagem seja sempre uma string
-              let errorMessage = 'Não foi possível finalizar a conta. Tente novamente.';
-              
+              let errorMessage =
+                "Não foi possível finalizar a conta. Tente novamente.";
+
               if (error.message) {
-                if (typeof error.message === 'string') {
+                if (typeof error.message === "string") {
                   errorMessage = error.message;
                 } else if (Array.isArray(error.message)) {
-                  errorMessage = error.message.join('\n');
+                  errorMessage = error.message.join("\n");
                 } else {
                   errorMessage = String(error.message);
                 }
               }
-              
-              Alert.alert(
-                'Erro ao Finalizar',
-                errorMessage,
-                [{ text: 'OK' }]
-              );
+
+              Alert.alert("Erro ao Finalizar", errorMessage, [{ text: "OK" }]);
             } finally {
               setSaving(false);
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -758,7 +788,9 @@ export default function SummaryScreen() {
 
                     {/* Seção Taxas e Encargos */}
                     <View style={styles.sectionHeader}>
-                      <Text style={styles.sectionHeaderText}>Taxas e Encargos</Text>
+                      <Text style={styles.sectionHeaderText}>
+                        Taxas e Encargos
+                      </Text>
                     </View>
 
                     {/* Taxa com Checkbox */}
@@ -815,7 +847,9 @@ export default function SummaryScreen() {
                         <Text style={styles.dropdownCouvertText}>Couvert</Text>
                       </View>
                       <Text style={styles.dropdownItemAmount}>
-                        {formatCurrency(participant.paysCouvert ? participant.couvert : 0)}
+                        {formatCurrency(
+                          participant.paysCouvert ? participant.couvert : 0,
+                        )}
                       </Text>
                     </TouchableOpacity>
 
@@ -864,8 +898,8 @@ export default function SummaryScreen() {
                     {formatCurrency(
                       summary.participants.reduce(
                         (sum, p) => sum + (p.paysCouvert ? p.couvert : 0),
-                        0
-                      )
+                        0,
+                      ),
                     )}
                   </Text>
                 </View>
@@ -876,15 +910,20 @@ export default function SummaryScreen() {
                   </Text>
                 </View>
                 <View style={styles.validationRow}>
-                  <MaterialCommunityIcons 
-                    name="check-circle" 
-                    size={16} 
-                    color="#10b981" 
+                  <MaterialCommunityIcons
+                    name="check-circle"
+                    size={16}
+                    color="#10b981"
                   />
                   <Text style={styles.validationText}>
-                    {summary.participants.length} participante{summary.participants.length !== 1 ? 's' : ''} • 
-                    Soma verificada: {formatCurrency(
-                      summary.participants.reduce((sum, p) => sum + p.totalAmount, 0)
+                    {summary.participants.length} participante
+                    {summary.participants.length !== 1 ? "s" : ""} • Soma
+                    verificada:{" "}
+                    {formatCurrency(
+                      summary.participants.reduce(
+                        (sum, p) => sum + p.totalAmount,
+                        0,
+                      ),
                     )}
                   </Text>
                 </View>
@@ -894,12 +933,16 @@ export default function SummaryScreen() {
             {/* Botão Finalizar/Salvar */}
             {isCompleted ? (
               <View style={[styles.saveButton, styles.completedButton]}>
-                <MaterialCommunityIcons name="check-circle" size={20} color="#FFF" />
+                <MaterialCommunityIcons
+                  name="check-circle"
+                  size={20}
+                  color="#FFF"
+                />
                 <Text style={styles.saveButtonText}>Conta Finalizada</Text>
               </View>
             ) : (
-              <TouchableOpacity 
-                style={[styles.saveButton, saving && styles.savingButton]} 
+              <TouchableOpacity
+                style={[styles.saveButton, saving && styles.savingButton]}
                 onPress={handleFinalize}
                 disabled={saving}
               >
@@ -1080,7 +1123,7 @@ const styles = StyleSheet.create({
   dropdownCouvertItem: {
     paddingTop: 8,
     paddingBottom: 8,
-    backgroundColor: '#FFFBF5',
+    backgroundColor: "#FFFBF5",
   },
   subtotalItem: {
     backgroundColor: "#FAFAFA",
