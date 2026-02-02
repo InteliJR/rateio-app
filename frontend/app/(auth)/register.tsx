@@ -45,13 +45,14 @@ type RegisterFormData = z.infer<typeof registerSchema>;
 export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
-  const { register: registerUser, isLoading, loadTokens } = useAuthStore();
+  const { register: registerUser, isLoading, logout } = useAuthStore();
   const router = useRouter();
 
   useEffect(() => {
-    // Initialize loading state on mount
-    loadTokens();
-  }, [loadTokens]);
+    // IMPORTANTE: Limpar qualquer sessão anterior ao entrar na tela de registro
+    // Isso evita que dados do usuário anterior sejam mostrados após o novo cadastro
+    logout();
+  }, []);
 
   const {
     control,

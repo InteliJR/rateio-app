@@ -54,19 +54,42 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   register: async (name: string, email: string, password: string) => {
     set({ isLoading: true });
     try {
-      // Limpar cache do React Query antes de fazer registro
+      // Limpar COMPLETAMENTE o cache do React Query antes de fazer registro
+      // Isso garante que dados do usuário anterior não apareçam
+      queryClient.cancelQueries();
+      queryClient.removeQueries();
       queryClient.clear();
+
+      // Limpar o store de contas do usuário anterior
+      useBillStore.getState().clearBills();
+
+      // Limpar tokens anteriores para garantir que não há contaminação
+      await storageService.deleteItem("accessToken");
+      await storageService.deleteItem("refreshToken");
+      await storageService.deleteItem("userName");
+      await storageService.deleteItem("userEmail");
 
       const response = await authService.register({ name, email, password });
 
-      // Note: Backend currently does not return tokens on register. User must login afterwards.
-      // console.log("[AuthStore] User registered:", response);
+      // Backend retorna tokens no registro - salvar e autenticar
+      if (response.accessToken && response.refreshToken) {
+        console.log('[AuthStore] Saving tokens from registration...');
+        await storageService.setItem("accessToken", response.accessToken);
+        await storageService.setItem("refreshToken", response.refreshToken);
+        console.log('[AuthStore] Registration tokens saved successfully');
 
-      // set({
-      //   user: response.user,
-      //   isAuthenticated: false, // Wait for explicit login
-      //   isLoading: false,
-      // });
+        set({
+          user: response.user,
+          accessToken: response.accessToken,
+          refreshToken: response.refreshToken,
+          isAuthenticated: true,
+          isLoading: false,
+        });
+      } else {
+        // Fallback caso backend não retorne tokens
+        set({ isLoading: false });
+      }
+
       return response;
     } catch (error) {
       set({ isLoading: false });

@@ -27,6 +27,8 @@ export interface RegisterRequest {
 
 export interface RegisterResponse {
   user: User;
+  accessToken: string;
+  refreshToken: string;
   message: string;
 }
 
