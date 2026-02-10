@@ -36,6 +36,7 @@ export interface CreateBillSetupConfig {
   billName?: string;
   serviceFeePercentage: number;
   coverChargeValue?: number;
+  /** @deprecated Mantido para compatibilidade - sempre tratado como 'per_person' */
   coverChargeType?: 'total' | 'per_person';
   participantNames?: string[];
 }

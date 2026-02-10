@@ -34,6 +34,7 @@ export class CreateBillDto {
   @Min(0)
   coverChargeValue?: number;
 
+  // Mantido para compatibilidade, mas ignorado (sempre per_person)
   @IsOptional()
   @IsIn(['total', 'per_person'])
   coverChargeType?: 'total' | 'per_person';

@@ -127,7 +127,7 @@ export class BillsService {
         }
       }
 
-      // Adicionar couvert se houver
+      // Adicionar couvert se houver (sempre por pessoa)
       if (
         createBillDto.coverChargeValue !== undefined &&
         createBillDto.coverChargeValue !== null &&
@@ -135,24 +135,15 @@ export class BillsService {
         Number(createBillDto.coverChargeValue) > 0
       ) {
         try {
-          const couvertType = createBillDto.coverChargeType || 'per_person';
-          const participantCount = Number(createBillDto.participantCount) || 1;
-          
-          // Se for valor total, dividir entre participantes. Se for por pessoa, usar valor direto.
-          const valuePerPerson = couvertType === 'total' 
-            ? Number(createBillDto.coverChargeValue) / participantCount 
-            : Number(createBillDto.coverChargeValue);
-          
-          const description = couvertType === 'total' 
-            ? 'Couvert (valor total dividido)' 
-            : 'Couvert por pessoa';
+          // O valor do couvert é sempre por pessoa
+          const valuePerPerson = Number(createBillDto.coverChargeValue);
 
           await this.prisma.fee.create({
             data: {
               billId: bill.id,
               type: 'COVER_CHARGE',
               value: valuePerPerson,
-              description,
+              description: 'Couvert por pessoa',
             },
           });
         } catch (feeError) {

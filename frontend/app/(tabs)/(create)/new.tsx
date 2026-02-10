@@ -32,8 +32,6 @@ interface ParticipantInput {
   name: string;
 }
 
-type CouvertType = 'total' | 'per_person';
-
 const newBillSchema = z.object({
   billName: z.string().optional(),
   serviceRate: z
@@ -60,7 +58,6 @@ export default function NewBillScreen() {
     { id: 1, name: "Pessoa 1" },
   ]);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [couvertType, setCouvertType] = useState<CouvertType>('total');
 
   // Get store actions
   const { addBill } = useBillStore();
@@ -116,7 +113,7 @@ export default function NewBillScreen() {
           ? Number(data.couvertValue) 
           : undefined,
         coverChargeType: data.couvertValue && data.couvertValue.trim() !== "" 
-          ? couvertType 
+          ? 'per_person' 
           : undefined,
         participantNames,
       });
@@ -199,61 +196,12 @@ export default function NewBillScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Couvert (opcional)</Text>
 
-            {/* Toggle para tipo de couvert */}
-            <View style={styles.couvertTypeContainer}>
-              <TouchableOpacity
-                style={[
-                  styles.couvertTypeOption,
-                  couvertType === 'total' && styles.couvertTypeOptionActive,
-                ]}
-                onPress={() => setCouvertType('total')}
-                disabled={isLoading}
-              >
-                <View style={[
-                  styles.radioCircle,
-                  couvertType === 'total' && styles.radioCircleActive,
-                ]}>
-                  {couvertType === 'total' && <View style={styles.radioInner} />}
-                </View>
-                <View style={styles.couvertTypeTextContainer}>
-                  <Text style={[
-                    styles.couvertTypeLabel,
-                    couvertType === 'total' && styles.couvertTypeLabelActive,
-                  ]}>Valor total</Text>
-                  <Text style={styles.couvertTypeHint}>Divide igualmente entre todos</Text>
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.couvertTypeOption,
-                  couvertType === 'per_person' && styles.couvertTypeOptionActive,
-                ]}
-                onPress={() => setCouvertType('per_person')}
-                disabled={isLoading}
-              >
-                <View style={[
-                  styles.radioCircle,
-                  couvertType === 'per_person' && styles.radioCircleActive,
-                ]}>
-                  {couvertType === 'per_person' && <View style={styles.radioInner} />}
-                </View>
-                <View style={styles.couvertTypeTextContainer}>
-                  <Text style={[
-                    styles.couvertTypeLabel,
-                    couvertType === 'per_person' && styles.couvertTypeLabelActive,
-                  ]}>Por pessoa</Text>
-                  <Text style={styles.couvertTypeHint}>Cada um paga este valor</Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-
             <Controller
               control={control}
               name="couvertValue"
               render={({ field: { onChange, value, onBlur } }) => (
                 <NumericInput
-                  label={couvertType === 'total' ? "Valor total do couvert" : "Valor por pessoa"}
+                  label="Valor por pessoa"
                   placeholder="Ex: 20.00"
                   value={value}
                   onChange={onChange}
@@ -434,63 +382,9 @@ const styles = StyleSheet.create({
   hintText: {
     color: "#999",
     fontSize: 12,
-    marginTop: 8,
+    marginTop: 4,
+    marginBottom: 12,
     marginLeft: 8,
-  },
-  couvertTypeContainer: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 16,
-  },
-  couvertTypeOption: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f5f5f5",
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: "transparent",
-    gap: 10,
-  },
-  couvertTypeOptionActive: {
-    backgroundColor: "#f9e6f9",
-    borderColor: "#81007F",
-  },
-  radioCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: "#999",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  radioCircleActive: {
-    borderColor: "#81007F",
-  },
-  radioInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: "#81007F",
-  },
-  couvertTypeTextContainer: {
-    flex: 1,
-  },
-  couvertTypeLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#666",
-  },
-  couvertTypeLabelActive: {
-    color: "#81007F",
-  },
-  couvertTypeHint: {
-    fontSize: 11,
-    color: "#999",
-    marginTop: 2,
   },
   button: {
     backgroundColor: "#81007F",
