@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   StyleSheet,
   Text,
@@ -6,9 +6,10 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Ionicons } from "@expo/vector-icons";
 import billService, {
@@ -40,13 +41,20 @@ export default function BillDetail() {
   const router = useRouter();
   const [data, setData] = useState<BillSummaryResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [duplicating, setDuplicating] = useState(false);
+  const [isLatestBill, setIsLatestBill] = useState(false);
   const [expandedParticipantId, setExpandedParticipantId] = useState<
     string | null
   >(null);
 
-  useEffect(() => {
-    loadBillDetails();
-  }, [id]);
+  // Usar useFocusEffect para recarregar dados quando a tela ganha foco
+  // Isso garante que os dados sejam atualizados após edição
+  useFocusEffect(
+    useCallback(() => {
+      loadBillDetails();
+      checkIfLatestBill();
+    }, [id])
+  );
 
   const loadBillDetails = async () => {
     try {
@@ -57,6 +65,55 @@ export default function BillDetail() {
       console.error("Erro ao carregar conta:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const checkIfLatestBill = async () => {
+    try {
+      // Buscar a lista de contas ordenada por data (mais recente primeiro)
+      const response = await billService.listBills(1, 1);
+      
+      // Se esta conta é a primeira da lista (mais recente), permitir edição
+      if (response.data.length > 0 && response.data[0].id === id) {
+        setIsLatestBill(true);
+      } else {
+        setIsLatestBill(false);
+      }
+    } catch (err) {
+      console.error("Erro ao verificar conta mais recente:", err);
+      setIsLatestBill(false);
+    }
+  };
+
+  const handleEditBill = () => {
+    // Navegar para a tela de edição (scanned.tsx) com a conta atual
+    // Passamos editMode=true para permitir edição mesmo se a conta estiver COMPLETED
+    router.push({
+      pathname: "/(tabs)/(create)/scanned",
+      params: { id: id as string, editMode: "true" },
+    });
+  };
+
+  const handleReuseBill = async () => {
+    try {
+      setDuplicating(true);
+      
+      // Duplicar a conta no backend
+      const newBill = await billService.duplicateBill(id as string);
+      
+      // Navegar para a tela de edição da nova conta
+      router.push({
+        pathname: "/(tabs)/(create)/scanned",
+        params: { id: newBill.id },
+      });
+    } catch (err: any) {
+      console.error("Erro ao reutilizar conta:", err);
+      Alert.alert(
+        "Erro",
+        err.message || "Não foi possível reutilizar a conta. Tente novamente."
+      );
+    } finally {
+      setDuplicating(false);
     }
   };
 
@@ -115,9 +172,14 @@ export default function BillDetail() {
             <Text style={styles.titleText}>
               {data.bill.establishmentName || "Detalhes"}
             </Text>
-            <TouchableOpacity style={styles.editButton}>
-              <Text style={styles.editButtonText}>Editar</Text>
-            </TouchableOpacity>
+            {/* Botão Editar - só aparece para a conta mais recente */}
+            {isLatestBill ? (
+              <TouchableOpacity style={styles.editButton} onPress={handleEditBill}>
+                <Text style={styles.editButtonText}>Editar</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.editButtonPlaceholder} />
+            )}
           </View>
 
           {/* Aviso de Falha (Se houver) */}
@@ -276,8 +338,16 @@ export default function BillDetail() {
           </View>
 
           {/* Botão Reutilizar Conta */}
-          <TouchableOpacity style={styles.reuseButton}>
-            <Text style={styles.reuseButtonText}>Reutilizar Conta</Text>
+          <TouchableOpacity 
+            style={[styles.reuseButton, duplicating && styles.reuseButtonDisabled]}
+            onPress={handleReuseBill}
+            disabled={duplicating}
+          >
+            {duplicating ? (
+              <ActivityIndicator size="small" color="#ffff00" />
+            ) : (
+              <Text style={styles.reuseButtonText}>Reutilizar Conta</Text>
+            )}
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -328,6 +398,9 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: "#8B2E8F",
     borderRadius: 18,
+  },
+  editButtonPlaceholder: {
+    width: 70, // Aproximadamente a largura do botão "Editar"
   },
   editButtonText: {
     fontSize: 13,
@@ -538,6 +611,10 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     alignItems: "center",
     justifyContent: "center",
+    minHeight: 50,
+  },
+  reuseButtonDisabled: {
+    opacity: 0.7,
   },
   reuseButtonText: {
     fontSize: 16,

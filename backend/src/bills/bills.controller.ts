@@ -226,6 +226,14 @@ export class BillsController {
   }
 
   /**
+   * Duplicar conta (reutilizar) - cria uma nova conta com os mesmos itens e participantes
+   */
+  @Post(':id/duplicate')
+  duplicate(@Param('id') id: string, @Request() req: any) {
+    return this.billsService.duplicate(id, req.user.id);
+  }
+
+  /**
    * Buscar conta específica
    */
   @Get(':id')

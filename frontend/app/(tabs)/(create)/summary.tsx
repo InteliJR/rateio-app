@@ -321,13 +321,12 @@ export default function SummaryScreen() {
     let isValid = true;
     const errors: string[] = [];
 
-    // 1. Validar cada participante: subtotal + taxa + couvert = total
+    // 1. Validar cada participante: subtotal + soma das taxas + couvert = total
     summary.participants.forEach((p, index) => {
-      const serviceFee = p.paysFee
-        ? round2((p.subtotal * serviceFeePercentage) / 100)
-        : 0;
+      // Usar a soma das taxas do próprio participante (já calculadas)
+      const feesAmount = p.fees?.reduce((sum, f) => sum + f.amount, 0) || 0;
       const couvertAmount = p.paysCouvert ? p.couvert : 0;
-      const expectedTotal = round2(p.subtotal + serviceFee + couvertAmount);
+      const expectedTotal = round2(p.subtotal + feesAmount + couvertAmount);
       const actualTotal = round2(p.totalAmount);
 
       if (Math.abs(expectedTotal - actualTotal) > 0.01) {

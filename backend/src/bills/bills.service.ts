@@ -928,9 +928,22 @@ export class BillsService {
   }
 
   /**
+   * Verificar se a conta é a mais recente do usuário
+   */
+  private async isLatestBillForUser(billId: string, userId: string): Promise<boolean> {
+    const latestBill = await this.prisma.bill.findFirst({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+    
+    return latestBill?.id === billId;
+  }
+
+  /**
    * Recalcular o totalAmount da conta baseado nos itens + taxas
    * Permite edição livre durante REVIEWING e DIVIDING
-   * Bloqueia apenas COMPLETED
+   * Bloqueia apenas COMPLETED (exceto se for a conta mais recente do usuário)
    */
   private async recalculateBillTotal(billId: string) {
     const bill = await this.prisma.bill.findUnique({
@@ -945,11 +958,14 @@ export class BillsService {
       throw new NotFoundException('Conta não encontrada');
     }
 
-    // Bloquear edição de contas finalizadas
+    // Bloquear edição de contas finalizadas, EXCETO se for a conta mais recente do usuário
     if (bill.status === 'COMPLETED') {
-      throw new BadRequestException(
-        'Não é possível modificar uma conta finalizada.'
-      );
+      const isLatest = await this.isLatestBillForUser(billId, bill.userId);
+      if (!isLatest) {
+        throw new BadRequestException(
+          'Não é possível modificar uma conta finalizada.'
+        );
+      }
     }
 
     // Calcular soma dos itens
@@ -1219,5 +1235,86 @@ export class BillsService {
 
     // Reutilizar FeesService
     return this.feesService.create(userId, createFeeDto);
+  }
+
+  /**
+   * Duplicar conta (reutilizar) - cria uma nova conta com os mesmos itens, participantes e taxas
+   * A nova conta fica em status DIVIDING para edição
+   */
+  async duplicate(billId: string, userId: string) {
+    // 1. Buscar conta original com todos os dados
+    const originalBill = await this.prisma.bill.findFirst({
+      where: { id: billId, userId },
+      include: {
+        items: true,
+        participants: true,
+        fees: true,
+      },
+    });
+
+    if (!originalBill) {
+      throw new NotFoundException('Conta não encontrada');
+    }
+
+    // 2. Criar nova conta (sem imagem, status DIVIDING para edição)
+    const newBill = await this.prisma.bill.create({
+      data: {
+        userId,
+        status: BillStatus.DIVIDING,
+        establishmentName: originalBill.establishmentName 
+          ? `${originalBill.establishmentName} (Cópia)` 
+          : 'Conta Reutilizada',
+        imageUrl: '', // Nova conta não tem imagem
+        imageKey: '',
+        totalAmount: originalBill.totalAmount,
+      },
+    });
+
+    // 3. Duplicar participantes
+    if (originalBill.participants.length > 0) {
+      const participantsData = originalBill.participants.map((p) => ({
+        billId: newBill.id,
+        name: p.name,
+      }));
+      await this.prisma.participant.createMany({ data: participantsData });
+    }
+
+    // 4. Duplicar itens (sem divisões - usuário vai refazer)
+    if (originalBill.items.length > 0) {
+      const itemsData = originalBill.items.map((item) => ({
+        billId: newBill.id,
+        name: item.name,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        totalPrice: item.totalPrice,
+      }));
+      await this.prisma.billItem.createMany({ data: itemsData });
+    }
+
+    // 5. Duplicar taxas
+    if (originalBill.fees.length > 0) {
+      const feesData = originalBill.fees.map((fee) => ({
+        billId: newBill.id,
+        type: fee.type,
+        value: fee.value,
+        description: fee.description,
+      }));
+      await this.prisma.fee.createMany({ data: feesData });
+    }
+
+    // 6. Retornar nova conta com dados completos
+    const newBillWithData = await this.prisma.bill.findUnique({
+      where: { id: newBill.id },
+      include: {
+        items: true,
+        participants: true,
+        fees: true,
+      },
+    });
+
+    return {
+      ...newBillWithData,
+      message: 'Conta duplicada com sucesso. Você pode editar os itens e participantes.',
+    };
   }
 }

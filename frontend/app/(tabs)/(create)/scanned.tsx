@@ -9,6 +9,8 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -21,10 +23,12 @@ import participantsService, {
   Participant,
 } from "../../../services/participants.service";
 import divisionsService from "../../../services/divisions.service";
+import feesService, { Fee, FeeType } from "../../../services/fees.service";
 
 export default function ScannedBillScreen() {
-  const { id, participants: participantsParam } = useLocalSearchParams();
+  const { id, participants: participantsParam, editMode } = useLocalSearchParams();
   const router = useRouter();
+  const isEditMode = editMode === "true";
 
   const [billName, setBillName] = useState("");
   const [items, setItems] = useState<BillItem[]>([]);
@@ -59,6 +63,14 @@ export default function ScannedBillScreen() {
   const [editingParticipantId, setEditingParticipantId] = useState<string | null>(null);
   const [participantNameInput, setParticipantNameInput] = useState<string>("");
   const [savingParticipantId, setSavingParticipantId] = useState<string | null>(null);
+
+  // Estados de taxas
+  const [fees, setFees] = useState<Fee[]>([]);
+  const [serviceFeeInput, setServiceFeeInput] = useState<string>("");
+  const [couvertInput, setCouvertInput] = useState<string>("");
+  const [editingServiceFee, setEditingServiceFee] = useState(false);
+  const [editingCouvert, setEditingCouvert] = useState(false);
+  const [savingFee, setSavingFee] = useState(false);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const saveTimeoutsRef = useRef<{ [key: string]: any }>({});
@@ -170,7 +182,8 @@ export default function ScannedBillScreen() {
       console.log("[Scanned] Bill data:", billData);
 
       setBillStatus(billData.status);
-      setIsCompleted(billData.status === "COMPLETED");
+      // Se estiver em modo de edição (editMode), permitir edição mesmo se COMPLETED
+      setIsCompleted(billData.status === "COMPLETED" && !isEditMode);
       setBillName(billData.establishmentName || "");
 
       // Se o OCR ainda está processando, não tentar carregar itens ainda
@@ -210,7 +223,32 @@ export default function ScannedBillScreen() {
         setParticipants([]);
       }
 
-      // 4. Carregar divisões existentes (assignments)
+      // 4. Carregar taxas (fees)
+      try {
+        const feesResponse = await feesService.findAllByBill(id as string);
+        console.log("[Scanned] Fees loaded:", feesResponse);
+        
+        // feesResponse pode ser array ou objeto com fees
+        const feesData = Array.isArray(feesResponse) 
+          ? feesResponse 
+          : (feesResponse as any).fees || [];
+        
+        setFees(feesData);
+        
+        // Inicializar inputs de taxas
+        const serviceFee = feesData.find((f: Fee) => f.type === FeeType.SERVICE_PERCENTAGE);
+        const couvert = feesData.find((f: Fee) => f.type === FeeType.COVER_CHARGE);
+        
+        setServiceFeeInput(serviceFee ? serviceFee.value.toString() : "0");
+        setCouvertInput(couvert ? couvert.value.toFixed(2).replace(".", ",") : "0,00");
+      } catch (error: any) {
+        console.warn("[Scanned] Error loading fees:", error.message);
+        setFees([]);
+        setServiceFeeInput("0");
+        setCouvertInput("0,00");
+      }
+
+      // 5. Carregar divisões existentes (assignments)
       let divisionsData: any[] = [];
       try {
         const divisionsResponse = await divisionsService.findAllByBill(
@@ -712,14 +750,14 @@ export default function ScannedBillScreen() {
       delete saveTimeoutsRef.current[itemId];
     }
 
-    const priceStr = itemPrices[itemId]?.replace(",", ".") || "0";
+    const priceStr = itemPrices[itemId]?.replace(",", ".") || "";
     const newUnitPrice = parseFloat(priceStr);
     const originalItem = items.find((item) => item.id === itemId);
 
     if (!originalItem) return;
 
-    // Validar valor unitário > 0
-    if (isNaN(newUnitPrice) || newUnitPrice <= 0) {
+    // Se campo está vazio ou valor é inválido, reverter para valor original
+    if (priceStr === "" || isNaN(newUnitPrice) || newUnitPrice <= 0) {
       setItemPrices((prev) => ({
         ...prev,
         [itemId]: originalItem.price.toFixed(2).replace(".", ","),
@@ -893,6 +931,24 @@ export default function ScannedBillScreen() {
     });
   };
 
+  // Função para concluir edição e voltar aos detalhes da conta
+  const handleSaveAndGoBack = () => {
+    Alert.alert(
+      "Concluir edição",
+      "Deseja finalizar a edição e voltar para os detalhes da conta?",
+      [
+        { text: "Continuar editando", style: "cancel" },
+        { 
+          text: "Concluir", 
+          onPress: () => router.replace({
+            pathname: "/(tabs)/bills/[id]",
+            params: { id: id as string }
+          })
+        },
+      ]
+    );
+  };
+
   const formatCurrency = (value: number) => {
     return `R$ ${value.toFixed(2).replace(".", ",")}`;
   };
@@ -971,6 +1027,178 @@ export default function ScannedBillScreen() {
   };
 
   /**
+   * Adiciona um novo participante à conta
+   */
+  const addParticipant = async () => {
+    if (isCompleted) return;
+
+    try {
+      const newName = `Pessoa ${participants.length + 1}`;
+      const newParticipant = await participantsService.createParticipant(
+        id as string,
+        newName
+      );
+      
+      setParticipants((prev) => [...prev, newParticipant]);
+      console.log("[Scanned] New participant added:", newParticipant.name);
+    } catch (error: any) {
+      console.error("Error adding participant:", error);
+      Alert.alert(
+        "Erro",
+        error.message || "Não foi possível adicionar participante"
+      );
+    }
+  };
+
+  /**
+   * Remove um participante da conta
+   */
+  const removeParticipant = async (participantId: string) => {
+    if (isCompleted) return;
+
+    const participant = participants.find((p) => p.id === participantId);
+    if (!participant) return;
+
+    // Confirmar remoção
+    Alert.alert(
+      "Remover Participante",
+      `Deseja remover "${participant.name}"? As divisões atribuídas a este participante serão removidas.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Remover",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await participantsService.deleteParticipant(participantId);
+
+              // Atualizar lista de participantes local
+              setParticipants((prev) => prev.filter((p) => p.id !== participantId));
+
+              // Remover participante das atribuições dos itens
+              setItems((prevItems) =>
+                prevItems.map((item) => ({
+                  ...item,
+                  assignedParticipants: item.assignedParticipants.filter(
+                    (name) => name !== participant.name
+                  ),
+                }))
+              );
+
+              console.log("[Scanned] Participant removed:", participant.name);
+            } catch (error: any) {
+              console.error("Error removing participant:", error);
+              Alert.alert(
+                "Erro",
+                error.message || "Não foi possível remover o participante"
+              );
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  /**
+   * Salva a taxa de serviço (porcentagem)
+   */
+  const saveServiceFee = async () => {
+    if (isCompleted) return;
+    
+    const newValue = parseFloat(serviceFeeInput) || 0;
+    
+    // Validar: deve estar entre 0 e 100
+    if (newValue < 0 || newValue > 100) {
+      Alert.alert("Erro", "A taxa de serviço deve estar entre 0% e 100%");
+      return;
+    }
+
+    try {
+      setSavingFee(true);
+      
+      const existingFee = fees.find((f) => f.type === FeeType.SERVICE_PERCENTAGE);
+      
+      if (existingFee) {
+        // Atualizar taxa existente
+        if (newValue === 0) {
+          // Se valor é 0, deletar a taxa
+          await feesService.remove(existingFee.id);
+          setFees((prev) => prev.filter((f) => f.id !== existingFee.id));
+        } else {
+          // Atualizar valor
+          const updated = await feesService.update(existingFee.id, { value: newValue });
+          setFees((prev) => prev.map((f) => f.id === existingFee.id ? updated : f));
+        }
+      } else if (newValue > 0) {
+        // Criar nova taxa
+        const newFee = await feesService.create({
+          billId: id as string,
+          type: FeeType.SERVICE_PERCENTAGE,
+          value: newValue,
+        });
+        setFees((prev) => [...prev, newFee]);
+      }
+      
+      setEditingServiceFee(false);
+      console.log("[Scanned] Service fee saved:", newValue);
+    } catch (error: any) {
+      console.error("Error saving service fee:", error);
+      Alert.alert("Erro", error.message || "Não foi possível salvar a taxa de serviço");
+    } finally {
+      setSavingFee(false);
+    }
+  };
+
+  /**
+   * Salva o couvert (valor por pessoa)
+   */
+  const saveCouvert = async () => {
+    if (isCompleted) return;
+    
+    const newValue = parseFloat(couvertInput.replace(",", ".")) || 0;
+    
+    if (newValue < 0) {
+      Alert.alert("Erro", "O valor do couvert não pode ser negativo");
+      return;
+    }
+
+    try {
+      setSavingFee(true);
+      
+      const existingFee = fees.find((f) => f.type === FeeType.COVER_CHARGE);
+      
+      if (existingFee) {
+        if (newValue === 0) {
+          // Se valor é 0, deletar a taxa
+          await feesService.remove(existingFee.id);
+          setFees((prev) => prev.filter((f) => f.id !== existingFee.id));
+        } else {
+          // Atualizar valor
+          const updated = await feesService.update(existingFee.id, { value: newValue });
+          setFees((prev) => prev.map((f) => f.id === existingFee.id ? updated : f));
+        }
+      } else if (newValue > 0) {
+        // Criar nova taxa
+        const newFee = await feesService.create({
+          billId: id as string,
+          type: FeeType.COVER_CHARGE,
+          value: newValue,
+          description: "Couvert por pessoa",
+        });
+        setFees((prev) => [...prev, newFee]);
+      }
+      
+      setEditingCouvert(false);
+      console.log("[Scanned] Couvert saved:", newValue);
+    } catch (error: any) {
+      console.error("Error saving couvert:", error);
+      Alert.alert("Erro", error.message || "Não foi possível salvar o couvert");
+    } finally {
+      setSavingFee(false);
+    }
+  };
+
+  /**
    * IMPORTANTE:
    * - No frontend, o campo `price` do BillItem representa o VALOR UNITÁRIO.
    * - O total da conta deve ser a soma de (quantidade × valor unitário) para cada item.
@@ -990,6 +1218,11 @@ export default function ScannedBillScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView 
+        style={styles.keyboardAvoidingContainer}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+      >
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#81007F" />
@@ -998,10 +1231,29 @@ export default function ScannedBillScreen() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
         >
           <View style={styles.contentContainer}>
-            {/* Banner de Conta Finalizada */}
-            {isCompleted && (
+            {/* Banner de Modo Edição */}
+            {isEditMode && (
+              <View style={styles.editModeBanner}>
+                <View style={styles.editModeIconContainer}>
+                  <MaterialCommunityIcons
+                    name="pencil-outline"
+                    size={18}
+                    color="#fff"
+                  />
+                </View>
+                <View style={styles.editModeBannerContent}>
+                  <Text style={styles.editModeBannerTitle}>Modo de Edição</Text>
+                  <Text style={styles.editModeBannerSubtitle}>
+                    Edite os valores e participantes abaixo
+                  </Text>
+                </View>
+              </View>
+            )}
+            {/* Banner de Conta Finalizada (só mostra se não estiver em modo edição) */}
+            {isCompleted && !isEditMode && (
               <View style={styles.completedBanner}>
                 <MaterialCommunityIcons
                   name="check-circle"
@@ -1104,6 +1356,207 @@ export default function ScannedBillScreen() {
                   </Text>
                 </View>
               )}
+
+            {/* Seção de Participantes - Editável */}
+            {!processingOcr && (
+              <View style={styles.participantsSection}>
+                <View style={styles.participantsSectionHeader}>
+                  <Text style={styles.participantsSectionTitle}>
+                    Participantes ({participants.length})
+                  </Text>
+                  {!isCompleted && (
+                    <TouchableOpacity
+                      style={styles.addParticipantBtn}
+                      onPress={addParticipant}
+                    >
+                      <Ionicons name="add" size={18} color="#8B2E8F" />
+                      <Text style={styles.addParticipantBtnText}>Adicionar</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                
+                {participants.length === 0 ? (
+                  <Text style={styles.noParticipantsText}>
+                    Nenhum participante. Adicione pelo menos um participante.
+                  </Text>
+                ) : (
+                  <View style={styles.participantsList}>
+                    {participants.map((participant) => {
+                      const isEditingThis = editingParticipantId === participant.id;
+                      const isSavingThis = savingParticipantId === participant.id;
+                      
+                      return (
+                        <View key={participant.id} style={styles.participantChip}>
+                          {isEditingThis ? (
+                            <View style={styles.participantChipEditContainer}>
+                              <TextInput
+                                style={styles.participantChipInput}
+                                value={participantNameInput}
+                                onChangeText={setParticipantNameInput}
+                                autoFocus
+                                selectTextOnFocus
+                                editable={!isSavingThis}
+                              />
+                              <TouchableOpacity
+                                onPress={() => saveParticipantName(participant.id)}
+                                disabled={isSavingThis}
+                              >
+                                {isSavingThis ? (
+                                  <ActivityIndicator size="small" color="#8B2E8F" />
+                                ) : (
+                                  <Ionicons name="checkmark" size={18} color="#10b981" />
+                                )}
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                onPress={cancelEditingParticipant}
+                                disabled={isSavingThis}
+                              >
+                                <Ionicons name="close" size={18} color="#ef4444" />
+                              </TouchableOpacity>
+                            </View>
+                          ) : (
+                            <>
+                              <TouchableOpacity
+                                style={styles.participantChipNameArea}
+                                onPress={() => !isCompleted && startEditingParticipant(participant)}
+                                disabled={isCompleted}
+                              >
+                                <Text style={styles.participantChipName}>
+                                  {participant.name}
+                                </Text>
+                                {!isCompleted && (
+                                  <Ionicons name="pencil" size={12} color="#999" />
+                                )}
+                              </TouchableOpacity>
+                              {!isCompleted && (
+                                <TouchableOpacity
+                                  style={styles.participantChipRemove}
+                                  onPress={() => removeParticipant(participant.id)}
+                                >
+                                  <Ionicons name="close-circle" size={18} color="#ef4444" />
+                                </TouchableOpacity>
+                              )}
+                            </>
+                          )}
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Seção de Taxas - Editável */}
+            {!processingOcr && (
+              <View style={styles.feesSection}>
+                <Text style={styles.feesSectionTitle}>Taxas</Text>
+                
+                {/* Taxa de Serviço */}
+                <View style={styles.feeRow}>
+                  <Text style={styles.feeLabel}>Taxa de Serviço</Text>
+                  {editingServiceFee && !isCompleted ? (
+                    <View style={styles.feeEditContainer}>
+                      <TextInput
+                        style={styles.feeInput}
+                        value={serviceFeeInput}
+                        onChangeText={setServiceFeeInput}
+                        keyboardType="numeric"
+                        placeholder="0"
+                        editable={!savingFee}
+                      />
+                      <Text style={styles.feeInputSuffix}>%</Text>
+                      <TouchableOpacity
+                        onPress={saveServiceFee}
+                        disabled={savingFee}
+                        style={styles.feeActionBtn}
+                      >
+                        {savingFee ? (
+                          <ActivityIndicator size="small" color="#8B2E8F" />
+                        ) : (
+                          <Ionicons name="checkmark" size={18} color="#10b981" />
+                        )}
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => {
+                          const existingFee = fees.find((f) => f.type === FeeType.SERVICE_PERCENTAGE);
+                          setServiceFeeInput(existingFee ? existingFee.value.toString() : "0");
+                          setEditingServiceFee(false);
+                        }}
+                        disabled={savingFee}
+                        style={styles.feeActionBtn}
+                      >
+                        <Ionicons name="close" size={18} color="#ef4444" />
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.feeValueContainer}
+                      onPress={() => !isCompleted && setEditingServiceFee(true)}
+                      disabled={isCompleted}
+                    >
+                      <Text style={styles.feeValue}>
+                        {fees.find((f) => f.type === FeeType.SERVICE_PERCENTAGE)?.value || 0}%
+                      </Text>
+                      {!isCompleted && <Ionicons name="pencil" size={14} color="#999" />}
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Couvert */}
+                <View style={styles.feeRow}>
+                  <Text style={styles.feeLabel}>Couvert (por pessoa)</Text>
+                  {editingCouvert && !isCompleted ? (
+                    <View style={styles.feeEditContainer}>
+                      <Text style={styles.feeInputPrefix}>R$</Text>
+                      <TextInput
+                        style={styles.feeInput}
+                        value={couvertInput}
+                        onChangeText={(text) => {
+                          const cleaned = text.replace(/[^0-9,]/g, "");
+                          setCouvertInput(cleaned);
+                        }}
+                        keyboardType="numeric"
+                        placeholder="0,00"
+                        editable={!savingFee}
+                      />
+                      <TouchableOpacity
+                        onPress={saveCouvert}
+                        disabled={savingFee}
+                        style={styles.feeActionBtn}
+                      >
+                        {savingFee ? (
+                          <ActivityIndicator size="small" color="#8B2E8F" />
+                        ) : (
+                          <Ionicons name="checkmark" size={18} color="#10b981" />
+                        )}
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => {
+                          const existingFee = fees.find((f) => f.type === FeeType.COVER_CHARGE);
+                          setCouvertInput(existingFee ? existingFee.value.toFixed(2).replace(".", ",") : "0,00");
+                          setEditingCouvert(false);
+                        }}
+                        disabled={savingFee}
+                        style={styles.feeActionBtn}
+                      >
+                        <Ionicons name="close" size={18} color="#ef4444" />
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.feeValueContainer}
+                      onPress={() => !isCompleted && setEditingCouvert(true)}
+                      disabled={isCompleted}
+                    >
+                      <Text style={styles.feeValue}>
+                        R$ {(fees.find((f) => f.type === FeeType.COVER_CHARGE)?.value || 0).toFixed(2).replace(".", ",")}
+                      </Text>
+                      {!isCompleted && <Ionicons name="pencil" size={14} color="#999" />}
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            )}
 
             {/* Lista de items */}
             {!processingOcr &&
@@ -1212,8 +1665,9 @@ export default function ScannedBillScreen() {
                               styles.itemCardAmountEditable,
                           ]}
                           value={
-                            itemPrices[item.id] ||
-                            item.price.toFixed(2).replace(".", ",")
+                            editingItemPriceId === item.id
+                              ? (itemPrices[item.id] ?? "")
+                              : (itemPrices[item.id] || item.price.toFixed(2).replace(".", ","))
                           }
                           onChangeText={(text) =>
                             handleItemPriceChange(item.id, text)
@@ -1409,18 +1863,33 @@ export default function ScannedBillScreen() {
               </View>
             )}
 
-            {/* Botão Visualizar Resumo - só mostrar se não estiver processando e houver itens */}
+            {/* Botões - variam conforme o modo */}
             {!processingOcr && items.length > 0 && (
-              <TouchableOpacity
-                style={styles.summaryBtn}
-                onPress={handleSummary}
-              >
-                <Text style={styles.summaryBtnText}>Visualizar resumo</Text>
-              </TouchableOpacity>
+              <>
+                {isEditMode ? (
+                  /* Modo Edição: Botão Concluir Edição */
+                  <TouchableOpacity
+                    style={styles.saveAndGoBackBtn}
+                    onPress={handleSaveAndGoBack}
+                  >
+                    <MaterialCommunityIcons name="check" size={20} color="#fff" />
+                    <Text style={styles.saveAndGoBackBtnText}>Concluir Edição</Text>
+                  </TouchableOpacity>
+                ) : (
+                  /* Modo Normal: Botão Visualizar Resumo */
+                  <TouchableOpacity
+                    style={styles.summaryBtn}
+                    onPress={handleSummary}
+                  >
+                    <Text style={styles.summaryBtnText}>Visualizar resumo</Text>
+                  </TouchableOpacity>
+                )}
+              </>
             )}
           </View>
         </ScrollView>
       )}
+      </KeyboardAvoidingView>
 
       <AddItemModal
         visible={isModalVisible}
@@ -1436,6 +1905,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#fff",
   },
+  keyboardAvoidingContainer: {
+    flex: 1,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
@@ -1449,6 +1921,42 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: 16,
     paddingHorizontal: 20,
+  },
+  editModeBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#8B2E8F",
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+    gap: 12,
+    shadowColor: "#8B2E8F",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  editModeIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  editModeBannerContent: {
+    flex: 1,
+  },
+  editModeBannerTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#fff",
+  },
+  editModeBannerSubtitle: {
+    fontSize: 12,
+    color: "rgba(255, 255, 255, 0.85)",
+    marginTop: 2,
   },
   completedBanner: {
     flexDirection: "row",
@@ -1860,6 +2368,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
+  saveAndGoBackBtn: {
+    backgroundColor: "#10b981",
+    borderRadius: 25,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    alignItems: "center",
+    marginTop: 16,
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 8,
+  },
+  saveAndGoBackBtnText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
   processingContainer: {
     paddingVertical: 40,
     paddingHorizontal: 20,
@@ -1908,5 +2432,153 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: "center",
     lineHeight: 20,
+  },
+  // Estilos da Seção de Participantes
+  participantsSection: {
+    backgroundColor: "#F9F9FB",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#E8E8ED",
+  },
+  participantsSectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  participantsSectionTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#333",
+  },
+  addParticipantBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#8B2E8F",
+    gap: 4,
+  },
+  addParticipantBtnText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#8B2E8F",
+  },
+  noParticipantsText: {
+    fontSize: 14,
+    color: "#666",
+    fontStyle: "italic",
+  },
+  participantsList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  participantChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    paddingVertical: 6,
+    paddingLeft: 12,
+    paddingRight: 6,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+  },
+  participantChipEditContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  participantChipInput: {
+    fontSize: 14,
+    color: "#333",
+    minWidth: 80,
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: "#8B2E8F",
+  },
+  participantChipNameArea: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  participantChipName: {
+    fontSize: 14,
+    color: "#333",
+  },
+  participantChipRemove: {
+    marginLeft: 4,
+    padding: 2,
+  },
+  // Estilos da Seção de Taxas
+  feesSection: {
+    backgroundColor: "#FFF9F0",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#FFE5C4",
+  },
+  feesSectionTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 12,
+  },
+  feeRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#FFE5C4",
+  },
+  feeLabel: {
+    fontSize: 14,
+    color: "#666",
+  },
+  feeValueContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  feeValue: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#8B2E8F",
+  },
+  feeEditContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  feeInputPrefix: {
+    fontSize: 14,
+    color: "#666",
+  },
+  feeInput: {
+    fontSize: 14,
+    color: "#333",
+    minWidth: 50,
+    textAlign: "right",
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: "#8B2E8F",
+    borderRadius: 6,
+    backgroundColor: "#fff",
+  },
+  feeInputSuffix: {
+    fontSize: 14,
+    color: "#666",
+  },
+  feeActionBtn: {
+    padding: 4,
   },
 });

@@ -473,6 +473,28 @@ class BillService {
       } as UploadBillError;
     }
   }
+
+  /**
+   * Duplica uma conta existente (reutilizar)
+   * Cria uma nova conta com os mesmos itens, participantes e taxas
+   * @param billId - ID da conta original
+   * @returns Nova conta duplicada
+   */
+  async duplicateBill(billId: string): Promise<UploadBillResponse> {
+    try {
+      console.log('[BillService] Duplicating bill:', billId);
+      const api = apiService.getApi();
+      const response = await api.post<UploadBillResponse>(`/bills/${billId}/duplicate`);
+      console.log('[BillService] Bill duplicated successfully:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('[BillService] Error duplicating bill:', error);
+      throw {
+        message: error.response?.data?.message || "Erro ao duplicar conta",
+        statusCode: error.response?.status,
+      } as UploadBillError;
+    }
+  }
 }
 
 export interface FinalizeBillPayload {
