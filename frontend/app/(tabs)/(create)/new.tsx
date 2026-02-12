@@ -24,7 +24,7 @@ import { NumericInput } from "../../../components/common/NumericInput";
 interface INewBillFormData {
   billName?: string;
   serviceRate: string;
-  couvertValue: string;
+  couvertValue?: string;
 }
 
 interface ParticipantInput {
@@ -203,7 +203,7 @@ export default function NewBillScreen() {
                 <NumericInput
                   label="Valor por pessoa"
                   placeholder="Ex: 20.00"
-                  value={value}
+                  value={value ?? ""}
                   onChange={onChange}
                   onBlur={onBlur}
                   editable={!isLoading}
