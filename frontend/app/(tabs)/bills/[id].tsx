@@ -53,7 +53,7 @@ export default function BillDetail() {
     useCallback(() => {
       loadBillDetails();
       checkIfLatestBill();
-    }, [id])
+    }, [id]),
   );
 
   const loadBillDetails = async () => {
@@ -72,7 +72,7 @@ export default function BillDetail() {
     try {
       // Buscar a lista de contas ordenada por data (mais recente primeiro)
       const response = await billService.listBills(1, 1);
-      
+
       // Se esta conta é a primeira da lista (mais recente), permitir edição
       if (response.data.length > 0 && response.data[0].id === id) {
         setIsLatestBill(true);
@@ -94,27 +94,40 @@ export default function BillDetail() {
     });
   };
 
-  const handleReuseBill = async () => {
-    try {
-      setDuplicating(true);
-      
-      // Duplicar a conta no backend
-      const newBill = await billService.duplicateBill(id as string);
-      
-      // Navegar para a tela de edição da nova conta
-      router.push({
-        pathname: "/(tabs)/(create)/scanned",
-        params: { id: newBill.id },
-      });
-    } catch (err: any) {
-      console.error("Erro ao reutilizar conta:", err);
-      Alert.alert(
-        "Erro",
-        err.message || "Não foi possível reutilizar a conta. Tente novamente."
-      );
-    } finally {
-      setDuplicating(false);
-    }
+  const handleReuseBill = () => {
+    Alert.alert(
+      "Reutilizar conta",
+      "Será criada uma cópia desta conta com os mesmos participantes e configurações. Deseja continuar?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Reutilizar",
+          onPress: async () => {
+            try {
+              setDuplicating(true);
+
+              // Duplicar a conta no backend
+              const newBill = await billService.duplicateBill(id as string);
+
+              // Navegar para a tela de edição da nova conta
+              router.push({
+                pathname: "/(tabs)/(create)/scanned",
+                params: { id: newBill.id },
+              });
+            } catch (err: any) {
+              console.error("Erro ao reutilizar conta:", err);
+              Alert.alert(
+                "Erro",
+                err.message ||
+                  "Não foi possível reutilizar a conta. Tente novamente.",
+              );
+            } finally {
+              setDuplicating(false);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const formatCurrency = (value?: number): string => {
@@ -174,7 +187,10 @@ export default function BillDetail() {
             </Text>
             {/* Botão Editar - só aparece para a conta mais recente */}
             {isLatestBill ? (
-              <TouchableOpacity style={styles.editButton} onPress={handleEditBill}>
+              <TouchableOpacity
+                style={styles.editButton}
+                onPress={handleEditBill}
+              >
                 <Text style={styles.editButtonText}>Editar</Text>
               </TouchableOpacity>
             ) : (
@@ -278,18 +294,21 @@ export default function BillDetail() {
                       <>
                         <View style={styles.detailDivider} />
                         {participant.feeDetails.map((fee) => (
-                          <View 
-                            key={fee.id} 
+                          <View
+                            key={fee.id}
                             style={[
                               styles.detailRow,
-                              fee.type === "SERVICE_PERCENTAGE" && styles.detailRowFee,
-                              fee.type === "COVER_CHARGE" && styles.detailRowCouvert,
+                              fee.type === "SERVICE_PERCENTAGE" &&
+                                styles.detailRowFee,
+                              fee.type === "COVER_CHARGE" &&
+                                styles.detailRowCouvert,
                             ]}
                           >
-                            <Text 
+                            <Text
                               style={[
                                 styles.detailTextFee,
-                                fee.type === "COVER_CHARGE" && styles.detailTextCouvert,
+                                fee.type === "COVER_CHARGE" &&
+                                  styles.detailTextCouvert,
                               ]}
                             >
                               {fee.type === "SERVICE_PERCENTAGE"
@@ -298,10 +317,11 @@ export default function BillDetail() {
                                   ? "Couvert"
                                   : "Taxa"}
                             </Text>
-                            <Text 
+                            <Text
                               style={[
                                 styles.detailValueFee,
-                                fee.type === "COVER_CHARGE" && styles.detailValueCouvert,
+                                fee.type === "COVER_CHARGE" &&
+                                  styles.detailValueCouvert,
                               ]}
                             >
                               {formatCurrency(fee.participantShare)}
@@ -338,8 +358,11 @@ export default function BillDetail() {
           </View>
 
           {/* Botão Reutilizar Conta */}
-          <TouchableOpacity 
-            style={[styles.reuseButton, duplicating && styles.reuseButtonDisabled]}
+          <TouchableOpacity
+            style={[
+              styles.reuseButton,
+              duplicating && styles.reuseButtonDisabled,
+            ]}
             onPress={handleReuseBill}
             disabled={duplicating}
           >

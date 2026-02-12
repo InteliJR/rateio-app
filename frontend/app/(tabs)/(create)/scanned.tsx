@@ -26,7 +26,11 @@ import divisionsService from "../../../services/divisions.service";
 import feesService, { Fee, FeeType } from "../../../services/fees.service";
 
 export default function ScannedBillScreen() {
-  const { id, participants: participantsParam, editMode } = useLocalSearchParams();
+  const {
+    id,
+    participants: participantsParam,
+    editMode,
+  } = useLocalSearchParams();
   const router = useRouter();
   const isEditMode = editMode === "true";
 
@@ -60,9 +64,13 @@ export default function ScannedBillScreen() {
   );
 
   // Estados de edição de participantes
-  const [editingParticipantId, setEditingParticipantId] = useState<string | null>(null);
+  const [editingParticipantId, setEditingParticipantId] = useState<
+    string | null
+  >(null);
   const [participantNameInput, setParticipantNameInput] = useState<string>("");
-  const [savingParticipantId, setSavingParticipantId] = useState<string | null>(null);
+  const [savingParticipantId, setSavingParticipantId] = useState<string | null>(
+    null,
+  );
 
   // Estados de taxas
   const [fees, setFees] = useState<Fee[]>([]);
@@ -227,20 +235,26 @@ export default function ScannedBillScreen() {
       try {
         const feesResponse = await feesService.findAllByBill(id as string);
         console.log("[Scanned] Fees loaded:", feesResponse);
-        
+
         // feesResponse pode ser array ou objeto com fees
-        const feesData = Array.isArray(feesResponse) 
-          ? feesResponse 
+        const feesData = Array.isArray(feesResponse)
+          ? feesResponse
           : (feesResponse as any).fees || [];
-        
+
         setFees(feesData);
-        
+
         // Inicializar inputs de taxas
-        const serviceFee = feesData.find((f: Fee) => f.type === FeeType.SERVICE_PERCENTAGE);
-        const couvert = feesData.find((f: Fee) => f.type === FeeType.COVER_CHARGE);
-        
+        const serviceFee = feesData.find(
+          (f: Fee) => f.type === FeeType.SERVICE_PERCENTAGE,
+        );
+        const couvert = feesData.find(
+          (f: Fee) => f.type === FeeType.COVER_CHARGE,
+        );
+
         setServiceFeeInput(serviceFee ? serviceFee.value.toString() : "0");
-        setCouvertInput(couvert ? couvert.value.toFixed(2).replace(".", ",") : "0,00");
+        setCouvertInput(
+          couvert ? couvert.value.toFixed(2).replace(".", ",") : "0,00",
+        );
       } catch (error: any) {
         console.warn("[Scanned] Error loading fees:", error.message);
         setFees([]);
@@ -380,7 +394,7 @@ export default function ScannedBillScreen() {
 
       // Remover todas as divisões existentes deste item em paralelo
       await Promise.all(
-        currentItemDivisions.map((div: any) => divisionsService.remove(div.id))
+        currentItemDivisions.map((div: any) => divisionsService.remove(div.id)),
       );
 
       // Criar novas divisões com valores recalculados
@@ -491,7 +505,9 @@ export default function ScannedBillScreen() {
 
           // Remover todas as divisões existentes deste item em paralelo
           await Promise.all(
-            currentItemDivisions.map((div: any) => divisionsService.remove(div.id))
+            currentItemDivisions.map((div: any) =>
+              divisionsService.remove(div.id),
+            ),
           );
 
           // Criar novas divisões com valores recalculados para os participantes restantes
@@ -533,7 +549,9 @@ export default function ScannedBillScreen() {
 
         // Remover todas as divisões existentes deste item em paralelo
         await Promise.all(
-          currentItemDivisions.map((div: any) => divisionsService.remove(div.id))
+          currentItemDivisions.map((div: any) =>
+            divisionsService.remove(div.id),
+          ),
         );
 
         // Criar novas divisões com valores recalculados para todos os participantes
@@ -614,7 +632,7 @@ export default function ScannedBillScreen() {
     }
   };
 
-  const deleteItem = async (itemId: string) => {
+  const deleteItem = (itemId: string) => {
     if (isCompleted) {
       Alert.alert(
         "Conta Finalizada",
@@ -624,27 +642,37 @@ export default function ScannedBillScreen() {
       return;
     }
 
-    try {
-      // Deletar item no backend (isso também remove as divisões relacionadas)
-      const result = await itemsService.deleteItem(id as string, itemId);
+    Alert.alert("Excluir item", "Tem certeza que deseja excluir este item?", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Excluir",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            // Deletar item no backend (isso também remove as divisões relacionadas)
+            const result = await itemsService.deleteItem(id as string, itemId);
 
-      // Se retornar a lista atualizada, usar ela; senão filtrar localmente
-      if (Array.isArray(result)) {
-        setItems(result);
-      } else {
-        setItems(items.filter((item) => item.id !== itemId));
-      }
+            // Se retornar a lista atualizada, usar ela; senão filtrar localmente
+            if (Array.isArray(result)) {
+              setItems(result);
+            } else {
+              setItems(items.filter((item) => item.id !== itemId));
+            }
 
-      if (expandedItemId === itemId) {
-        setExpandedItemId("");
-      }
-    } catch (error: any) {
-      console.error("[Scanned] Error deleting item:", error);
-      Alert.alert(
-        "Erro",
-        error.message || "Não foi possível deletar o item. Tente novamente.",
-      );
-    }
+            if (expandedItemId === itemId) {
+              setExpandedItemId("");
+            }
+          } catch (error: any) {
+            console.error("[Scanned] Error deleting item:", error);
+            Alert.alert(
+              "Erro",
+              error.message ||
+                "Não foi possível deletar o item. Tente novamente.",
+            );
+          }
+        },
+      },
+    ]);
   };
 
   // === FUNÇÕES DE EDIÇÃO DE NOME ===
@@ -782,13 +810,14 @@ export default function ScannedBillScreen() {
         // Atualizar estado local: manter convenção `price` = unitário
         const updatedItem = { ...originalItem, price: newUnitPrice };
         setItems((prevItems) =>
-          prevItems.map((item) =>
-            item.id === itemId ? updatedItem : item,
-          ),
+          prevItems.map((item) => (item.id === itemId ? updatedItem : item)),
         );
 
         // Recalcular divisões se houver participantes atribuídos
-        if (originalItem.assignedParticipants && originalItem.assignedParticipants.length > 0) {
+        if (
+          originalItem.assignedParticipants &&
+          originalItem.assignedParticipants.length > 0
+        ) {
           await recalculateDivisionsForItem(itemId, updatedItem);
         }
       } catch (error: any) {
@@ -877,13 +906,14 @@ export default function ScannedBillScreen() {
 
         const updatedItem = { ...originalItem, quantity: newQuantity };
         setItems((prevItems) =>
-          prevItems.map((item) =>
-            item.id === itemId ? updatedItem : item,
-          ),
+          prevItems.map((item) => (item.id === itemId ? updatedItem : item)),
         );
 
         // Recalcular divisões se houver participantes atribuídos
-        if (originalItem.assignedParticipants && originalItem.assignedParticipants.length > 0) {
+        if (
+          originalItem.assignedParticipants &&
+          originalItem.assignedParticipants.length > 0
+        ) {
           await recalculateDivisionsForItem(itemId, updatedItem);
         }
       } catch (error: any) {
@@ -938,14 +968,15 @@ export default function ScannedBillScreen() {
       "Deseja finalizar a edição e voltar para os detalhes da conta?",
       [
         { text: "Continuar editando", style: "cancel" },
-        { 
-          text: "Concluir", 
-          onPress: () => router.replace({
-            pathname: "/(tabs)/bills/[id]",
-            params: { id: id as string }
-          })
+        {
+          text: "Concluir",
+          onPress: () =>
+            router.replace({
+              pathname: "/(tabs)/bills/[id]",
+              params: { id: id as string },
+            }),
         },
-      ]
+      ],
     );
   };
 
@@ -980,7 +1011,7 @@ export default function ScannedBillScreen() {
       return;
     }
 
-    const participant = participants.find(p => p.id === participantId);
+    const participant = participants.find((p) => p.id === participantId);
     if (!participant) return;
 
     // Se o nome não mudou, apenas cancelar edição
@@ -991,34 +1022,37 @@ export default function ScannedBillScreen() {
 
     try {
       setSavingParticipantId(participantId);
-      
+
       // Atualizar no backend
       await participantsService.updateParticipant(participantId, newName);
-      
+
       // Atualizar nome nos itens que tinham esse participante atribuído
       const oldName = participant.name;
       setItems((prevItems) =>
         prevItems.map((item) => ({
           ...item,
           assignedParticipants: item.assignedParticipants.map((name) =>
-            name === oldName ? newName : name
+            name === oldName ? newName : name,
           ),
-        }))
+        })),
       );
 
       // Atualizar lista de participantes local
       setParticipants((prev) =>
-        prev.map((p) =>
-          p.id === participantId ? { ...p, name: newName } : p
-        )
+        prev.map((p) => (p.id === participantId ? { ...p, name: newName } : p)),
       );
 
-      console.log("[Scanned] Participant name updated:", participantId, "->", newName);
+      console.log(
+        "[Scanned] Participant name updated:",
+        participantId,
+        "->",
+        newName,
+      );
     } catch (error: any) {
       console.error("Error updating participant name:", error);
       Alert.alert(
         "Erro",
-        error.message || "Não foi possível atualizar o nome do participante"
+        error.message || "Não foi possível atualizar o nome do participante",
       );
     } finally {
       setSavingParticipantId(null);
@@ -1036,16 +1070,16 @@ export default function ScannedBillScreen() {
       const newName = `Pessoa ${participants.length + 1}`;
       const newParticipant = await participantsService.createParticipant(
         id as string,
-        newName
+        newName,
       );
-      
+
       setParticipants((prev) => [...prev, newParticipant]);
       console.log("[Scanned] New participant added:", newParticipant.name);
     } catch (error: any) {
       console.error("Error adding participant:", error);
       Alert.alert(
         "Erro",
-        error.message || "Não foi possível adicionar participante"
+        error.message || "Não foi possível adicionar participante",
       );
     }
   };
@@ -1073,16 +1107,18 @@ export default function ScannedBillScreen() {
               await participantsService.deleteParticipant(participantId);
 
               // Atualizar lista de participantes local
-              setParticipants((prev) => prev.filter((p) => p.id !== participantId));
+              setParticipants((prev) =>
+                prev.filter((p) => p.id !== participantId),
+              );
 
               // Remover participante das atribuições dos itens
               setItems((prevItems) =>
                 prevItems.map((item) => ({
                   ...item,
                   assignedParticipants: item.assignedParticipants.filter(
-                    (name) => name !== participant.name
+                    (name) => name !== participant.name,
                   ),
-                }))
+                })),
               );
 
               console.log("[Scanned] Participant removed:", participant.name);
@@ -1090,12 +1126,12 @@ export default function ScannedBillScreen() {
               console.error("Error removing participant:", error);
               Alert.alert(
                 "Erro",
-                error.message || "Não foi possível remover o participante"
+                error.message || "Não foi possível remover o participante",
               );
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -1104,9 +1140,9 @@ export default function ScannedBillScreen() {
    */
   const saveServiceFee = async () => {
     if (isCompleted) return;
-    
+
     const newValue = parseFloat(serviceFeeInput) || 0;
-    
+
     // Validar: deve estar entre 0 e 100
     if (newValue < 0 || newValue > 100) {
       Alert.alert("Erro", "A taxa de serviço deve estar entre 0% e 100%");
@@ -1115,9 +1151,11 @@ export default function ScannedBillScreen() {
 
     try {
       setSavingFee(true);
-      
-      const existingFee = fees.find((f) => f.type === FeeType.SERVICE_PERCENTAGE);
-      
+
+      const existingFee = fees.find(
+        (f) => f.type === FeeType.SERVICE_PERCENTAGE,
+      );
+
       if (existingFee) {
         // Atualizar taxa existente
         if (newValue === 0) {
@@ -1126,8 +1164,12 @@ export default function ScannedBillScreen() {
           setFees((prev) => prev.filter((f) => f.id !== existingFee.id));
         } else {
           // Atualizar valor
-          const updated = await feesService.update(existingFee.id, { value: newValue });
-          setFees((prev) => prev.map((f) => f.id === existingFee.id ? updated : f));
+          const updated = await feesService.update(existingFee.id, {
+            value: newValue,
+          });
+          setFees((prev) =>
+            prev.map((f) => (f.id === existingFee.id ? updated : f)),
+          );
         }
       } else if (newValue > 0) {
         // Criar nova taxa
@@ -1138,12 +1180,15 @@ export default function ScannedBillScreen() {
         });
         setFees((prev) => [...prev, newFee]);
       }
-      
+
       setEditingServiceFee(false);
       console.log("[Scanned] Service fee saved:", newValue);
     } catch (error: any) {
       console.error("Error saving service fee:", error);
-      Alert.alert("Erro", error.message || "Não foi possível salvar a taxa de serviço");
+      Alert.alert(
+        "Erro",
+        error.message || "Não foi possível salvar a taxa de serviço",
+      );
     } finally {
       setSavingFee(false);
     }
@@ -1154,9 +1199,9 @@ export default function ScannedBillScreen() {
    */
   const saveCouvert = async () => {
     if (isCompleted) return;
-    
+
     const newValue = parseFloat(couvertInput.replace(",", ".")) || 0;
-    
+
     if (newValue < 0) {
       Alert.alert("Erro", "O valor do couvert não pode ser negativo");
       return;
@@ -1164,9 +1209,9 @@ export default function ScannedBillScreen() {
 
     try {
       setSavingFee(true);
-      
+
       const existingFee = fees.find((f) => f.type === FeeType.COVER_CHARGE);
-      
+
       if (existingFee) {
         if (newValue === 0) {
           // Se valor é 0, deletar a taxa
@@ -1174,8 +1219,12 @@ export default function ScannedBillScreen() {
           setFees((prev) => prev.filter((f) => f.id !== existingFee.id));
         } else {
           // Atualizar valor
-          const updated = await feesService.update(existingFee.id, { value: newValue });
-          setFees((prev) => prev.map((f) => f.id === existingFee.id ? updated : f));
+          const updated = await feesService.update(existingFee.id, {
+            value: newValue,
+          });
+          setFees((prev) =>
+            prev.map((f) => (f.id === existingFee.id ? updated : f)),
+          );
         }
       } else if (newValue > 0) {
         // Criar nova taxa
@@ -1187,7 +1236,7 @@ export default function ScannedBillScreen() {
         });
         setFees((prev) => [...prev, newFee]);
       }
-      
+
       setEditingCouvert(false);
       console.log("[Scanned] Couvert saved:", newValue);
     } catch (error: any) {
@@ -1209,7 +1258,9 @@ export default function ScannedBillScreen() {
       const unitPrice = Number(item.price) || 0;
       const quantity = Number(item.quantity) || 1;
       const itemTotal = unitPrice * quantity;
-      console.log(`[Scanned] Item: ${item.name}, UnitPrice: ${unitPrice}, Qty: ${quantity}, Total: ${itemTotal}`);
+      console.log(
+        `[Scanned] Item: ${item.name}, UnitPrice: ${unitPrice}, Qty: ${quantity}, Total: ${itemTotal}`,
+      );
       return sum + itemTotal;
     }, 0);
     console.log("[Scanned] Calculated total:", total);
@@ -1218,615 +1269,707 @@ export default function ScannedBillScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         style={styles.keyboardAvoidingContainer}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
       >
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#81007F" />
-        </View>
-      ) : (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={styles.contentContainer}>
-            {/* Banner de Modo Edição */}
-            {isEditMode && (
-              <View style={styles.editModeBanner}>
-                <View style={styles.editModeIconContainer}>
-                  <MaterialCommunityIcons
-                    name="pencil-outline"
-                    size={18}
-                    color="#fff"
-                  />
-                </View>
-                <View style={styles.editModeBannerContent}>
-                  <Text style={styles.editModeBannerTitle}>Modo de Edição</Text>
-                  <Text style={styles.editModeBannerSubtitle}>
-                    Edite os valores e participantes abaixo
-                  </Text>
-                </View>
-              </View>
-            )}
-            {/* Banner de Conta Finalizada (só mostra se não estiver em modo edição) */}
-            {isCompleted && !isEditMode && (
-              <View style={styles.completedBanner}>
-                <MaterialCommunityIcons
-                  name="check-circle"
-                  size={20}
-                  color="#10b981"
-                />
-                <Text style={styles.completedBannerText}>
-                  Conta finalizada - Somente leitura
-                </Text>
-              </View>
-            )}
-
-            {/* Header */}
-            <View style={styles.header}>
-              <View style={styles.billNameContainer}>
-                <View style={styles.billNameInputWrapper}>
-                  <TextInput
-                    style={[
-                      styles.billNameInput,
-                      !savingName && billName && styles.billNameInputEditable,
-                    ]}
-                    value={billName}
-                    onChangeText={setBillName}
-                    onBlur={saveBillName}
-                    onFocus={() => {}}
-                    placeholder="Nome da conta"
-                    placeholderTextColor="#999"
-                    editable={!isCompleted}
-                  />
-                  {!savingName && billName && !isCompleted && (
-                    <Ionicons
-                      name="create-outline"
-                      size={16}
-                      color="#8B2E8F"
-                      style={styles.billNameEditIcon}
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#81007F" />
+          </View>
+        ) : (
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.contentContainer}>
+              {/* Banner de Modo Edição */}
+              {isEditMode && (
+                <View style={styles.editModeBanner}>
+                  <View style={styles.editModeIconContainer}>
+                    <MaterialCommunityIcons
+                      name="pencil-outline"
+                      size={18}
+                      color="#fff"
                     />
-                  )}
+                  </View>
+                  <View style={styles.editModeBannerContent}>
+                    <Text style={styles.editModeBannerTitle}>
+                      Modo de Edição
+                    </Text>
+                    <Text style={styles.editModeBannerSubtitle}>
+                      Edite os valores e participantes abaixo
+                    </Text>
+                  </View>
                 </View>
-                {savingName && (
-                  <ActivityIndicator
-                    size="small"
-                    color="#81007F"
-                    style={styles.savingIndicator}
-                  />
-                )}
-              </View>
-              <TouchableOpacity
-                style={styles.addItemBtn}
-                onPress={() => setIsModalVisible(true)}
-                disabled={isCompleted}
-              >
-                <Text style={styles.addItemBtnText}>+ Item</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Mensagem de processamento OCR */}
-            {processingOcr && (
-              <View style={styles.processingContainer}>
-                <ActivityIndicator size="large" color="#81007F" />
-                <Text style={styles.processingText}>
-                  Processando imagem e reconhecendo itens...
-                </Text>
-                <Text style={styles.processingSubtext}>
-                  Isso pode levar alguns segundos
-                </Text>
-              </View>
-            )}
-
-            {/* Mensagem quando OCR falhou */}
-            {billStatus === "OCR_FAILED" && items.length === 0 && (
-              <View style={styles.errorContainer}>
-                <Ionicons
-                  name="alert-circle-outline"
-                  size={48}
-                  color="#FF6B6B"
-                />
-                <Text style={styles.errorTitle}>
-                  Não foi possível reconhecer os itens
-                </Text>
-                <Text style={styles.errorText}>
-                  Você pode adicionar os itens manualmente usando o botão "+
-                  Item"
-                </Text>
-              </View>
-            )}
-
-            {/* Lista de items vazia */}
-            {!processingOcr &&
-              items.length === 0 &&
-              billStatus !== "OCR_FAILED" && (
-                <View style={styles.emptyContainer}>
+              )}
+              {/* Banner de Conta Finalizada (só mostra se não estiver em modo edição) */}
+              {isCompleted && !isEditMode && (
+                <View style={styles.completedBanner}>
                   <MaterialCommunityIcons
-                    name="receipt"
-                    size={48}
-                    color="#ccc"
+                    name="check-circle"
+                    size={20}
+                    color="#10b981"
                   />
-                  <Text style={styles.emptyText}>Nenhum item encontrado</Text>
-                  <Text style={styles.emptySubtext}>
-                    Adicione itens manualmente usando o botão "+ Item"
+                  <Text style={styles.completedBannerText}>
+                    Conta finalizada - Somente leitura
                   </Text>
                 </View>
               )}
 
-            {/* Seção de Participantes - Editável */}
-            {!processingOcr && (
-              <View style={styles.participantsSection}>
-                <View style={styles.participantsSectionHeader}>
-                  <Text style={styles.participantsSectionTitle}>
-                    Participantes ({participants.length})
-                  </Text>
-                  {!isCompleted && (
-                    <TouchableOpacity
-                      style={styles.addParticipantBtn}
-                      onPress={addParticipant}
-                    >
-                      <Ionicons name="add" size={18} color="#8B2E8F" />
-                      <Text style={styles.addParticipantBtnText}>Adicionar</Text>
-                    </TouchableOpacity>
+              {/* Header */}
+              <View style={styles.header}>
+                <View style={styles.billNameContainer}>
+                  <View style={styles.billNameInputWrapper}>
+                    <TextInput
+                      style={[
+                        styles.billNameInput,
+                        !savingName && billName && styles.billNameInputEditable,
+                      ]}
+                      value={billName}
+                      onChangeText={setBillName}
+                      onBlur={saveBillName}
+                      onFocus={() => {}}
+                      placeholder="Nome da conta"
+                      placeholderTextColor="#999"
+                      editable={!isCompleted}
+                    />
+                    {!savingName && billName && !isCompleted && (
+                      <Ionicons
+                        name="create-outline"
+                        size={16}
+                        color="#8B2E8F"
+                        style={styles.billNameEditIcon}
+                      />
+                    )}
+                  </View>
+                  {savingName && (
+                    <ActivityIndicator
+                      size="small"
+                      color="#81007F"
+                      style={styles.savingIndicator}
+                    />
                   )}
                 </View>
-                
-                {participants.length === 0 ? (
-                  <Text style={styles.noParticipantsText}>
-                    Nenhum participante. Adicione pelo menos um participante.
+                <TouchableOpacity
+                  style={styles.addItemBtn}
+                  onPress={() => setIsModalVisible(true)}
+                  disabled={isCompleted}
+                >
+                  <Text style={styles.addItemBtnText}>+ Item</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Mensagem de processamento OCR */}
+              {processingOcr && (
+                <View style={styles.processingContainer}>
+                  <ActivityIndicator size="large" color="#81007F" />
+                  <Text style={styles.processingText}>
+                    Processando imagem e reconhecendo itens...
                   </Text>
-                ) : (
-                  <View style={styles.participantsList}>
-                    {participants.map((participant) => {
-                      const isEditingThis = editingParticipantId === participant.id;
-                      const isSavingThis = savingParticipantId === participant.id;
-                      
-                      return (
-                        <View key={participant.id} style={styles.participantChip}>
-                          {isEditingThis ? (
-                            <View style={styles.participantChipEditContainer}>
-                              <TextInput
-                                style={styles.participantChipInput}
-                                value={participantNameInput}
-                                onChangeText={setParticipantNameInput}
-                                autoFocus
-                                selectTextOnFocus
-                                editable={!isSavingThis}
-                              />
-                              <TouchableOpacity
-                                onPress={() => saveParticipantName(participant.id)}
-                                disabled={isSavingThis}
-                              >
-                                {isSavingThis ? (
-                                  <ActivityIndicator size="small" color="#8B2E8F" />
-                                ) : (
-                                  <Ionicons name="checkmark" size={18} color="#10b981" />
-                                )}
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                onPress={cancelEditingParticipant}
-                                disabled={isSavingThis}
-                              >
-                                <Ionicons name="close" size={18} color="#ef4444" />
-                              </TouchableOpacity>
-                            </View>
-                          ) : (
-                            <>
-                              <TouchableOpacity
-                                style={styles.participantChipNameArea}
-                                onPress={() => !isCompleted && startEditingParticipant(participant)}
-                                disabled={isCompleted}
-                              >
-                                <Text style={styles.participantChipName}>
-                                  {participant.name}
-                                </Text>
-                                {!isCompleted && (
-                                  <Ionicons name="pencil" size={12} color="#999" />
-                                )}
-                              </TouchableOpacity>
-                              {!isCompleted && (
-                                <TouchableOpacity
-                                  style={styles.participantChipRemove}
-                                  onPress={() => removeParticipant(participant.id)}
-                                >
-                                  <Ionicons name="close-circle" size={18} color="#ef4444" />
-                                </TouchableOpacity>
-                              )}
-                            </>
-                          )}
-                        </View>
-                      );
-                    })}
+                  <Text style={styles.processingSubtext}>
+                    Isso pode levar alguns segundos
+                  </Text>
+                </View>
+              )}
+
+              {/* Mensagem quando OCR falhou */}
+              {billStatus === "OCR_FAILED" && items.length === 0 && (
+                <View style={styles.errorContainer}>
+                  <Ionicons
+                    name="alert-circle-outline"
+                    size={48}
+                    color="#FF6B6B"
+                  />
+                  <Text style={styles.errorTitle}>
+                    Não foi possível reconhecer os itens
+                  </Text>
+                  <Text style={styles.errorText}>
+                    Você pode adicionar os itens manualmente usando o botão "+
+                    Item"
+                  </Text>
+                </View>
+              )}
+
+              {/* Lista de items vazia */}
+              {!processingOcr &&
+                items.length === 0 &&
+                billStatus !== "OCR_FAILED" && (
+                  <View style={styles.emptyContainer}>
+                    <MaterialCommunityIcons
+                      name="receipt"
+                      size={48}
+                      color="#ccc"
+                    />
+                    <Text style={styles.emptyText}>Nenhum item encontrado</Text>
+                    <Text style={styles.emptySubtext}>
+                      Adicione itens manualmente usando o botão "+ Item"
+                    </Text>
                   </View>
                 )}
-              </View>
-            )}
 
-            {/* Seção de Taxas - Editável */}
-            {!processingOcr && (
-              <View style={styles.feesSection}>
-                <Text style={styles.feesSectionTitle}>Taxas</Text>
-                
-                {/* Taxa de Serviço */}
-                <View style={styles.feeRow}>
-                  <Text style={styles.feeLabel}>Taxa de Serviço</Text>
-                  {editingServiceFee && !isCompleted ? (
-                    <View style={styles.feeEditContainer}>
-                      <TextInput
-                        style={styles.feeInput}
-                        value={serviceFeeInput}
-                        onChangeText={setServiceFeeInput}
-                        keyboardType="numeric"
-                        placeholder="0"
-                        editable={!savingFee}
-                      />
-                      <Text style={styles.feeInputSuffix}>%</Text>
+              {/* Seção de Participantes - Editável */}
+              {!processingOcr && (
+                <View style={styles.participantsSection}>
+                  <View style={styles.participantsSectionHeader}>
+                    <Text style={styles.participantsSectionTitle}>
+                      Participantes ({participants.length})
+                    </Text>
+                    {!isCompleted && (
                       <TouchableOpacity
-                        onPress={saveServiceFee}
-                        disabled={savingFee}
-                        style={styles.feeActionBtn}
+                        style={styles.addParticipantBtn}
+                        onPress={addParticipant}
                       >
-                        {savingFee ? (
-                          <ActivityIndicator size="small" color="#8B2E8F" />
-                        ) : (
-                          <Ionicons name="checkmark" size={18} color="#10b981" />
-                        )}
+                        <Ionicons name="add" size={18} color="#8B2E8F" />
+                        <Text style={styles.addParticipantBtnText}>
+                          Adicionar
+                        </Text>
                       </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => {
-                          const existingFee = fees.find((f) => f.type === FeeType.SERVICE_PERCENTAGE);
-                          setServiceFeeInput(existingFee ? existingFee.value.toString() : "0");
-                          setEditingServiceFee(false);
-                        }}
-                        disabled={savingFee}
-                        style={styles.feeActionBtn}
-                      >
-                        <Ionicons name="close" size={18} color="#ef4444" />
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    <TouchableOpacity
-                      style={styles.feeValueContainer}
-                      onPress={() => !isCompleted && setEditingServiceFee(true)}
-                      disabled={isCompleted}
-                    >
-                      <Text style={styles.feeValue}>
-                        {fees.find((f) => f.type === FeeType.SERVICE_PERCENTAGE)?.value || 0}%
-                      </Text>
-                      {!isCompleted && <Ionicons name="pencil" size={14} color="#999" />}
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                {/* Couvert */}
-                <View style={styles.feeRow}>
-                  <Text style={styles.feeLabel}>Couvert (por pessoa)</Text>
-                  {editingCouvert && !isCompleted ? (
-                    <View style={styles.feeEditContainer}>
-                      <Text style={styles.feeInputPrefix}>R$</Text>
-                      <TextInput
-                        style={styles.feeInput}
-                        value={couvertInput}
-                        onChangeText={(text) => {
-                          const cleaned = text.replace(/[^0-9,]/g, "");
-                          setCouvertInput(cleaned);
-                        }}
-                        keyboardType="numeric"
-                        placeholder="0,00"
-                        editable={!savingFee}
-                      />
-                      <TouchableOpacity
-                        onPress={saveCouvert}
-                        disabled={savingFee}
-                        style={styles.feeActionBtn}
-                      >
-                        {savingFee ? (
-                          <ActivityIndicator size="small" color="#8B2E8F" />
-                        ) : (
-                          <Ionicons name="checkmark" size={18} color="#10b981" />
-                        )}
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => {
-                          const existingFee = fees.find((f) => f.type === FeeType.COVER_CHARGE);
-                          setCouvertInput(existingFee ? existingFee.value.toFixed(2).replace(".", ",") : "0,00");
-                          setEditingCouvert(false);
-                        }}
-                        disabled={savingFee}
-                        style={styles.feeActionBtn}
-                      >
-                        <Ionicons name="close" size={18} color="#ef4444" />
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    <TouchableOpacity
-                      style={styles.feeValueContainer}
-                      onPress={() => !isCompleted && setEditingCouvert(true)}
-                      disabled={isCompleted}
-                    >
-                      <Text style={styles.feeValue}>
-                        R$ {(fees.find((f) => f.type === FeeType.COVER_CHARGE)?.value || 0).toFixed(2).replace(".", ",")}
-                      </Text>
-                      {!isCompleted && <Ionicons name="pencil" size={14} color="#999" />}
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
-            )}
-
-            {/* Lista de items */}
-            {!processingOcr &&
-              items.map((item, index) => (
-                <View key={item.id} style={styles.itemCardWrapper}>
-                  <View style={styles.itemCardMain}>
-                    <View style={styles.itemCardLeft}>
-                      <View
-                        style={[styles.inputWrapper, styles.nameInputWrapper]}
-                      >
-                        {editingItemNameId === item.id && !isCompleted ? (
-                          <TextInput
-                            style={[
-                              styles.itemCardName,
-                              styles.itemCardNameFocused,
-                            ]}
-                            value={
-                              itemNames[item.id] !== undefined
-                                ? itemNames[item.id]
-                                : item.name
-                            }
-                            onChangeText={(text) =>
-                              handleItemNameChange(item.id, text)
-                            }
-                            onBlur={() => handleItemNameBlur(item.id)}
-                            placeholder="Nome do item"
-                            placeholderTextColor="#999"
-                            editable={true}
-                            underlineColorAndroid="transparent"
-                            selectionColor="#8B2E8F"
-                            multiline={false}
-                            numberOfLines={1}
-                          />
-                        ) : (
-                          <TouchableOpacity
-                            style={styles.itemCardNameContainer}
-                            onPress={() =>
-                              !isCompleted && setEditingItemNameId(item.id)
-                            }
-                            activeOpacity={isCompleted ? 1 : 0.7}
-                          >
-                            <Text
-                              style={styles.itemCardNameText}
-                              numberOfLines={1}
-                              ellipsizeMode="tail"
-                            >
-                              {itemNames[item.id] !== undefined
-                                ? itemNames[item.id]
-                                : item.name}
-                            </Text>
-                            {!isCompleted && (
-                              <Ionicons
-                                name="create-outline"
-                                size={14}
-                                color="#8B2E8F"
-                                style={styles.editIconInContainer}
-                              />
-                            )}
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                      {savingItemId === item.id && (
-                        <ActivityIndicator
-                          size="small"
-                          color="#81007F"
-                          style={styles.savingItemIndicator}
-                        />
-                      )}
-                    </View>
-                    <View style={styles.itemCardRight}>
-                      <View style={styles.inputWrapper}>
-                        <TextInput
-                          style={[
-                            styles.itemCardQty,
-                            editingItemQtyId === item.id &&
-                              styles.itemCardQtyFocused,
-                            editingItemQtyId !== item.id &&
-                              styles.itemCardQtyEditable,
-                          ]}
-                          value={
-                            itemQuantities[item.id] !== undefined
-                              ? itemQuantities[item.id]
-                              : item.quantity.toString()
-                          }
-                          onChangeText={(text) =>
-                            handleItemQuantityChange(item.id, text)
-                          }
-                          onBlur={() => handleItemQuantityBlur(item.id)}
-                          onFocus={() => setEditingItemQtyId(item.id)}
-                          keyboardType="number-pad"
-                          placeholder="1"
-                          placeholderTextColor="#999"
-                          underlineColorAndroid="transparent"
-                          selectionColor="#8B2E8F"
-                          editable={!isCompleted}
-                        />
-                      </View>
-                      <Text style={styles.qtySuffix}>x</Text>
-                      <View style={styles.inputWrapper}>
-                        <TextInput
-                          style={[
-                            styles.itemCardAmount,
-                            editingItemPriceId === item.id &&
-                              styles.itemCardAmountFocused,
-                            editingItemPriceId !== item.id &&
-                              styles.itemCardAmountEditable,
-                          ]}
-                          value={
-                            editingItemPriceId === item.id
-                              ? (itemPrices[item.id] ?? "")
-                              : (itemPrices[item.id] || item.price.toFixed(2).replace(".", ","))
-                          }
-                          onChangeText={(text) =>
-                            handleItemPriceChange(item.id, text)
-                          }
-                          onBlur={() => handleItemPriceBlur(item.id)}
-                          onFocus={() => setEditingItemPriceId(item.id)}
-                          keyboardType="numeric"
-                          placeholder="0,00"
-                          placeholderTextColor="#999"
-                          underlineColorAndroid="transparent"
-                          selectionColor="#8B2E8F"
-                          editable={!isCompleted}
-                        />
-                      </View>
-                      <TouchableOpacity
-                        onPress={() =>
-                          setExpandedItemId(
-                            expandedItemId === item.id ? "" : item.id,
-                          )
-                        }
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons
-                          name={
-                            expandedItemId === item.id
-                              ? "chevron-up"
-                              : "chevron-down"
-                          }
-                          size={20}
-                          color="#666"
-                        />
-                      </TouchableOpacity>
-                    </View>
+                    )}
                   </View>
 
-                  {/* Dropdown com checkboxes */}
-                  {expandedItemId === item.id && (
-                    <View style={styles.dropdownWrapper}>
-                      <ScrollView
-                        style={styles.checkboxesScroll}
-                        scrollEnabled={true}
-                        showsVerticalScrollIndicator={true}
-                      >
-                        <View style={styles.checkboxesList}>
-                          {participants.length === 0 ? (
-                            <View style={styles.emptyParticipantsContainer}>
-                              <Text style={styles.emptyParticipantsText}>
-                                Nenhum participante encontrado
-                              </Text>
-                              <Text style={styles.emptyParticipantsSubtext}>
-                                Adicione participantes na tela anterior
-                              </Text>
-                            </View>
-                          ) : (
-                            participants.map((participant, idx) => {
-                              const isAssigned =
-                                item.assignedParticipants.includes(
-                                  participant.name,
-                                );
-                              const isSaving = savingDivisions === item.id;
-                              const isEditingThis = editingParticipantId === participant.id;
-                              const isSavingName = savingParticipantId === participant.id;
-                              
-                              return (
-                                <View
-                                  key={participant.id || idx}
-                                  style={styles.checkboxRow}
+                  {participants.length === 0 ? (
+                    <Text style={styles.noParticipantsText}>
+                      Nenhum participante. Adicione pelo menos um participante.
+                    </Text>
+                  ) : (
+                    <View style={styles.participantsList}>
+                      {participants.map((participant) => {
+                        const isEditingThis =
+                          editingParticipantId === participant.id;
+                        const isSavingThis =
+                          savingParticipantId === participant.id;
+
+                        return (
+                          <View
+                            key={participant.id}
+                            style={styles.participantChip}
+                          >
+                            {isEditingThis ? (
+                              <View style={styles.participantChipEditContainer}>
+                                <TextInput
+                                  style={styles.participantChipInput}
+                                  value={participantNameInput}
+                                  onChangeText={setParticipantNameInput}
+                                  autoFocus
+                                  selectTextOnFocus
+                                  editable={!isSavingThis}
+                                />
+                                <TouchableOpacity
+                                  onPress={() =>
+                                    saveParticipantName(participant.id)
+                                  }
+                                  disabled={isSavingThis}
                                 >
-                                  <TouchableOpacity
-                                    style={styles.checkboxTouchable}
-                                    onPress={() =>
-                                      toggleParticipant(item.id, participant.name)
-                                    }
-                                    activeOpacity={0.6}
-                                    disabled={isSaving || isCompleted || isEditingThis}
-                                  >
-                                    <View
-                                      style={[
-                                        styles.checkbox,
-                                        isAssigned && styles.checkboxActive,
-                                      ]}
-                                    >
-                                      {isAssigned && (
-                                        <Ionicons
-                                          name="checkmark"
-                                          size={10}
-                                          color="#8B2E8F"
-                                        />
-                                      )}
-                                    </View>
-                                  </TouchableOpacity>
-                                  
-                                  {isEditingThis ? (
-                                    <View style={styles.participantEditContainer}>
-                                      <TextInput
-                                        style={styles.participantEditInput}
-                                        value={participantNameInput}
-                                        onChangeText={setParticipantNameInput}
-                                        autoFocus
-                                        selectTextOnFocus
-                                        editable={!isSavingName}
-                                      />
-                                      <TouchableOpacity
-                                        style={styles.participantEditButton}
-                                        onPress={() => saveParticipantName(participant.id)}
-                                        disabled={isSavingName}
-                                      >
-                                        {isSavingName ? (
-                                          <ActivityIndicator size="small" color="#8B2E8F" />
-                                        ) : (
-                                          <Ionicons name="checkmark" size={18} color="#10b981" />
-                                        )}
-                                      </TouchableOpacity>
-                                      <TouchableOpacity
-                                        style={styles.participantEditButton}
-                                        onPress={cancelEditingParticipant}
-                                        disabled={isSavingName}
-                                      >
-                                        <Ionicons name="close" size={18} color="#ef4444" />
-                                      </TouchableOpacity>
-                                    </View>
-                                  ) : (
-                                    <TouchableOpacity
-                                      style={styles.participantNameContainer}
-                                      onPress={() => startEditingParticipant(participant)}
-                                      disabled={isCompleted}
-                                    >
-                                      <Text style={styles.participantName}>
-                                        {participant.name}
-                                      </Text>
-                                      {!isCompleted && (
-                                        <Ionicons
-                                          name="pencil"
-                                          size={14}
-                                          color="#999"
-                                          style={{ marginLeft: 8 }}
-                                        />
-                                      )}
-                                    </TouchableOpacity>
-                                  )}
-                                  
-                                  {isSaving && !isEditingThis && (
+                                  {isSavingThis ? (
                                     <ActivityIndicator
                                       size="small"
                                       color="#8B2E8F"
-                                      style={{ marginLeft: 8 }}
+                                    />
+                                  ) : (
+                                    <Ionicons
+                                      name="checkmark"
+                                      size={18}
+                                      color="#10b981"
                                     />
                                   )}
-                                </View>
-                              );
-                            })
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  onPress={cancelEditingParticipant}
+                                  disabled={isSavingThis}
+                                >
+                                  <Ionicons
+                                    name="close"
+                                    size={18}
+                                    color="#ef4444"
+                                  />
+                                </TouchableOpacity>
+                              </View>
+                            ) : (
+                              <>
+                                <TouchableOpacity
+                                  style={styles.participantChipNameArea}
+                                  onPress={() =>
+                                    !isCompleted &&
+                                    startEditingParticipant(participant)
+                                  }
+                                  disabled={isCompleted}
+                                >
+                                  <Text style={styles.participantChipName}>
+                                    {participant.name}
+                                  </Text>
+                                  {!isCompleted && (
+                                    <Ionicons
+                                      name="pencil"
+                                      size={12}
+                                      color="#999"
+                                    />
+                                  )}
+                                </TouchableOpacity>
+                                {!isCompleted && (
+                                  <TouchableOpacity
+                                    style={styles.participantChipRemove}
+                                    onPress={() =>
+                                      removeParticipant(participant.id)
+                                    }
+                                  >
+                                    <Ionicons
+                                      name="close-circle"
+                                      size={18}
+                                      color="#ef4444"
+                                    />
+                                  </TouchableOpacity>
+                                )}
+                              </>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Seção de Taxas - Editável */}
+              {!processingOcr && (
+                <View style={styles.feesSection}>
+                  <Text style={styles.feesSectionTitle}>Taxas</Text>
+
+                  {/* Taxa de Serviço */}
+                  <View style={styles.feeRow}>
+                    <Text style={styles.feeLabel}>Taxa de Serviço</Text>
+                    {editingServiceFee && !isCompleted ? (
+                      <View style={styles.feeEditContainer}>
+                        <TextInput
+                          style={styles.feeInput}
+                          value={serviceFeeInput}
+                          onChangeText={setServiceFeeInput}
+                          keyboardType="numeric"
+                          placeholder="0"
+                          editable={!savingFee}
+                        />
+                        <Text style={styles.feeInputSuffix}>%</Text>
+                        <TouchableOpacity
+                          onPress={saveServiceFee}
+                          disabled={savingFee}
+                          style={styles.feeActionBtn}
+                        >
+                          {savingFee ? (
+                            <ActivityIndicator size="small" color="#8B2E8F" />
+                          ) : (
+                            <Ionicons
+                              name="checkmark"
+                              size={18}
+                              color="#10b981"
+                            />
+                          )}
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => {
+                            const existingFee = fees.find(
+                              (f) => f.type === FeeType.SERVICE_PERCENTAGE,
+                            );
+                            setServiceFeeInput(
+                              existingFee ? existingFee.value.toString() : "0",
+                            );
+                            setEditingServiceFee(false);
+                          }}
+                          disabled={savingFee}
+                          style={styles.feeActionBtn}
+                        >
+                          <Ionicons name="close" size={18} color="#ef4444" />
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.feeValueContainer}
+                        onPress={() =>
+                          !isCompleted && setEditingServiceFee(true)
+                        }
+                        disabled={isCompleted}
+                      >
+                        <Text style={styles.feeValue}>
+                          {fees.find(
+                            (f) => f.type === FeeType.SERVICE_PERCENTAGE,
+                          )?.value || 0}
+                          %
+                        </Text>
+                        {!isCompleted && (
+                          <Ionicons name="pencil" size={14} color="#999" />
+                        )}
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {/* Couvert */}
+                  <View style={styles.feeRow}>
+                    <Text style={styles.feeLabel}>Couvert (por pessoa)</Text>
+                    {editingCouvert && !isCompleted ? (
+                      <View style={styles.feeEditContainer}>
+                        <Text style={styles.feeInputPrefix}>R$</Text>
+                        <TextInput
+                          style={styles.feeInput}
+                          value={couvertInput}
+                          onChangeText={(text) => {
+                            const cleaned = text.replace(/[^0-9,]/g, "");
+                            setCouvertInput(cleaned);
+                          }}
+                          keyboardType="numeric"
+                          placeholder="0,00"
+                          editable={!savingFee}
+                        />
+                        <TouchableOpacity
+                          onPress={saveCouvert}
+                          disabled={savingFee}
+                          style={styles.feeActionBtn}
+                        >
+                          {savingFee ? (
+                            <ActivityIndicator size="small" color="#8B2E8F" />
+                          ) : (
+                            <Ionicons
+                              name="checkmark"
+                              size={18}
+                              color="#10b981"
+                            />
+                          )}
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => {
+                            const existingFee = fees.find(
+                              (f) => f.type === FeeType.COVER_CHARGE,
+                            );
+                            setCouvertInput(
+                              existingFee
+                                ? existingFee.value.toFixed(2).replace(".", ",")
+                                : "0,00",
+                            );
+                            setEditingCouvert(false);
+                          }}
+                          disabled={savingFee}
+                          style={styles.feeActionBtn}
+                        >
+                          <Ionicons name="close" size={18} color="#ef4444" />
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.feeValueContainer}
+                        onPress={() => !isCompleted && setEditingCouvert(true)}
+                        disabled={isCompleted}
+                      >
+                        <Text style={styles.feeValue}>
+                          R${" "}
+                          {(
+                            fees.find((f) => f.type === FeeType.COVER_CHARGE)
+                              ?.value || 0
+                          )
+                            .toFixed(2)
+                            .replace(".", ",")}
+                        </Text>
+                        {!isCompleted && (
+                          <Ionicons name="pencil" size={14} color="#999" />
+                        )}
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              )}
+
+              {/* Lista de items */}
+              {!processingOcr &&
+                items.map((item, index) => (
+                  <View key={item.id} style={styles.itemCardWrapper}>
+                    <View style={styles.itemCardMain}>
+                      <View style={styles.itemCardLeft}>
+                        <View
+                          style={[styles.inputWrapper, styles.nameInputWrapper]}
+                        >
+                          {editingItemNameId === item.id && !isCompleted ? (
+                            <TextInput
+                              style={[
+                                styles.itemCardName,
+                                styles.itemCardNameFocused,
+                              ]}
+                              value={
+                                itemNames[item.id] !== undefined
+                                  ? itemNames[item.id]
+                                  : item.name
+                              }
+                              onChangeText={(text) =>
+                                handleItemNameChange(item.id, text)
+                              }
+                              onBlur={() => handleItemNameBlur(item.id)}
+                              placeholder="Nome do item"
+                              placeholderTextColor="#999"
+                              editable={true}
+                              underlineColorAndroid="transparent"
+                              selectionColor="#8B2E8F"
+                              multiline={false}
+                              numberOfLines={1}
+                            />
+                          ) : (
+                            <TouchableOpacity
+                              style={styles.itemCardNameContainer}
+                              onPress={() =>
+                                !isCompleted && setEditingItemNameId(item.id)
+                              }
+                              activeOpacity={isCompleted ? 1 : 0.7}
+                            >
+                              <Text
+                                style={styles.itemCardNameText}
+                                numberOfLines={1}
+                                ellipsizeMode="tail"
+                              >
+                                {itemNames[item.id] !== undefined
+                                  ? itemNames[item.id]
+                                  : item.name}
+                              </Text>
+                              {!isCompleted && (
+                                <Ionicons
+                                  name="create-outline"
+                                  size={14}
+                                  color="#8B2E8F"
+                                  style={styles.editIconInContainer}
+                                />
+                              )}
+                            </TouchableOpacity>
                           )}
                         </View>
-                      </ScrollView>
+                        {savingItemId === item.id && (
+                          <ActivityIndicator
+                            size="small"
+                            color="#81007F"
+                            style={styles.savingItemIndicator}
+                          />
+                        )}
+                      </View>
+                      <View style={styles.itemCardRight}>
+                        <View style={styles.inputWrapper}>
+                          <TextInput
+                            style={[
+                              styles.itemCardQty,
+                              editingItemQtyId === item.id &&
+                                styles.itemCardQtyFocused,
+                              editingItemQtyId !== item.id &&
+                                styles.itemCardQtyEditable,
+                            ]}
+                            value={
+                              itemQuantities[item.id] !== undefined
+                                ? itemQuantities[item.id]
+                                : item.quantity.toString()
+                            }
+                            onChangeText={(text) =>
+                              handleItemQuantityChange(item.id, text)
+                            }
+                            onBlur={() => handleItemQuantityBlur(item.id)}
+                            onFocus={() => setEditingItemQtyId(item.id)}
+                            keyboardType="number-pad"
+                            placeholder="1"
+                            placeholderTextColor="#999"
+                            underlineColorAndroid="transparent"
+                            selectionColor="#8B2E8F"
+                            editable={!isCompleted}
+                          />
+                        </View>
+                        <Text style={styles.qtySuffix}>x</Text>
+                        <View style={styles.inputWrapper}>
+                          <TextInput
+                            style={[
+                              styles.itemCardAmount,
+                              editingItemPriceId === item.id &&
+                                styles.itemCardAmountFocused,
+                              editingItemPriceId !== item.id &&
+                                styles.itemCardAmountEditable,
+                            ]}
+                            value={
+                              editingItemPriceId === item.id
+                                ? (itemPrices[item.id] ?? "")
+                                : itemPrices[item.id] ||
+                                  item.price.toFixed(2).replace(".", ",")
+                            }
+                            onChangeText={(text) =>
+                              handleItemPriceChange(item.id, text)
+                            }
+                            onBlur={() => handleItemPriceBlur(item.id)}
+                            onFocus={() => setEditingItemPriceId(item.id)}
+                            keyboardType="numeric"
+                            placeholder="0,00"
+                            placeholderTextColor="#999"
+                            underlineColorAndroid="transparent"
+                            selectionColor="#8B2E8F"
+                            editable={!isCompleted}
+                          />
+                        </View>
+                        <TouchableOpacity
+                          onPress={() =>
+                            setExpandedItemId(
+                              expandedItemId === item.id ? "" : item.id,
+                            )
+                          }
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons
+                            name={
+                              expandedItemId === item.id
+                                ? "chevron-up"
+                                : "chevron-down"
+                            }
+                            size={20}
+                            color="#666"
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
 
-                      {/* Buttons Footer Row */}
-                      <View style={styles.footerRow}>
-                        {!isCompleted && (
-                          <>
+                    {/* Dropdown com checkboxes */}
+                    {expandedItemId === item.id && (
+                      <View style={styles.dropdownWrapper}>
+                        <ScrollView
+                          style={styles.checkboxesScroll}
+                          scrollEnabled={true}
+                          showsVerticalScrollIndicator={true}
+                        >
+                          <View style={styles.checkboxesList}>
+                            {participants.length === 0 ? (
+                              <View style={styles.emptyParticipantsContainer}>
+                                <Text style={styles.emptyParticipantsText}>
+                                  Nenhum participante encontrado
+                                </Text>
+                                <Text style={styles.emptyParticipantsSubtext}>
+                                  Adicione participantes na tela anterior
+                                </Text>
+                              </View>
+                            ) : (
+                              participants.map((participant, idx) => {
+                                const isAssigned =
+                                  item.assignedParticipants.includes(
+                                    participant.name,
+                                  );
+                                const isSaving = savingDivisions === item.id;
+                                const isEditingThis =
+                                  editingParticipantId === participant.id;
+                                const isSavingName =
+                                  savingParticipantId === participant.id;
+
+                                return (
+                                  <View
+                                    key={participant.id || idx}
+                                    style={styles.checkboxRow}
+                                  >
+                                    <TouchableOpacity
+                                      style={styles.checkboxTouchable}
+                                      onPress={() =>
+                                        toggleParticipant(
+                                          item.id,
+                                          participant.name,
+                                        )
+                                      }
+                                      activeOpacity={0.6}
+                                      disabled={
+                                        isSaving || isCompleted || isEditingThis
+                                      }
+                                    >
+                                      <View
+                                        style={[
+                                          styles.checkbox,
+                                          isAssigned && styles.checkboxActive,
+                                        ]}
+                                      >
+                                        {isAssigned && (
+                                          <Ionicons
+                                            name="checkmark"
+                                            size={10}
+                                            color="#8B2E8F"
+                                          />
+                                        )}
+                                      </View>
+                                    </TouchableOpacity>
+
+                                    {isEditingThis ? (
+                                      <View
+                                        style={styles.participantEditContainer}
+                                      >
+                                        <TextInput
+                                          style={styles.participantEditInput}
+                                          value={participantNameInput}
+                                          onChangeText={setParticipantNameInput}
+                                          autoFocus
+                                          selectTextOnFocus
+                                          editable={!isSavingName}
+                                        />
+                                        <TouchableOpacity
+                                          style={styles.participantEditButton}
+                                          onPress={() =>
+                                            saveParticipantName(participant.id)
+                                          }
+                                          disabled={isSavingName}
+                                        >
+                                          {isSavingName ? (
+                                            <ActivityIndicator
+                                              size="small"
+                                              color="#8B2E8F"
+                                            />
+                                          ) : (
+                                            <Ionicons
+                                              name="checkmark"
+                                              size={18}
+                                              color="#10b981"
+                                            />
+                                          )}
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                          style={styles.participantEditButton}
+                                          onPress={cancelEditingParticipant}
+                                          disabled={isSavingName}
+                                        >
+                                          <Ionicons
+                                            name="close"
+                                            size={18}
+                                            color="#ef4444"
+                                          />
+                                        </TouchableOpacity>
+                                      </View>
+                                    ) : (
+                                      <TouchableOpacity
+                                        style={styles.participantNameContainer}
+                                        onPress={() =>
+                                          startEditingParticipant(participant)
+                                        }
+                                        disabled={isCompleted}
+                                      >
+                                        <Text style={styles.participantName}>
+                                          {participant.name}
+                                        </Text>
+                                        {!isCompleted && (
+                                          <Ionicons
+                                            name="pencil"
+                                            size={14}
+                                            color="#999"
+                                            style={{ marginLeft: 8 }}
+                                          />
+                                        )}
+                                      </TouchableOpacity>
+                                    )}
+
+                                    {isSaving && !isEditingThis && (
+                                      <ActivityIndicator
+                                        size="small"
+                                        color="#8B2E8F"
+                                        style={{ marginLeft: 8 }}
+                                      />
+                                    )}
+                                  </View>
+                                );
+                              })
+                            )}
+                          </View>
+                        </ScrollView>
+
+                        {/* Buttons Footer Row */}
+                        <View style={styles.footerRow}>
+                          {!isCompleted && (
                             <TouchableOpacity
                               style={styles.deleteIconButton}
                               onPress={() => deleteItem(item.id)}
@@ -1837,58 +1980,57 @@ export default function ScannedBillScreen() {
                                 color="#999"
                               />
                             </TouchableOpacity>
-                            <TouchableOpacity
-                              style={styles.addItemButton}
-                              onPress={() => setIsModalVisible(true)}
-                            >
-                              <Text style={styles.addItemButtonLabel}>
-                                Adicionar
-                              </Text>
-                            </TouchableOpacity>
-                          </>
-                        )}
+                          )}
+                        </View>
                       </View>
-                    </View>
-                  )}
+                    )}
+                  </View>
+                ))}
+
+              {/* Card do Total - só mostrar se não estiver processando e houver itens */}
+              {!processingOcr && items.length > 0 && (
+                <View style={styles.totalCardWrapper}>
+                  <Text style={styles.totalCardLabel}>Total:</Text>
+                  <Text style={styles.totalCardAmount}>
+                    {formatCurrency(calculateTotal())}
+                  </Text>
                 </View>
-              ))}
+              )}
 
-            {/* Card do Total - só mostrar se não estiver processando e houver itens */}
-            {!processingOcr && items.length > 0 && (
-              <View style={styles.totalCardWrapper}>
-                <Text style={styles.totalCardLabel}>Total:</Text>
-                <Text style={styles.totalCardAmount}>
-                  {formatCurrency(calculateTotal())}
-                </Text>
-              </View>
-            )}
-
-            {/* Botões - variam conforme o modo */}
-            {!processingOcr && items.length > 0 && (
-              <>
-                {isEditMode ? (
-                  /* Modo Edição: Botão Concluir Edição */
-                  <TouchableOpacity
-                    style={styles.saveAndGoBackBtn}
-                    onPress={handleSaveAndGoBack}
-                  >
-                    <MaterialCommunityIcons name="check" size={20} color="#fff" />
-                    <Text style={styles.saveAndGoBackBtnText}>Concluir Edição</Text>
-                  </TouchableOpacity>
-                ) : (
-                  /* Modo Normal: Botão Visualizar Resumo */
-                  <TouchableOpacity
-                    style={styles.summaryBtn}
-                    onPress={handleSummary}
-                  >
-                    <Text style={styles.summaryBtnText}>Visualizar resumo</Text>
-                  </TouchableOpacity>
-                )}
-              </>
-            )}
-          </View>
-        </ScrollView>
-      )}
+              {/* Botões - variam conforme o modo */}
+              {!processingOcr && items.length > 0 && (
+                <>
+                  {isEditMode ? (
+                    /* Modo Edição: Botão Concluir Edição */
+                    <TouchableOpacity
+                      style={styles.saveAndGoBackBtn}
+                      onPress={handleSaveAndGoBack}
+                    >
+                      <MaterialCommunityIcons
+                        name="check"
+                        size={20}
+                        color="#fff"
+                      />
+                      <Text style={styles.saveAndGoBackBtnText}>
+                        Concluir Edição
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    /* Modo Normal: Botão Visualizar Resumo */
+                    <TouchableOpacity
+                      style={styles.summaryBtn}
+                      onPress={handleSummary}
+                    >
+                      <Text style={styles.summaryBtnText}>
+                        Visualizar resumo
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              )}
+            </View>
+          </ScrollView>
+        )}
       </KeyboardAvoidingView>
 
       <AddItemModal
@@ -2296,7 +2438,7 @@ const styles = StyleSheet.create({
   footerRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "flex-end",
     marginTop: 12,
     paddingTop: 10,
     borderTopWidth: 1,
@@ -2304,17 +2446,6 @@ const styles = StyleSheet.create({
   },
   deleteIconButton: {
     padding: 6,
-  },
-  addItemButton: {
-    backgroundColor: "#F1E4F2",
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-  },
-  addItemButtonLabel: {
-    color: "#81007F",
-    fontSize: 13,
-    fontWeight: "600",
   },
   emptyContainer: {
     paddingVertical: 48,
