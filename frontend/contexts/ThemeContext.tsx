@@ -106,12 +106,12 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
         AsyncStorage.getItem("@theme_preference"),
         AsyncStorage.getItem("@font_scale_preference"),
       ]);
-      
+
       if (savedTheme !== null) {
         setIsDark(savedTheme === "dark");
         console.log("[Theme] Loaded preference:", savedTheme);
       }
-      
+
       if (savedFontScale !== null) {
         const scale = parseFloat(savedFontScale);
         if (!isNaN(scale) && scale >= 0.8 && scale <= 1.4) {
@@ -153,9 +153,12 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
     // Limitar o scale entre 0.8 e 1.4
     const clampedScale = Math.max(0.8, Math.min(1.4, scale));
     setFontScaleState(clampedScale);
-    
+
     try {
-      await AsyncStorage.setItem("@font_scale_preference", clampedScale.toString());
+      await AsyncStorage.setItem(
+        "@font_scale_preference",
+        clampedScale.toString(),
+      );
       console.log("[FontScale] Saved preference:", clampedScale);
     } catch (error) {
       console.error("[FontScale] Error saving preference:", error);
@@ -174,7 +177,17 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
   }
 
   return (
-    <ThemeContext.Provider value={{ isDark, colors, fontScale, toggleTheme, setTheme, setFontScale, getFontSize }}>
+    <ThemeContext.Provider
+      value={{
+        isDark,
+        colors,
+        fontScale,
+        toggleTheme,
+        setTheme,
+        setFontScale,
+        getFontSize,
+      }}
+    >
       {children}
     </ThemeContext.Provider>
   );

@@ -111,7 +111,12 @@ export default function ProfileScreen() {
         ]}
       >
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary, fontSize: getFontSize(16) }]}>
+        <Text
+          style={[
+            styles.loadingText,
+            { color: colors.textSecondary, fontSize: getFontSize(16) },
+          ]}
+        >
           Carregando perfil...
         </Text>
       </View>
@@ -134,11 +139,21 @@ export default function ProfileScreen() {
             </View>
           )}
         </View>
-        <Text style={[styles.userName, { color: colors.text, fontSize: getFontSize(24) }]}>
+        <Text
+          style={[
+            styles.userName,
+            { color: colors.text, fontSize: getFontSize(24) },
+          ]}
+        >
           {userName || "Usuário"}
         </Text>
         {userEmail && (
-          <Text style={[styles.userEmail, { color: colors.textTertiary, fontSize: getFontSize(14) }]}>
+          <Text
+            style={[
+              styles.userEmail,
+              { color: colors.textTertiary, fontSize: getFontSize(14) },
+            ]}
+          >
             {userEmail}
           </Text>
         )}
@@ -155,7 +170,12 @@ export default function ProfileScreen() {
         >
           <View style={styles.menuItemLeft}>
             <Ionicons name="pencil-outline" size={24} color={colors.text} />
-            <Text style={[styles.menuItemText, { color: colors.text, fontSize: getFontSize(16) }]}>
+            <Text
+              style={[
+                styles.menuItemText,
+                { color: colors.text, fontSize: getFontSize(16) },
+              ]}
+            >
               Editar Perfil
             </Text>
           </View>
@@ -179,7 +199,12 @@ export default function ProfileScreen() {
               size={24}
               color={colors.text}
             />
-            <Text style={[styles.menuItemText, { color: colors.text, fontSize: getFontSize(16) }]}>
+            <Text
+              style={[
+                styles.menuItemText,
+                { color: colors.text, fontSize: getFontSize(16) },
+              ]}
+            >
               Segurança
             </Text>
           </View>
@@ -199,7 +224,12 @@ export default function ProfileScreen() {
         >
           <View style={styles.menuItemLeft}>
             <Ionicons name="settings-outline" size={24} color={colors.text} />
-            <Text style={[styles.menuItemText, { color: colors.text, fontSize: getFontSize(16) }]}>
+            <Text
+              style={[
+                styles.menuItemText,
+                { color: colors.text, fontSize: getFontSize(16) },
+              ]}
+            >
               Configuração
             </Text>
           </View>
@@ -219,7 +249,15 @@ export default function ProfileScreen() {
         >
           <View style={styles.menuItemLeft}>
             <Ionicons name="log-out-outline" size={24} color="#E53935" />
-            <Text style={[styles.menuItemText, styles.logoutText, { fontSize: getFontSize(16) }]}>Logout</Text>
+            <Text
+              style={[
+                styles.menuItemText,
+                styles.logoutText,
+                { fontSize: getFontSize(16) },
+              ]}
+            >
+              Logout
+            </Text>
           </View>
         </TouchableOpacity>
       </View>

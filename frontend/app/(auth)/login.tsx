@@ -113,10 +113,21 @@ export default function LoginScreen() {
       <View style={styles.content}>
         <View style={styles.stack}>
           <Logo style={styles.logo} />
-          <Text style={[styles.title, { color: colors.text, fontSize: getFontSize(28) }]}>Login</Text>
+          <Text
+            style={[
+              styles.title,
+              { color: colors.text, fontSize: getFontSize(28) },
+            ]}
+          >
+            Login
+          </Text>
 
           {serverError && (
-            <Text style={[styles.serverErrorText, { fontSize: getFontSize(14) }]}>{serverError}</Text>
+            <Text
+              style={[styles.serverErrorText, { fontSize: getFontSize(14) }]}
+            >
+              {serverError}
+            </Text>
           )}
 
           <Controller
@@ -144,7 +155,9 @@ export default function LoginScreen() {
             )}
           />
           {errors.email && (
-            <Text style={[styles.errorText, { fontSize: getFontSize(12) }]}>{errors.email.message}</Text>
+            <Text style={[styles.errorText, { fontSize: getFontSize(12) }]}>
+              {errors.email.message}
+            </Text>
           )}
 
           <View
@@ -162,7 +175,10 @@ export default function LoginScreen() {
               name="password"
               render={({ field: { onChange, value } }) => (
                 <TextInput
-                  style={[styles.passwordInput, { color: colors.text, fontSize: getFontSize(16) }]}
+                  style={[
+                    styles.passwordInput,
+                    { color: colors.text, fontSize: getFontSize(16) },
+                  ]}
                   placeholder="Senha"
                   placeholderTextColor={colors.placeholderText}
                   value={value}
@@ -185,7 +201,9 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
           {errors.password && (
-            <Text style={[styles.errorText, { fontSize: getFontSize(12) }]}>{errors.password.message}</Text>
+            <Text style={[styles.errorText, { fontSize: getFontSize(12) }]}>
+              {errors.password.message}
+            </Text>
           )}
 
           <TouchableOpacity
@@ -200,7 +218,12 @@ export default function LoginScreen() {
             {isSubmitting ? (
               <ActivityIndicator color={colors.accent} />
             ) : (
-              <Text style={[styles.buttonText, { color: colors.accent, fontSize: getFontSize(16) }]}>
+              <Text
+                style={[
+                  styles.buttonText,
+                  { color: colors.accent, fontSize: getFontSize(16) },
+                ]}
+              >
                 Entrar
               </Text>
             )}
@@ -208,14 +231,22 @@ export default function LoginScreen() {
         </View>
 
         <View style={styles.linkRow}>
-          <Text style={{ color: colors.textSecondary, fontSize: getFontSize(14) }}>
+          <Text
+            style={{ color: colors.textSecondary, fontSize: getFontSize(14) }}
+          >
             Não possui uma conta?{" "}
           </Text>
           <TouchableOpacity
             onPress={() => router.push("/(auth)/register")}
             disabled={isSubmitting}
           >
-            <Text style={{ color: colors.primary, fontWeight: "bold", fontSize: getFontSize(14) }}>
+            <Text
+              style={{
+                color: colors.primary,
+                fontWeight: "bold",
+                fontSize: getFontSize(14),
+              }}
+            >
               Cadastre-se
             </Text>
           </TouchableOpacity>
