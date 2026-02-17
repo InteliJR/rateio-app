@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   Modal,
   View,
@@ -9,30 +9,35 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   KeyboardAvoidingView,
-  Platform
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { BillItem } from '../items/ItemCard';
+  Platform,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { BillItem } from "../items/ItemCard";
+import { useTheme } from "../../contexts/ThemeContext";
 
 interface AddItemModalProps {
   visible: boolean;
   onClose: () => void;
-  onAdd: (item: Omit<BillItem, 'id' | 'assignedParticipants'>) => void;
+  onAdd: (item: Omit<BillItem, "id" | "assignedParticipants">) => void;
 }
 
-
-export const AddItemModal: React.FC<AddItemModalProps> = ({ visible, onClose, onAdd }) => {
-  const [name, setName] = useState('');
-  const [quantity, setQuantity] = useState('');
-  const [value, setValue] = useState('');
-  const [errors, setErrors] = useState({ name: '', quantity: '', value: '' });
+export const AddItemModal: React.FC<AddItemModalProps> = ({
+  visible,
+  onClose,
+  onAdd,
+}) => {
+  const { colors } = useTheme();
+  const [name, setName] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [value, setValue] = useState("");
+  const [errors, setErrors] = useState({ name: "", quantity: "", value: "" });
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
   const resetForm = () => {
-    setName('');
-    setQuantity('');
-    setValue('');
-    setErrors({ name: '', quantity: '', value: '' });
+    setName("");
+    setQuantity("");
+    setValue("");
+    setErrors({ name: "", quantity: "", value: "" });
   };
 
   const handleClose = () => {
@@ -42,60 +47,60 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ visible, onClose, on
 
   const formatCurrency = (text: string) => {
     // Remove non-numeric characters
-    let numeric = text.replace(/[^0-9]/g, '');
-    if (!numeric) return '';
+    let numeric = text.replace(/[^0-9]/g, "");
+    if (!numeric) return "";
 
     // Convert to decimal
     const amount = parseInt(numeric) / 100;
 
     // Format to BRL
-    return amount.toLocaleString('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
+    return amount.toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
     });
   };
 
   const handleValueChange = (text: string) => {
     // If deleting everything, clear it
     if (!text) {
-      setValue('');
+      setValue("");
       return;
     }
 
     // If user is typing, we just take the numbers and reformat
-    const numeric = text.replace(/[^0-9]/g, '');
+    const numeric = text.replace(/[^0-9]/g, "");
     const formatted = formatCurrency(numeric);
     setValue(formatted);
-    if (errors.value) setErrors(prev => ({ ...prev, value: '' }));
+    if (errors.value) setErrors((prev) => ({ ...prev, value: "" }));
   };
 
   const parseCurrency = (text: string): number => {
-    const numeric = text.replace(/[^0-9]/g, '');
+    const numeric = text.replace(/[^0-9]/g, "");
     return parseInt(numeric) / 100;
   };
 
   const validate = () => {
-    const newErrors = { name: '', quantity: '', value: '' };
+    const newErrors = { name: "", quantity: "", value: "" };
     let isValid = true;
 
     if (!name.trim()) {
-      newErrors.name = 'Nome é obrigatório';
+      newErrors.name = "Nome é obrigatório";
       isValid = false;
     }
 
     if (!quantity.trim()) {
-      newErrors.quantity = 'Quantidade é obrigatória';
+      newErrors.quantity = "Quantidade é obrigatória";
       isValid = false;
     } else if (parseInt(quantity) <= 0) {
-      newErrors.quantity = 'Quantidade deve ser maior que 0';
+      newErrors.quantity = "Quantidade deve ser maior que 0";
       isValid = false;
     }
 
     if (!value.trim()) {
-      newErrors.value = 'Valor é obrigatório';
+      newErrors.value = "Valor é obrigatório";
       isValid = false;
     } else if (parseCurrency(value) <= 0) {
-      newErrors.value = 'Valor deve ser maior que 0';
+      newErrors.value = "Valor deve ser maior que 0";
       isValid = false;
     }
 
@@ -123,82 +128,123 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ visible, onClose, on
     <View style={styles.formContainer}>
       <View style={styles.header}>
         <TouchableOpacity onPress={handleClose} style={styles.backButton}>
-          <Ionicons name="close" size={24} color="#333" />
+          <Ionicons name="close" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Novo Item</Text>
+        <Text style={[styles.title, { color: colors.text }]}>Novo Item</Text>
         <View style={{ width: 24 }} />
       </View>
 
-      <Text style={styles.label}>Nome</Text>
+      <Text style={[styles.label, { color: colors.text }]}>Nome</Text>
       <TextInput
         style={[
           styles.input,
+          {
+            backgroundColor: colors.inputBackground,
+            borderColor: colors.inputBorder,
+            color: colors.text,
+          },
           errors.name ? styles.inputError : null,
-          focusedField === 'name' && styles.inputFocused
+          focusedField === "name" && [
+            styles.inputFocused,
+            { borderColor: colors.primary },
+          ],
         ]}
         placeholder="Ex: Coca-cola"
-        placeholderTextColor="rgba(0, 0, 0, 0.3)"
+        placeholderTextColor={colors.placeholderText}
         value={name}
         onChangeText={(text) => {
           setName(text);
-          if (errors.name) setErrors(prev => ({ ...prev, name: '' }));
+          if (errors.name) setErrors((prev) => ({ ...prev, name: "" }));
         }}
-        onFocus={() => setFocusedField('name')}
+        onFocus={() => setFocusedField("name")}
         onBlur={() => setFocusedField(null)}
         editable={true}
         underlineColorAndroid="transparent"
-        selectionColor="#8B2E8F"
+        selectionColor={colors.primary}
         importantForAutofill="no"
       />
-      {errors.name ? <Text style={styles.errorText}>{errors.name}</Text> : null}
+      {errors.name ? (
+        <Text style={[styles.errorText, { color: colors.error }]}>
+          {errors.name}
+        </Text>
+      ) : null}
 
-      <Text style={styles.label}>Quantidade</Text>
+      <Text style={[styles.label, { color: colors.text }]}>Quantidade</Text>
       <TextInput
         style={[
           styles.input,
+          {
+            backgroundColor: colors.inputBackground,
+            borderColor: colors.inputBorder,
+            color: colors.text,
+          },
           errors.quantity ? styles.inputError : null,
-          focusedField === 'quantity' && styles.inputFocused
+          focusedField === "quantity" && [
+            styles.inputFocused,
+            { borderColor: colors.primary },
+          ],
         ]}
         placeholder="Ex: 2"
-        placeholderTextColor="rgba(0, 0, 0, 0.3)"
+        placeholderTextColor={colors.placeholderText}
         value={quantity}
         onChangeText={(text) => {
-          setQuantity(text.replace(/[^0-9]/g, ''));
-          if (errors.quantity) setErrors(prev => ({ ...prev, quantity: '' }));
+          setQuantity(text.replace(/[^0-9]/g, ""));
+          if (errors.quantity) setErrors((prev) => ({ ...prev, quantity: "" }));
         }}
-        onFocus={() => setFocusedField('quantity')}
+        onFocus={() => setFocusedField("quantity")}
         onBlur={() => setFocusedField(null)}
         keyboardType="numeric"
         editable={true}
         underlineColorAndroid="transparent"
-        selectionColor="#8B2E8F"
+        selectionColor={colors.primary}
         importantForAutofill="no"
       />
-      {errors.quantity ? <Text style={styles.errorText}>{errors.quantity}</Text> : null}
+      {errors.quantity ? (
+        <Text style={[styles.errorText, { color: colors.error }]}>
+          {errors.quantity}
+        </Text>
+      ) : null}
 
-      <Text style={styles.label}>Preço Unitário</Text>
+      <Text style={[styles.label, { color: colors.text }]}>Preço Unitário</Text>
       <TextInput
         style={[
           styles.input,
+          {
+            backgroundColor: colors.inputBackground,
+            borderColor: colors.inputBorder,
+            color: colors.text,
+          },
           errors.value ? styles.inputError : null,
-          focusedField === 'value' && styles.inputFocused
+          focusedField === "value" && [
+            styles.inputFocused,
+            { borderColor: colors.primary },
+          ],
         ]}
         placeholder="R$ 0,00"
-        placeholderTextColor="rgba(0, 0, 0, 0.3)"
+        placeholderTextColor={colors.placeholderText}
         value={value}
         onChangeText={handleValueChange}
-        onFocus={() => setFocusedField('value')}
+        onFocus={() => setFocusedField("value")}
         onBlur={() => setFocusedField(null)}
         keyboardType="numeric"
         editable={true}
         underlineColorAndroid="transparent"
-        selectionColor="#8B2E8F"
+        selectionColor={colors.primary}
         importantForAutofill="no"
       />
-      {errors.value ? <Text style={styles.errorText}>{errors.value}</Text> : null}
+      {errors.value ? (
+        <Text style={[styles.errorText, { color: colors.error }]}>
+          {errors.value}
+        </Text>
+      ) : null}
 
-      <TouchableOpacity style={styles.addButton} onPress={handleAdd}>
-        <Text style={styles.addButtonText}>Adicionar</Text>
+      <TouchableOpacity
+        style={[styles.addButton, { backgroundColor: colors.primary }]}
+        onPress={handleAdd}
+      >
+        <Text style={[styles.addButtonText, { color: colors.accent }]}>
+          Adicionar
+        </Text>
       </TouchableOpacity>
     </View>
   );
@@ -210,15 +256,18 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ visible, onClose, on
       animationType="slide"
       onRequestClose={handleClose}
     >
-      <View style={styles.overlay}>
+      <View style={[styles.overlay, { backgroundColor: colors.overlay }]}>
         <TouchableWithoutFeedback onPress={handleClose}>
           <View style={styles.overlayTouchable} />
         </TouchableWithoutFeedback>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalContent}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={[
+            styles.modalContent,
+            { backgroundColor: colors.cardBackground },
+          ]}
         >
-          <View style={styles.handle} />
+          <View style={[styles.handle, { backgroundColor: colors.divider }]} />
           {renderForm()}
         </KeyboardAvoidingView>
       </View>
@@ -229,18 +278,18 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ visible, onClose, on
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
   },
   overlayTouchable: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
@@ -249,25 +298,25 @@ const styles = StyleSheet.create({
   handle: {
     width: 40,
     height: 4,
-    backgroundColor: '#ccc',
+    backgroundColor: "#ccc",
     borderRadius: 2,
-    alignSelf: 'center',
+    alignSelf: "center",
     marginBottom: 24,
   },
   title: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    textAlign: 'center',
+    fontWeight: "bold",
+    color: "#333",
+    textAlign: "center",
     marginBottom: 24,
   },
   formContainer: {
     gap: 16,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 8,
   },
   backButton: {
@@ -275,50 +324,50 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    color: '#666',
+    color: "#666",
     marginBottom: -8,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: "#ddd",
     borderRadius: 12,
     padding: 16,
     fontSize: 16,
-    backgroundColor: '#fff',
-    color: '#000',
-    outlineStyle: 'none',
+    backgroundColor: "#fff",
+    color: "#000",
+    outlineStyle: "none",
     outlineWidth: 0,
-    outlineColor: 'transparent',
+    outlineColor: "transparent",
   },
   inputFocused: {
-    borderColor: '#8B2E8F',
+    borderColor: "#8B2E8F",
     borderWidth: 1,
     borderTopWidth: 1,
     borderLeftWidth: 1,
     borderRightWidth: 1,
     borderBottomWidth: 1,
-    outlineStyle: 'none',
+    outlineStyle: "none",
     outlineWidth: 0,
-    outlineColor: 'transparent',
+    outlineColor: "transparent",
   },
   inputError: {
-    borderColor: '#ff4444',
+    borderColor: "#ff4444",
   },
   errorText: {
-    color: '#ff4444',
+    color: "#ff4444",
     fontSize: 12,
     marginTop: -8,
   },
   addButton: {
-    backgroundColor: '#81007F',
+    backgroundColor: "#81007F",
     padding: 16,
     borderRadius: 28,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 8,
   },
   addButtonText: {
-    color: '#FFFF00',
+    color: "#FFFF00",
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
 });

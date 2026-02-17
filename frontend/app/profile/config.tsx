@@ -12,8 +12,10 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { userService } from "../../services/user.service";
 import { API_URL } from "../../services/api.service";
+import { useTheme } from "../../contexts/ThemeContext";
 
 export default function ConfigScreen() {
+  const { colors } = useTheme();
   const router = useRouter();
   const [userName, setUserName] = React.useState("");
   const [avatarUrl, setAvatarUrl] = React.useState<string | null>(null);
@@ -58,13 +60,13 @@ export default function ConfigScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Back Button */}
       <TouchableOpacity
         onPress={() => router.push("/(tabs)/profile")}
-        style={styles.backButton}
+        style={[styles.backButton, { backgroundColor: colors.cardBackground }]}
       >
-        <Ionicons name="chevron-back" size={28} color="#333" />
+        <Ionicons name="chevron-back" size={28} color={colors.text} />
       </TouchableOpacity>
 
       <ScrollView
@@ -77,27 +79,60 @@ export default function ConfigScreen() {
             {avatarUrl ? (
               <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
             ) : (
-              <View style={styles.avatar}>
-                <Ionicons name="person" size={60} color="#FFF" />
+              <View
+                style={[styles.avatar, { backgroundColor: colors.primary }]}
+              >
+                <Ionicons name="person" size={60} color={colors.accent} />
               </View>
             )}
           </View>
-          <Text style={styles.userName}>{userName || "Usuário"}</Text>
+          <Text style={[styles.userName, { color: colors.text }]}>
+            {userName || "Usuário"}
+          </Text>
         </View>
 
         {/* Config Options */}
-        <View style={styles.optionsContainer}>
+        <View
+          style={[
+            styles.optionsContainer,
+            {
+              backgroundColor: colors.backgroundSecondary,
+              borderColor: colors.divider,
+            },
+          ]}
+        >
           <TouchableOpacity
-            style={styles.optionItem}
+            style={[
+              styles.optionItem,
+              { backgroundColor: colors.cardBackground },
+            ]}
             onPress={handleAccessibility}
           >
-            <Text style={styles.optionText}>Acessibilidade</Text>
-            <Ionicons name="chevron-forward" size={24} color="#999" />
+            <Text style={[styles.optionText, { color: colors.text }]}>
+              Acessibilidade
+            </Text>
+            <Ionicons
+              name="chevron-forward"
+              size={24}
+              color={colors.secondaryText}
+            />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.optionItem} onPress={handleAbout}>
-            <Text style={styles.optionText}>Sobre</Text>
-            <Ionicons name="chevron-forward" size={24} color="#999" />
+          <TouchableOpacity
+            style={[
+              styles.optionItem,
+              { backgroundColor: colors.cardBackground },
+            ]}
+            onPress={handleAbout}
+          >
+            <Text style={[styles.optionText, { color: colors.text }]}>
+              Sobre
+            </Text>
+            <Ionicons
+              name="chevron-forward"
+              size={24}
+              color={colors.secondaryText}
+            />
           </TouchableOpacity>
         </View>
       </ScrollView>

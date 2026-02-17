@@ -1,11 +1,13 @@
 // mobile/app/index.tsx
 
-import { useEffect } from 'react';
-import { useRouter } from 'expo-router';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { useAuthStore } from '../../frontend/store/authStore';
+import { useEffect } from "react";
+import { useRouter } from "expo-router";
+import { View, ActivityIndicator, StyleSheet } from "react-native";
+import { useAuthStore } from "../../frontend/store/authStore";
+import { useTheme } from "../contexts/ThemeContext";
 
 export default function Index() {
+  const { colors } = useTheme();
   const router = useRouter();
   const { isAuthenticated, isLoading, loadTokens } = useAuthStore();
 
@@ -21,16 +23,16 @@ export default function Index() {
     // Só redireciona quando terminar de carregar
     if (!isLoading) {
       if (isAuthenticated) {
-        router.replace('/(tabs)/(create)/new');
+        router.replace("/(tabs)/(create)/new");
       } else {
-        router.replace('/(auth)/login');
+        router.replace("/(auth)/login");
       }
     }
   }, [isAuthenticated, isLoading]);
 
   return (
-    <View style={styles.container}>
-      <ActivityIndicator size="large" color="#007AFF" />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <ActivityIndicator size="large" color={colors.primary} />
     </View>
   );
 }
@@ -38,8 +40,7 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+    justifyContent: "center",
+    alignItems: "center",
   },
 });

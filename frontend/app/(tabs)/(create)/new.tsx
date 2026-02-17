@@ -18,6 +18,7 @@ import { z } from "zod";
 import billService from "../../../services/bill.service";
 import { useBillStore } from "../../../store/billStore";
 import { NumericInput } from "../../../components/common/NumericInput";
+import { useTheme } from "../../../contexts/ThemeContext";
 
 interface INewBillFormData {
   numPeople: string;
@@ -33,7 +34,7 @@ const newBillSchema = z
       .min(1, "Campo obrigatório")
       .refine(
         (val) => !isNaN(Number(val)) && Number(val) >= 1,
-        "Mínimo de 1 participante"
+        "Mínimo de 1 participante",
       ),
     defineNameOption: z.enum(["sim", "nao"]),
     billName: z.string().optional(),
@@ -42,7 +43,7 @@ const newBillSchema = z
       .min(1, "Campo obrigatório")
       .refine(
         (val) => !isNaN(Number(val)) && Number(val) >= 0 && Number(val) <= 100,
-        "A taxa deve ser entre 0% e 100%"
+        "A taxa deve ser entre 0% e 100%",
       ),
   })
   .superRefine((data, ctx) => {
@@ -60,6 +61,7 @@ const newBillSchema = z
 
 export default function NewBillScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
   // const { id } = useLocalSearchParams();
   const [isLoading, setIsLoading] = useState(false);
 
@@ -104,7 +106,7 @@ export default function NewBillScreen() {
     } catch (error: any) {
       Alert.alert(
         "Erro",
-        error.message || "Não foi possível criar a conta. Tente novamente."
+        error.message || "Não foi possível criar a conta. Tente novamente.",
       );
     } finally {
       setIsLoading(false);
@@ -114,7 +116,7 @@ export default function NewBillScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
     >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -122,7 +124,9 @@ export default function NewBillScreen() {
       >
         <View style={styles.content}>
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Adicionar pessoas</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Adicionar pessoas
+            </Text>
 
             <Controller
               control={control}
@@ -141,7 +145,9 @@ export default function NewBillScreen() {
               )}
             />
 
-            <Text style={styles.label}>Deseja definir o nome?</Text>
+            <Text style={[styles.label, { color: colors.text }]}>
+              Deseja definir o nome?
+            </Text>
             <View style={styles.radioGroup}>
               <TouchableOpacity
                 style={styles.radioOption}
@@ -150,12 +156,21 @@ export default function NewBillScreen() {
                 }
                 disabled={isLoading}
               >
-                <View style={styles.radioCircle}>
+                <View
+                  style={[styles.radioCircle, { borderColor: colors.divider }]}
+                >
                   {defineNameOption === "sim" && (
-                    <View style={styles.radioCircleFilled} />
+                    <View
+                      style={[
+                        styles.radioCircleFilled,
+                        { backgroundColor: colors.primary },
+                      ]}
+                    />
                   )}
                 </View>
-                <Text style={styles.radioLabel}>Sim</Text>
+                <Text style={[styles.radioLabel, { color: colors.text }]}>
+                  Sim
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -166,12 +181,21 @@ export default function NewBillScreen() {
                 }}
                 disabled={isLoading}
               >
-                <View style={styles.radioCircle}>
+                <View
+                  style={[styles.radioCircle, { borderColor: colors.divider }]}
+                >
                   {defineNameOption === "nao" && (
-                    <View style={styles.radioCircleFilled} />
+                    <View
+                      style={[
+                        styles.radioCircleFilled,
+                        { backgroundColor: colors.primary },
+                      ]}
+                    />
                   )}
                 </View>
-                <Text style={styles.radioLabel}>Não</Text>
+                <Text style={[styles.radioLabel, { color: colors.text }]}>
+                  Não
+                </Text>
               </TouchableOpacity>
             </View>
 
@@ -185,9 +209,15 @@ export default function NewBillScreen() {
                       style={[
                         styles.input,
                         styles.conditionalInput,
+                        {
+                          backgroundColor: colors.inputBackground,
+                          borderColor: colors.inputBorder,
+                          color: colors.text,
+                        },
                         errors.billName ? styles.inputError : null,
                       ]}
                       placeholder="Nome da conta"
+                      placeholderTextColor={colors.placeholderText}
                       value={value}
                       onChangeText={onChange}
                       onBlur={onBlur}
@@ -205,7 +235,9 @@ export default function NewBillScreen() {
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Definir a taxa de serviço</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Definir a taxa de serviço
+            </Text>
 
             <Controller
               control={control}
@@ -228,19 +260,24 @@ export default function NewBillScreen() {
         </View>
       </ScrollView>
 
-      <View style={styles.buttonContainer}>
+      <View
+        style={[styles.buttonContainer, { backgroundColor: colors.background }]}
+      >
         <TouchableOpacity
           style={[
             styles.button,
+            { backgroundColor: colors.primary },
             (!isValid || isLoading) && styles.buttonDisabled,
           ]}
           onPress={handleSubmit(onSubmit)}
           disabled={!isValid || isLoading}
         >
           {isLoading ? (
-            <ActivityIndicator color="#FFFF00" />
+            <ActivityIndicator color={colors.accent} />
           ) : (
-            <Text style={styles.buttonText}>Confirmar</Text>
+            <Text style={[styles.buttonText, { color: colors.accent }]}>
+              Confirmar
+            </Text>
           )}
         </TouchableOpacity>
       </View>

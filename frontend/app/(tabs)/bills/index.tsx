@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import {
   StyleSheet,
   Text,
@@ -9,30 +9,34 @@ import {
   ActivityIndicator,
   ScrollView,
   TextInput,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { useInfiniteQuery } from '@tanstack/react-query';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import billService, { UploadBillResponse, BillFilters } from '../../../services/bill.service';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import billService, {
+  UploadBillResponse,
+  BillFilters,
+} from "../../../services/bill.service";
+import { useTheme } from "../../../contexts/ThemeContext";
 
 // Interface BillWithStatus removed as it conflicts with UploadBillResponse
 
-
 const DATE_FILTERS = [
-  { id: 'all', label: 'Todos' },
-  { id: 'week', label: 'Última semana' },
-  { id: 'month', label: 'Último mês' },
+  { id: "all", label: "Todos" },
+  { id: "week", label: "Última semana" },
+  { id: "month", label: "Último mês" },
 ];
 
 export default function BillsScreen() {
   const router = useRouter();
-  const [selectedDateFilter, setSelectedDateFilter] = useState<string>('all');
+  const { colors } = useTheme();
+  const [selectedDateFilter, setSelectedDateFilter] = useState<string>("all");
   const [showFilters, setShowFilters] = useState(false);
-  const [searchText, setSearchText] = useState<string>('');
-  
+  const [searchText, setSearchText] = useState<string>("");
+
   // Debounce search text for query
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -45,29 +49,29 @@ export default function BillsScreen() {
   const filters: BillFilters = useMemo(() => {
     const result: BillFilters = {};
     if (debouncedSearch) result.search = debouncedSearch;
-    
-    if (selectedDateFilter !== 'all') {
+
+    if (selectedDateFilter !== "all") {
       const now = new Date();
       const startDate = new Date();
-      
+
       switch (selectedDateFilter) {
-        case 'week':
+        case "week":
           startDate.setDate(now.getDate() - 7);
           break;
-        case 'month':
+        case "month":
           startDate.setDate(now.getDate() - 30);
           break;
       }
-      
+
       result.startDate = startDate.toISOString();
     }
-    
+
     return result;
   }, [debouncedSearch, selectedDateFilter]);
 
   // Estabilizar queryKey para evitar requisições desnecessárias
   const queryKey = useMemo(() => {
-    return ['bills', debouncedSearch, selectedDateFilter];
+    return ["bills", debouncedSearch, selectedDateFilter];
   }, [debouncedSearch, selectedDateFilter]);
 
   // React Query Infinite Query
@@ -79,10 +83,11 @@ export default function BillsScreen() {
     hasNextPage,
     isFetchingNextPage,
     refetch,
-    isRefetching
+    isRefetching,
   } = useInfiniteQuery({
     queryKey,
-    queryFn: ({ pageParam = 1 }) => billService.listBills(pageParam as number, 10, filters),
+    queryFn: ({ pageParam = 1 }) =>
+      billService.listBills(pageParam as number, 10, filters),
     getNextPageParam: (lastPage) => {
       if (lastPage.meta.page < lastPage.meta.totalPages) {
         return lastPage.meta.page + 1;
@@ -94,7 +99,7 @@ export default function BillsScreen() {
   });
 
   // Flatten data for FlatList
-  const allBills = data?.pages.flatMap(page => page.data) || [];
+  const allBills = data?.pages.flatMap((page) => page.data) || [];
 
   // Mudar filtro
   const handleFilterChange = useCallback((filterId: string) => {
@@ -116,13 +121,23 @@ export default function BillsScreen() {
   // Renderizar card de conta
   const renderBillCard = ({ item }: { item: UploadBillResponse }) => (
     <TouchableOpacity
-      style={styles.card}
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.card,
+          borderColor: colors.cardBorder,
+        },
+      ]}
       onPress={() => router.push(`/(tabs)/bills/${item.id}`)}
       activeOpacity={0.7}
     >
       <View style={styles.cardContent}>
-        <Text style={styles.cardTitle}>{item.establishmentName || 'Sem nome'}</Text>
-        <Text style={styles.cardDate}>{new Date(item.createdAt).toLocaleDateString('pt-BR')}</Text>
+        <Text style={[styles.cardTitle, { color: colors.text }]}>
+          {item.establishmentName || "Sem nome"}
+        </Text>
+        <Text style={[styles.cardDate, { color: colors.textSecondary }]}>
+          {new Date(item.createdAt).toLocaleDateString("pt-BR")}
+        </Text>
       </View>
     </TouchableOpacity>
   );
@@ -134,32 +149,46 @@ export default function BillsScreen() {
 
   // Renderizar filtros
   const renderFilters = () => (
-    <View style={styles.filtersContainer}>
-      <View style={styles.filterHeader}>
-        <Text style={styles.filterTitle}>Filtrar por data</Text>
+    <View style={[styles.filtersContainer, { backgroundColor: colors.card }]}>
+      <View
+        style={[styles.filterHeader, { borderBottomColor: colors.divider }]}
+      >
+        <Text style={[styles.filterTitle, { color: colors.text }]}>
+          Filtrar por data
+        </Text>
         <TouchableOpacity onPress={() => setShowFilters(false)}>
-          <MaterialCommunityIcons name="close" size={24} color="#000" />
+          <MaterialCommunityIcons name="close" size={24} color={colors.text} />
         </TouchableOpacity>
       </View>
       <ScrollView style={styles.filterOptions}>
-        {DATE_FILTERS.map(filter => (
+        {DATE_FILTERS.map((filter) => (
           <TouchableOpacity
             key={filter.id}
             style={[
               styles.filterOption,
-              selectedDateFilter === filter.id && styles.filterOptionActive,
+              selectedDateFilter === filter.id && {
+                backgroundColor: colors.backgroundSecondary,
+              },
             ]}
             onPress={() => {
               handleFilterChange(filter.id);
               setShowFilters(false);
             }}
           >
-            <View style={styles.filterCheckbox}>
+            <View
+              style={[styles.filterCheckbox, { borderColor: colors.divider }]}
+            >
               {selectedDateFilter === filter.id && (
-                <MaterialCommunityIcons name="check" size={16} color="#8B2E8F" />
+                <MaterialCommunityIcons
+                  name="check"
+                  size={16}
+                  color={colors.primary}
+                />
               )}
             </View>
-            <Text style={styles.filterOptionText}>{filter.label}</Text>
+            <Text style={[styles.filterOptionText, { color: colors.text }]}>
+              {filter.label}
+            </Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -171,8 +200,10 @@ export default function BillsScreen() {
     if (isLoading) {
       return (
         <View style={styles.emptyContainer}>
-          <ActivityIndicator size="large" color="#C91F7A" />
-          <Text style={styles.emptyText}>Carregando contas...</Text>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+            Carregando contas...
+          </Text>
         </View>
       );
     }
@@ -180,9 +211,13 @@ export default function BillsScreen() {
     if (isError) {
       return (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>Erro ao carregar contas.</Text>
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+            Erro ao carregar contas.
+          </Text>
           <TouchableOpacity onPress={() => refetch()} style={{ marginTop: 10 }}>
-             <Text style={{ color: '#C91F7A', fontWeight: 'bold' }}>Tentar novamente</Text>
+            <Text style={{ color: colors.primary, fontWeight: "bold" }}>
+              Tentar novamente
+            </Text>
           </TouchableOpacity>
         </View>
       );
@@ -190,7 +225,9 @@ export default function BillsScreen() {
 
     return (
       <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>Nenhuma conta encontrada</Text>
+        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+          Nenhuma conta encontrada
+        </Text>
       </View>
     );
   };
@@ -200,40 +237,56 @@ export default function BillsScreen() {
     if (!isFetchingNextPage) return null;
     return (
       <View style={styles.footerLoader}>
-        <ActivityIndicator size="small" color="#A01D66" />
+        <ActivityIndicator size="small" color={colors.primary} />
       </View>
     );
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Contas</Text>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+    >
+      <View style={[styles.header, { backgroundColor: colors.background }]}>
+        <Text style={[styles.title, { color: colors.text }]}>Contas</Text>
       </View>
 
       <View style={styles.searchFilterRow}>
-        <View style={styles.searchContainer}>
+        <View
+          style={[
+            styles.searchContainer,
+            {
+              backgroundColor: colors.inputBackground,
+              borderColor: colors.inputBorder,
+            },
+          ]}
+        >
           <MaterialCommunityIcons
             name="magnify"
             size={20}
-            color="#999"
+            color={colors.textTertiary}
             style={styles.searchIcon}
           />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: colors.text }]}
             placeholder="Buscar...."
-            placeholderTextColor="#999"
+            placeholderTextColor={colors.placeholderText}
             value={searchText}
             onChangeText={handleSearchChange}
           />
         </View>
 
         <TouchableOpacity
-          style={styles.filterButton}
+          style={[styles.filterButton, { borderColor: colors.primary }]}
           onPress={() => setShowFilters(!showFilters)}
         >
-          <MaterialCommunityIcons name="filter-outline" size={20} color="#C91F7A" />
-          <Text style={styles.filterButtonText}>Filtro</Text>
+          <MaterialCommunityIcons
+            name="filter-outline"
+            size={20}
+            color={colors.primary}
+          />
+          <Text style={[styles.filterButtonText, { color: colors.primary }]}>
+            Filtro
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -251,7 +304,7 @@ export default function BillsScreen() {
           <RefreshControl
             refreshing={isRefetching && !isFetchingNextPage}
             onRefresh={handleRefresh}
-            tintColor="#8B2E8F"
+            tintColor={colors.primary}
           />
         }
         scrollEventThrottle={16}
@@ -263,7 +316,7 @@ export default function BillsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
   },
   header: {
     paddingHorizontal: 20,
@@ -271,40 +324,40 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 24,
-    fontWeight: '600',
-    color: '#000',
+    fontWeight: "600",
+    color: "#000",
   },
   searchFilterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 20,
     paddingVertical: 12,
     gap: 10,
   },
   filterButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderWidth: 1.5,
-    borderColor: '#8B2E8F',
+    borderColor: "#8B2E8F",
     borderRadius: 20,
     gap: 6,
   },
   filterButtonText: {
-    color: '#8B2E8F',
+    color: "#8B2E8F",
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8F8F8',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8F8F8",
     borderRadius: 24,
     paddingHorizontal: 16,
     flex: 1,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: "#E0E0E0",
     height: 44,
   },
   searchIcon: {
@@ -313,28 +366,28 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 14,
-    color: '#000',
+    color: "#000",
     padding: 0,
   },
   filtersContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
-    borderBottomColor: '#D0D0D0',
+    borderBottomColor: "#D0D0D0",
     paddingBottom: 16,
   },
   filterHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: "#F0F0F0",
   },
   filterTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
+    fontWeight: "600",
+    color: "#000",
   },
   filterOptions: {
     paddingHorizontal: 20,
@@ -342,13 +395,13 @@ const styles = StyleSheet.create({
     maxHeight: 250,
   },
   filterOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 12,
     gap: 12,
   },
   filterOptionActive: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: "#F5F5F5",
     marginHorizontal: -10,
     paddingHorizontal: 10,
     borderRadius: 8,
@@ -357,54 +410,54 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderWidth: 2,
-    borderColor: '#8B2E8F',
+    borderColor: "#8B2E8F",
     borderRadius: 4,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   filterOptionText: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#333',
+    fontWeight: "500",
+    color: "#333",
   },
   card: {
     paddingHorizontal: 20,
     paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
-    borderBottomColor: '#E8E8E8',
+    borderBottomColor: "#E8E8E8",
   },
   cardContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   cardTitle: {
     fontSize: 16,
-    fontWeight: '400',
-    color: '#333333',
+    fontWeight: "400",
+    color: "#333333",
   },
   cardDate: {
     fontSize: 14,
-    color: '#999999',
-    fontWeight: '400',
+    color: "#999999",
+    fontWeight: "400",
   },
   emptyContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     paddingHorizontal: 20,
   },
   emptyText: {
     fontSize: 16,
-    fontWeight: '500',
-    color: '#666',
+    fontWeight: "500",
+    color: "#666",
     marginTop: 16,
-    textAlign: 'center',
+    textAlign: "center",
   },
   footerLoader: {
     paddingVertical: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

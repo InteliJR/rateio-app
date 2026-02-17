@@ -1,7 +1,19 @@
-import React from 'react';
-import { View, Text, TextInput, StyleSheet, TextInputProps, StyleProp, TextStyle } from 'react-native';
+import React from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  TextInputProps,
+  StyleProp,
+  TextStyle,
+} from "react-native";
+import { useTheme } from "../../contexts/ThemeContext";
 
-interface NumericInputProps extends Omit<TextInputProps, 'onChange' | 'onChangeText' | 'style'> {
+interface NumericInputProps extends Omit<
+  TextInputProps,
+  "onChange" | "onChangeText" | "style"
+> {
   label: string;
   value: string;
   onChange: (text: string) => void;
@@ -21,13 +33,14 @@ export const NumericInput: React.FC<NumericInputProps> = ({
   style,
   ...props
 }) => {
+  const { colors } = useTheme();
   const handleChangeText = (text: string) => {
-    if (text === '') {
+    if (text === "") {
       onChange(text);
       return;
     }
 
-    const numericValue = text.replace(/[^0-9]/g, '');
+    const numericValue = text.replace(/[^0-9]/g, "");
 
     if (max !== undefined && Number(numericValue) > max) {
       return;
@@ -37,7 +50,7 @@ export const NumericInput: React.FC<NumericInputProps> = ({
   };
 
   const handleBlur = (e: any) => {
-    if (value !== '' && min !== undefined && Number(value) < min) {
+    if (value !== "" && min !== undefined && Number(value) < min) {
       onChange(min.toString());
     }
     if (props.onBlur) {
@@ -47,20 +60,28 @@ export const NumericInput: React.FC<NumericInputProps> = ({
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
       <TextInput
         style={[
           styles.input,
-          error ? styles.inputError : null,
-          style
+          {
+            backgroundColor: colors.inputBackground,
+            borderBottomColor: colors.primary,
+            color: colors.text,
+          },
+          error ? [styles.inputError, { borderColor: colors.error }] : null,
+          style,
         ]}
+        placeholderTextColor={colors.placeholderText}
         value={value}
         onChangeText={handleChangeText}
         onBlur={handleBlur}
         keyboardType="numeric"
         {...props}
       />
-      {error && <Text style={styles.errorText}>{error}</Text>}
+      {error && (
+        <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+      )}
     </View>
   );
 };
@@ -71,23 +92,23 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    color: '#333',
+    color: "#333",
     marginBottom: 8,
     marginTop: 8,
   },
   input: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#81007F',
+    borderBottomColor: "#81007F",
   },
   inputError: {
-    borderColor: '#ff4d4d',
+    borderColor: "#ff4d4d",
   },
   errorText: {
-    color: '#ff4d4d',
+    color: "#ff4d4d",
     fontSize: 12,
     marginTop: 4,
     marginLeft: 8,

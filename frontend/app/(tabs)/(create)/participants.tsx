@@ -14,8 +14,10 @@ import { Ionicons } from "@expo/vector-icons";
 import participantsService, {
   Participant,
 } from "../../../services/participants.service";
+import { useTheme } from "../../../contexts/ThemeContext";
 
 export default function ParticipantsScreen() {
+  const { colors } = useTheme();
   const { id, participantCount } = useLocalSearchParams();
   const router = useRouter();
 
@@ -49,7 +51,7 @@ export default function ParticipantsScreen() {
 
   const handleUpdateParticipant = async (
     participantId: string,
-    newName: string
+    newName: string,
   ) => {
     if (!newName.trim()) {
       Alert.alert("Atenção", "Digite um nome válido.");
@@ -59,16 +61,16 @@ export default function ParticipantsScreen() {
     try {
       const updated = await participantsService.updateParticipant(
         participantId,
-        newName
+        newName,
       );
       setParticipants((prev) =>
-        prev.map((p) => (p.id === participantId ? updated : p))
+        prev.map((p) => (p.id === participantId ? updated : p)),
       );
       setNameInput("");
     } catch (error: any) {
       Alert.alert(
         "Erro",
-        error.message || "Não foi possível atualizar o participante."
+        error.message || "Não foi possível atualizar o participante.",
       );
     }
   };
@@ -81,7 +83,7 @@ export default function ParticipantsScreen() {
 
     // Encontrar o primeiro participante com nome padrão "Pessoa X"
     const nextParticipant = participants.find((p) =>
-      p.name.startsWith("Pessoa ")
+      p.name.startsWith("Pessoa "),
     );
 
     if (nextParticipant) {
@@ -105,17 +107,25 @@ export default function ParticipantsScreen() {
 
   if (isLoading) {
     return (
-      <View style={[styles.container, styles.centerContent]}>
-        <ActivityIndicator size="large" color="#81007F" />
-        <Text style={styles.loadingText}>Carregando participantes...</Text>
+      <View
+        style={[
+          styles.container,
+          styles.centerContent,
+          { backgroundColor: colors.background },
+        ]}
+      >
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.text }]}>
+          Carregando participantes...
+        </Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.title}>
+        <Text style={[styles.title, { color: colors.text }]}>
           Defina os nomes (
           {participants.filter((p) => !p.name.startsWith("Pessoa ")).length}/
           {participants.length})
@@ -123,29 +133,56 @@ export default function ParticipantsScreen() {
 
         <View style={styles.inputRow}>
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              {
+                backgroundColor: colors.inputBackground,
+                borderColor: colors.inputBorder,
+                color: colors.text,
+              },
+            ]}
             placeholder="Digite o nome do participante..."
+            placeholderTextColor={colors.placeholderText}
             value={nameInput}
             onChangeText={setNameInput}
             onSubmitEditing={handleAddOrUpdateNext}
             editable={!isSaving}
           />
           <TouchableOpacity
-            style={[styles.okButton, isSaving && styles.okButtonDisabled]}
+            style={[
+              styles.okButton,
+              { backgroundColor: colors.primary },
+              isSaving && styles.okButtonDisabled,
+            ]}
             onPress={handleAddOrUpdateNext}
             disabled={isSaving}
           >
-            <Text style={styles.okButtonText}>OK</Text>
+            <Text style={[styles.okButtonText, { color: colors.accent }]}>
+              OK
+            </Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.listContainer}>
           {participants.map((participant, index) => (
-            <View key={participant.id} style={styles.participantRow}>
+            <View
+              key={participant.id}
+              style={[
+                styles.participantRow,
+                { backgroundColor: colors.cardBackground },
+              ]}
+            >
               <View style={styles.participantInfo}>
-                <Text style={styles.participantName}>{participant.name}</Text>
+                <Text style={[styles.participantName, { color: colors.text }]}>
+                  {participant.name}
+                </Text>
                 {participant.name.startsWith("Pessoa ") && (
-                  <Text style={styles.participantHint}>
+                  <Text
+                    style={[
+                      styles.participantHint,
+                      { color: colors.secondaryText },
+                    ]}
+                  >
                     Opcional - pode manter esse nome
                   </Text>
                 )}
@@ -170,15 +207,15 @@ export default function ParticipantsScreen() {
                                 }
                               },
                               "plain-text",
-                              participant.name
+                              participant.name,
                             );
                           },
                         },
-                      ]
+                      ],
                     );
                   }}
                 >
-                  <Ionicons name="pencil" size={20} color="#81007F" />
+                  <Ionicons name="pencil" size={20} color={colors.primary} />
                 </TouchableOpacity>
               )}
             </View>
@@ -186,13 +223,19 @@ export default function ParticipantsScreen() {
         </View>
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { backgroundColor: colors.background }]}>
         <TouchableOpacity
-          style={[styles.scanButton, isSaving && styles.scanButtonDisabled]}
+          style={[
+            styles.scanButton,
+            { backgroundColor: colors.primary },
+            isSaving && styles.scanButtonDisabled,
+          ]}
           onPress={handleScan}
           disabled={isSaving}
         >
-          <Text style={styles.scanButtonText}>Escanear</Text>
+          <Text style={[styles.scanButtonText, { color: colors.accent }]}>
+            Escanear
+          </Text>
         </TouchableOpacity>
       </View>
     </View>

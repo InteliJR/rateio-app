@@ -2,22 +2,26 @@ import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../../contexts/ThemeContext";
 
 export default function AboutScreen() {
+  const { colors } = useTheme();
   const router = useRouter();
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Back Button */}
       <TouchableOpacity
         onPress={() => router.push("/profile/config")}
-        style={styles.backButton}
+        style={[styles.backButton, { backgroundColor: colors.cardBackground }]}
       >
-        <Ionicons name="chevron-back" size={28} color="#333" />
+        <Ionicons name="chevron-back" size={28} color={colors.text} />
       </TouchableOpacity>
 
       <View style={styles.content}>
-        <Text style={styles.placeholderText}>Página Sobre</Text>
+        <Text style={[styles.placeholderText, { color: colors.secondaryText }]}>
+          Página Sobre
+        </Text>
       </View>
     </View>
   );
