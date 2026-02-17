@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../contexts/ThemeContext";
 
 export default function AboutScreen() {
-  const { colors } = useTheme();
+  const { colors, getFontSize } = useTheme();
   const router = useRouter();
 
   return (
@@ -19,7 +19,12 @@ export default function AboutScreen() {
       </TouchableOpacity>
 
       <View style={styles.content}>
-        <Text style={[styles.placeholderText, { color: colors.secondaryText }]}>
+        <Text
+          style={[
+            styles.placeholderText,
+            { color: colors.secondaryText, fontSize: getFontSize(18) },
+          ]}
+        >
           Página Sobre
         </Text>
       </View>

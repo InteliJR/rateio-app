@@ -1,6 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../../contexts/ThemeContext";
 
 export interface BillItem {
   id: string;
@@ -23,8 +30,9 @@ export const ItemCard: React.FC<ItemCardProps> = ({
   onDelete,
   onUpdate,
   isActive = false,
-  onPress
+  onPress,
 }) => {
+  const { colors, getFontSize } = useTheme();
   const [name, setName] = useState(item.name);
   const [quantity, setQuantity] = useState(item.quantity.toString());
   const [price, setPrice] = useState(item.price.toFixed(2));
@@ -36,19 +44,19 @@ export const ItemCard: React.FC<ItemCardProps> = ({
     setPrice(item.price.toFixed(2));
   }, [item]);
 
-  const handleBlur = (field: 'name' | 'quantity' | 'price') => {
+  const handleBlur = (field: "name" | "quantity" | "price") => {
     if (!onUpdate) return;
 
     let newItem = { ...item };
     let hasChanges = false;
 
-    if (field === 'name') {
+    if (field === "name") {
       const trimmed = name.trim();
       if (trimmed && trimmed !== item.name) {
         newItem.name = trimmed;
         hasChanges = true;
       }
-    } else if (field === 'quantity') {
+    } else if (field === "quantity") {
       const qty = parseInt(quantity, 10);
       if (!isNaN(qty) && qty >= 1 && qty !== item.quantity) {
         newItem.quantity = qty;
@@ -57,8 +65,8 @@ export const ItemCard: React.FC<ItemCardProps> = ({
         // Revert invalid
         setQuantity(item.quantity.toString());
       }
-    } else if (field === 'price') {
-      const normalized = price.replace(',', '.');
+    } else if (field === "price") {
+      const normalized = price.replace(",", ".");
       const val = parseFloat(normalized);
       if (!isNaN(val) && val >= 0 && val !== item.price) {
         newItem.price = val;
@@ -96,7 +104,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({
             style={[styles.input, styles.nameInput]}
             value={name}
             onChangeText={setName}
-            onBlur={() => handleBlur('name')}
+            onBlur={() => handleBlur("name")}
             placeholder="Nome do item"
             placeholderTextColor="#999"
           />
@@ -108,22 +116,26 @@ export const ItemCard: React.FC<ItemCardProps> = ({
             <TextInput
               style={[styles.input, styles.quantityInput]}
               value={quantity}
-              onChangeText={(text) => setQuantity(text.replace(/[^0-9]/g, ''))}
-              onBlur={() => handleBlur('quantity')}
+              onChangeText={(text) => setQuantity(text.replace(/[^0-9]/g, ""))}
+              onBlur={() => handleBlur("quantity")}
               keyboardType="number-pad"
               maxLength={3}
             />
-            <Text style={styles.suffix}>x</Text>
+            <Text style={[styles.suffix, { fontSize: getFontSize(16) }]}>
+              x
+            </Text>
           </View>
 
           {/* Preço */}
           <View style={styles.inputWrapper}>
-            <Text style={styles.prefix}>R$</Text>
+            <Text style={[styles.prefix, { fontSize: getFontSize(14) }]}>
+              R$
+            </Text>
             <TextInput
               style={[styles.input, styles.priceInput]}
               value={price}
-              onChangeText={(text) => setPrice(text.replace(/[^0-9,.]/g, ''))}
-              onBlur={() => handleBlur('price')}
+              onChangeText={(text) => setPrice(text.replace(/[^0-9,.]/g, ""))}
+              onBlur={() => handleBlur("price")}
               keyboardType="numeric"
             />
           </View>
@@ -134,7 +146,11 @@ export const ItemCard: React.FC<ItemCardProps> = ({
             onPress={onPress}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name={isActive ? "caret-down" : "caret-forward"} size={20} color="#666" />
+            <Ionicons
+              name={isActive ? "caret-down" : "caret-forward"}
+              size={20}
+              color="#666"
+            />
           </TouchableOpacity>
         </View>
       </View>
@@ -144,14 +160,14 @@ export const ItemCard: React.FC<ItemCardProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: "#ccc",
     marginBottom: 8,
   },
   deleteButton: {
@@ -160,57 +176,57 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   expandArea: {
     flex: 1,
     marginRight: 8,
   },
   detailsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
   },
   input: {
     fontSize: 16,
-    color: '#000',
+    color: "#000",
     padding: 0,
     borderBottomWidth: 1,
-    borderBottomColor: 'transparent', // Looks cleaner, can add color on focus if needed
+    borderBottomColor: "transparent", // Looks cleaner, can add color on focus if needed
   },
   nameInput: {
-    width: '100%',
+    width: "100%",
   },
   quantityInput: {
-    textAlign: 'center',
+    textAlign: "center",
     width: 30,
     borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
+    borderBottomColor: "#ddd",
   },
   priceInput: {
-    textAlign: 'right',
+    textAlign: "right",
     minWidth: 60,
     borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
+    borderBottomColor: "#ddd",
   },
   inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   suffix: {
     fontSize: 16,
-    color: '#666',
+    color: "#666",
     marginLeft: 2,
   },
   prefix: {
     fontSize: 14,
-    color: '#666',
+    color: "#666",
     marginRight: 2,
   },
   expandButton: {
     padding: 4,
     marginLeft: 4,
-  }
+  },
 });

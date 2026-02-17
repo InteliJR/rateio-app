@@ -33,7 +33,7 @@ export const NumericInput: React.FC<NumericInputProps> = ({
   style,
   ...props
 }) => {
-  const { colors } = useTheme();
+  const { colors, getFontSize } = useTheme();
   const handleChangeText = (text: string) => {
     if (text === "") {
       onChange(text);
@@ -60,7 +60,14 @@ export const NumericInput: React.FC<NumericInputProps> = ({
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
+      <Text
+        style={[
+          styles.label,
+          { color: colors.text, fontSize: getFontSize(14) },
+        ]}
+      >
+        {label}
+      </Text>
       <TextInput
         style={[
           styles.input,
@@ -80,7 +87,14 @@ export const NumericInput: React.FC<NumericInputProps> = ({
         {...props}
       />
       {error && (
-        <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+        <Text
+          style={[
+            styles.errorText,
+            { color: colors.error, fontSize: getFontSize(12) },
+          ]}
+        >
+          {error}
+        </Text>
       )}
     </View>
   );

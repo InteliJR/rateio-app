@@ -15,7 +15,7 @@ import { API_URL } from "../../services/api.service";
 import { useTheme } from "../../contexts/ThemeContext";
 
 export default function ConfigScreen() {
-  const { colors } = useTheme();
+  const { colors, getFontSize } = useTheme();
   const router = useRouter();
   const [userName, setUserName] = React.useState("");
   const [avatarUrl, setAvatarUrl] = React.useState<string | null>(null);
@@ -86,7 +86,12 @@ export default function ConfigScreen() {
               </View>
             )}
           </View>
-          <Text style={[styles.userName, { color: colors.text }]}>
+          <Text
+            style={[
+              styles.userName,
+              { color: colors.text, fontSize: getFontSize(24) },
+            ]}
+          >
             {userName || "Usuário"}
           </Text>
         </View>
@@ -108,7 +113,12 @@ export default function ConfigScreen() {
             ]}
             onPress={handleAccessibility}
           >
-            <Text style={[styles.optionText, { color: colors.text }]}>
+            <Text
+              style={[
+                styles.optionText,
+                { color: colors.text, fontSize: getFontSize(16) },
+              ]}
+            >
               Acessibilidade
             </Text>
             <Ionicons
@@ -125,7 +135,12 @@ export default function ConfigScreen() {
             ]}
             onPress={handleAbout}
           >
-            <Text style={[styles.optionText, { color: colors.text }]}>
+            <Text
+              style={[
+                styles.optionText,
+                { color: colors.text, fontSize: getFontSize(16) },
+              ]}
+            >
               Sobre
             </Text>
             <Ionicons

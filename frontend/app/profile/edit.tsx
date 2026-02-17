@@ -24,7 +24,7 @@ import { useTheme } from "../../contexts/ThemeContext";
 type EditField = "name" | "email" | null;
 
 export default function EditProfileScreen() {
-  const { colors } = useTheme();
+  const { colors, getFontSize } = useTheme();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -172,7 +172,12 @@ export default function EditProfileScreen() {
         ]}
       >
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.text }]}>
+        <Text
+          style={[
+            styles.loadingText,
+            { color: colors.text, fontSize: getFontSize(16) },
+          ]}
+        >
           Carregando seus dados...
         </Text>
       </View>
@@ -234,7 +239,12 @@ export default function EditProfileScreen() {
               )}
             </TouchableOpacity>
           </View>
-          <Text style={[styles.changePhotoText, { color: colors.text }]}>
+          <Text
+            style={[
+              styles.changePhotoText,
+              { color: colors.text, fontSize: getFontSize(14) },
+            ]}
+          >
             Alterar Foto
           </Text>
         </View>
@@ -254,11 +264,19 @@ export default function EditProfileScreen() {
           >
             <View style={styles.fieldContent}>
               <Text
-                style={[styles.fieldLabel, { color: colors.secondaryText }]}
+                style={[
+                  styles.fieldLabel,
+                  { color: colors.secondaryText, fontSize: getFontSize(14) },
+                ]}
               >
                 Nome
               </Text>
-              <Text style={[styles.fieldValue, { color: colors.text }]}>
+              <Text
+                style={[
+                  styles.fieldValue,
+                  { color: colors.text, fontSize: getFontSize(16) },
+                ]}
+              >
                 {name || "Não informado"}
               </Text>
             </View>
@@ -281,11 +299,19 @@ export default function EditProfileScreen() {
           >
             <View style={styles.fieldContent}>
               <Text
-                style={[styles.fieldLabel, { color: colors.secondaryText }]}
+                style={[
+                  styles.fieldLabel,
+                  { color: colors.secondaryText, fontSize: getFontSize(14) },
+                ]}
               >
                 Email
               </Text>
-              <Text style={[styles.fieldValue, { color: colors.text }]}>
+              <Text
+                style={[
+                  styles.fieldValue,
+                  { color: colors.text, fontSize: getFontSize(16) },
+                ]}
+              >
                 {email || "Não informado"}
               </Text>
             </View>
@@ -345,18 +371,28 @@ export default function EditProfileScreen() {
           >
             <View style={styles.modalHeader}>
               <TouchableOpacity onPress={closeEditModal}>
-                <Text style={[styles.modalCancel, { color: colors.error }]}>
+                <Text
+                  style={[
+                    styles.modalCancel,
+                    { color: colors.error, fontSize: getFontSize(16) },
+                  ]}
+                >
                   Cancelar
                 </Text>
               </TouchableOpacity>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>
+              <Text
+                style={[
+                  styles.modalTitle,
+                  { color: colors.text, fontSize: getFontSize(18) },
+                ]}
+              >
                 {editingField === "name" ? "Editar Nome" : "Editar Email"}
               </Text>
               <TouchableOpacity onPress={saveField} disabled={loading}>
                 <Text
                   style={[
                     styles.modalSave,
-                    { color: colors.primary },
+                    { color: colors.primary, fontSize: getFontSize(16) },
                     loading && styles.modalSaveDisabled,
                   ]}
                 >
@@ -366,7 +402,12 @@ export default function EditProfileScreen() {
             </View>
 
             <View style={styles.modalBody}>
-              <Text style={[styles.modalLabel, { color: colors.text }]}>
+              <Text
+                style={[
+                  styles.modalLabel,
+                  { color: colors.text, fontSize: getFontSize(14) },
+                ]}
+              >
                 {editingField === "name" ? "Nome" : "Email"}
               </Text>
               <TextInput

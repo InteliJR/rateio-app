@@ -40,7 +40,7 @@ interface BillSummaryData {
 
 export default function SummaryScreen() {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, getFontSize } = useTheme();
   const {
     billName,
     items: itemsParam,
@@ -236,7 +236,12 @@ export default function SummaryScreen() {
             >
               <Ionicons name="chevron-back" size={22} color={colors.text} />
             </TouchableOpacity>
-            <Text style={[styles.titleText, { color: colors.text }]}>
+            <Text
+              style={[
+                styles.titleText,
+                { color: colors.text, fontSize: getFontSize(18) },
+              ]}
+            >
               {billName || summary.establishmentName}
             </Text>
           </View>
@@ -265,14 +270,20 @@ export default function SummaryScreen() {
               >
                 <View style={styles.participantCardLeft}>
                   <Text
-                    style={[styles.participantName, { color: colors.text }]}
+                    style={[
+                      styles.participantName,
+                      { color: colors.text, fontSize: getFontSize(15) },
+                    ]}
                   >
                     {participant.name}
                   </Text>
                 </View>
                 <View style={styles.participantCardRight}>
                   <Text
-                    style={[styles.participantAmount, { color: colors.text }]}
+                    style={[
+                      styles.participantAmount,
+                      { color: colors.text, fontSize: getFontSize(15) },
+                    ]}
                   >
                     {formatCurrency(participant.totalAmount)}
                   </Text>
@@ -309,7 +320,10 @@ export default function SummaryScreen() {
                       <Text
                         style={[
                           styles.dropdownItemText,
-                          { color: colors.textSecondary },
+                          {
+                            color: colors.textSecondary,
+                            fontSize: getFontSize(13),
+                          },
                         ]}
                         numberOfLines={1}
                         ellipsizeMode="tail"
@@ -319,7 +333,10 @@ export default function SummaryScreen() {
                       <Text
                         style={[
                           styles.dropdownItemAmount,
-                          { color: colors.textSecondary },
+                          {
+                            color: colors.textSecondary,
+                            fontSize: getFontSize(13),
+                          },
                         ]}
                       >
                         {formatCurrency(item.amount)}
@@ -362,7 +379,10 @@ export default function SummaryScreen() {
                       <Text
                         style={[
                           styles.dropdownFeeText,
-                          { color: colors.textTertiary },
+                          {
+                            color: colors.textTertiary,
+                            fontSize: getFontSize(13),
+                          },
                         ]}
                       >
                         Taxa de Serviço
@@ -371,7 +391,10 @@ export default function SummaryScreen() {
                     <Text
                       style={[
                         styles.dropdownItemAmount,
-                        { color: colors.textSecondary },
+                        {
+                          color: colors.textSecondary,
+                          fontSize: getFontSize(13),
+                        },
                       ]}
                     >
                       {formatCurrency(participant.fees[0]?.amount || 0)}
@@ -392,10 +415,20 @@ export default function SummaryScreen() {
               },
             ]}
           >
-            <Text style={[styles.totalCardLabel, { color: colors.text }]}>
+            <Text
+              style={[
+                styles.totalCardLabel,
+                { color: colors.text, fontSize: getFontSize(15) },
+              ]}
+            >
               Valor Total
             </Text>
-            <Text style={[styles.totalCardAmount, { color: colors.text }]}>
+            <Text
+              style={[
+                styles.totalCardAmount,
+                { color: colors.text, fontSize: getFontSize(15) },
+              ]}
+            >
               {formatCurrency(summary.grandTotal)}
             </Text>
           </View>
@@ -405,7 +438,12 @@ export default function SummaryScreen() {
             style={[styles.saveButton, { backgroundColor: colors.primary }]}
             onPress={handleSave}
           >
-            <Text style={[styles.saveButtonText, { color: colors.accent }]}>
+            <Text
+              style={[
+                styles.saveButtonText,
+                { color: colors.accent, fontSize: getFontSize(16) },
+              ]}
+            >
               Salvar
             </Text>
           </TouchableOpacity>

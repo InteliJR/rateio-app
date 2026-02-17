@@ -22,7 +22,7 @@ import { useTheme } from "../../../contexts/ThemeContext";
 const { width, height } = Dimensions.get("window");
 
 export default function CameraScreen() {
-  const { colors } = useTheme();
+  const { colors, getFontSize } = useTheme();
   const router = useRouter();
   const { id, participants } = useLocalSearchParams();
   const cameraRef = useRef<CameraView>(null);
@@ -443,12 +443,18 @@ export default function CameraScreen() {
   if (!permission.granted) {
     return (
       <View style={styles.container}>
-        <Text style={styles.permissionText}>Precisamos de acesso à câmera</Text>
+        <Text style={[styles.permissionText, { fontSize: getFontSize(18) }]}>
+          Precisamos de acesso à câmera
+        </Text>
         <TouchableOpacity
           style={styles.permissionButton}
           onPress={requestPermission}
         >
-          <Text style={styles.permissionButtonText}>Conceder Permissão</Text>
+          <Text
+            style={[styles.permissionButtonText, { fontSize: getFontSize(16) }]}
+          >
+            Conceder Permissão
+          </Text>
         </TouchableOpacity>
       </View>
     );
@@ -478,7 +484,12 @@ export default function CameraScreen() {
             <View style={styles.loadingOverlay}>
               <View style={styles.loadingContent}>
                 <ActivityIndicator size="large" color={colors.accent} />
-                <Text style={[styles.loadingText, { color: colors.accent }]}>
+                <Text
+                  style={[
+                    styles.loadingText,
+                    { color: colors.accent, fontSize: getFontSize(18) },
+                  ]}
+                >
                   {getProgressMessage()}
                 </Text>
 
@@ -500,13 +511,23 @@ export default function CameraScreen() {
                       ]}
                     />
                   </View>
-                  <Text style={[styles.progressText, { color: colors.accent }]}>
+                  <Text
+                    style={[
+                      styles.progressText,
+                      { color: colors.accent, fontSize: getFontSize(14) },
+                    ]}
+                  >
                     {uploadProgress}%
                   </Text>
                 </View>
 
                 {/* Dica baseada no estágio */}
-                <Text style={[styles.progressHint, { color: colors.accent }]}>
+                <Text
+                  style={[
+                    styles.progressHint,
+                    { color: colors.accent, fontSize: getFontSize(14) },
+                  ]}
+                >
                   {uploadStage === "optimizing" && "Preparando sua imagem..."}
                   {uploadStage === "uploading" &&
                     "Isso pode levar alguns segundos..."}
@@ -547,7 +568,7 @@ export default function CameraScreen() {
             <Text
               style={[
                 styles.confirmButtonText,
-                { color: colors.accent },
+                { color: colors.accent, fontSize: getFontSize(18) },
                 isLoading && styles.buttonTextDisabled,
               ]}
             >

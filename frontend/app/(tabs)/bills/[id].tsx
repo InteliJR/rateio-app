@@ -38,7 +38,7 @@ import billService, {
 } from "../../../services/bill.service";
 
 export default function BillDetail() {
-  const { colors } = useTheme();
+  const { colors, getFontSize } = useTheme();
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const [data, setData] = useState<BillSummaryResponse | null>(null);
@@ -86,7 +86,12 @@ export default function BillDetail() {
       >
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.text }]}>
+          <Text
+            style={[
+              styles.loadingText,
+              { color: colors.text, fontSize: getFontSize(14) },
+            ]}
+          >
             Carregando conta...
           </Text>
         </View>
@@ -100,7 +105,12 @@ export default function BillDetail() {
         style={[styles.container, { backgroundColor: colors.background }]}
       >
         <View style={styles.errorContainer}>
-          <Text style={[styles.errorText, { color: colors.text }]}>
+          <Text
+            style={[
+              styles.errorText,
+              { color: colors.text, fontSize: getFontSize(16) },
+            ]}
+          >
             Conta não encontrada
           </Text>
         </View>
@@ -127,13 +137,23 @@ export default function BillDetail() {
             >
               <Ionicons name="chevron-back" size={22} color={colors.text} />
             </TouchableOpacity>
-            <Text style={[styles.titleText, { color: colors.text }]}>
+            <Text
+              style={[
+                styles.titleText,
+                { color: colors.text, fontSize: getFontSize(18) },
+              ]}
+            >
               {data.bill.establishmentName || "Detalhes"}
             </Text>
             <TouchableOpacity
               style={[styles.editButton, { backgroundColor: colors.primary }]}
             >
-              <Text style={[styles.editButtonText, { color: colors.accent }]}>
+              <Text
+                style={[
+                  styles.editButtonText,
+                  { color: colors.accent, fontSize: getFontSize(13) },
+                ]}
+              >
                 Editar
               </Text>
             </TouchableOpacity>
@@ -153,11 +173,19 @@ export default function BillDetail() {
                 color={colors.error}
               />
               <View style={styles.warningContent}>
-                <Text style={[styles.warningTitle, { color: colors.error }]}>
+                <Text
+                  style={[
+                    styles.warningTitle,
+                    { color: colors.error, fontSize: getFontSize(15) },
+                  ]}
+                >
                   Falha no processamento
                 </Text>
                 <Text
-                  style={[styles.warningText, { color: colors.secondaryText }]}
+                  style={[
+                    styles.warningText,
+                    { color: colors.secondaryText, fontSize: getFontSize(13) },
+                  ]}
                 >
                   Não foi possível ler os itens da nota automaticamente. Por
                   favor, verifique os valores ou edite manualmente.
@@ -167,7 +195,12 @@ export default function BillDetail() {
           )}
 
           {/* Seção de Itens da Conta */}
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          <Text
+            style={[
+              styles.sectionTitle,
+              { color: colors.text, fontSize: getFontSize(18) },
+            ]}
+          >
             Itens da Conta
           </Text>
           <View
@@ -188,16 +221,32 @@ export default function BillDetail() {
                 ]}
               >
                 <View style={styles.itemInfo}>
-                  <Text style={[styles.itemName, { color: colors.text }]}>
+                  <Text
+                    style={[
+                      styles.itemName,
+                      { color: colors.text, fontSize: getFontSize(15) },
+                    ]}
+                  >
                     {item.name}
                   </Text>
                   <Text
-                    style={[styles.itemQty, { color: colors.secondaryText }]}
+                    style={[
+                      styles.itemQty,
+                      {
+                        color: colors.secondaryText,
+                        fontSize: getFontSize(13),
+                      },
+                    ]}
                   >
                     {item.quantity}x {formatCurrency(item.unitPrice)}
                   </Text>
                 </View>
-                <Text style={[styles.itemTotal, { color: colors.text }]}>
+                <Text
+                  style={[
+                    styles.itemTotal,
+                    { color: colors.text, fontSize: getFontSize(15) },
+                  ]}
+                >
                   {formatCurrency(item.totalPrice)}
                 </Text>
               </View>
@@ -206,17 +255,32 @@ export default function BillDetail() {
               style={[styles.divider, { backgroundColor: colors.divider }]}
             />
             <View style={styles.totalRow}>
-              <Text style={[styles.totalLabel, { color: colors.text }]}>
+              <Text
+                style={[
+                  styles.totalLabel,
+                  { color: colors.text, fontSize: getFontSize(15) },
+                ]}
+              >
                 Subtotal
               </Text>
-              <Text style={[styles.totalValue, { color: colors.primary }]}>
+              <Text
+                style={[
+                  styles.totalValue,
+                  { color: colors.primary, fontSize: getFontSize(15) },
+                ]}
+              >
                 {formatCurrency(data.summary?.subtotal)}
               </Text>
             </View>
           </View>
 
           {/* Seção de Participantes */}
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          <Text
+            style={[
+              styles.sectionTitle,
+              { color: colors.text, fontSize: getFontSize(18) },
+            ]}
+          >
             Por Pessoa
           </Text>
           {(data.participants || []).map((participant) => (
@@ -232,12 +296,20 @@ export default function BillDetail() {
                 onPress={() => toggleParticipant(participant.id)}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.participantName, { color: colors.text }]}>
+                <Text
+                  style={[
+                    styles.participantName,
+                    { color: colors.text, fontSize: getFontSize(16) },
+                  ]}
+                >
                   {participant.name}
                 </Text>
                 <View style={styles.participantHeaderRight}>
                   <Text
-                    style={[styles.participantTotal, { color: colors.primary }]}
+                    style={[
+                      styles.participantTotal,
+                      { color: colors.primary, fontSize: getFontSize(16) },
+                    ]}
                   >
                     {formatCurrency(participant.total)}
                   </Text>
@@ -263,12 +335,20 @@ export default function BillDetail() {
                   {/* Itens do participante */}
                   {(participant.items || []).map((item) => (
                     <View key={item.id} style={styles.detailRow}>
-                      <Text style={[styles.detailText, { color: colors.text }]}>
+                      <Text
+                        style={[
+                          styles.detailText,
+                          { color: colors.text, fontSize: getFontSize(14) },
+                        ]}
+                      >
                         {item.name} (
                         {item.quantity > 1 ? `${item.quantity}x` : "1x"})
                       </Text>
                       <Text
-                        style={[styles.detailValue, { color: colors.text }]}
+                        style={[
+                          styles.detailValue,
+                          { color: colors.text, fontSize: getFontSize(14) },
+                        ]}
                       >
                         {formatCurrency(item.shareAmount)}
                       </Text>
@@ -290,7 +370,10 @@ export default function BillDetail() {
                             <Text
                               style={[
                                 styles.detailTextFee,
-                                { color: colors.secondaryText },
+                                {
+                                  color: colors.secondaryText,
+                                  fontSize: getFontSize(13),
+                                },
                               ]}
                             >
                               {fee.type === "SERVICE_PERCENTAGE"
@@ -302,7 +385,10 @@ export default function BillDetail() {
                             <Text
                               style={[
                                 styles.detailValueFee,
-                                { color: colors.secondaryText },
+                                {
+                                  color: colors.secondaryText,
+                                  fontSize: getFontSize(13),
+                                },
                               ]}
                             >
                               {formatCurrency(fee.participantShare)}
@@ -324,26 +410,56 @@ export default function BillDetail() {
             ]}
           >
             <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: colors.text }]}>
+              <Text
+                style={[
+                  styles.summaryLabel,
+                  { color: colors.text, fontSize: getFontSize(15) },
+                ]}
+              >
                 Subtotal
               </Text>
-              <Text style={[styles.summaryValue, { color: colors.text }]}>
+              <Text
+                style={[
+                  styles.summaryValue,
+                  { color: colors.text, fontSize: getFontSize(15) },
+                ]}
+              >
                 {formatCurrency(data.summary.subtotal)}
               </Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: colors.text }]}>
+              <Text
+                style={[
+                  styles.summaryLabel,
+                  { color: colors.text, fontSize: getFontSize(15) },
+                ]}
+              >
                 Taxas / Serviço
               </Text>
-              <Text style={[styles.summaryValue, { color: colors.text }]}>
+              <Text
+                style={[
+                  styles.summaryValue,
+                  { color: colors.text, fontSize: getFontSize(15) },
+                ]}
+              >
                 {formatCurrency(data.summary.totalFees)}
               </Text>
             </View>
             <View style={[styles.summaryRow, styles.marginTop]}>
-              <Text style={[styles.finalTotalLabel, { color: colors.primary }]}>
+              <Text
+                style={[
+                  styles.finalTotalLabel,
+                  { color: colors.primary, fontSize: getFontSize(17) },
+                ]}
+              >
                 Total Geral
               </Text>
-              <Text style={[styles.finalTotalValue, { color: colors.primary }]}>
+              <Text
+                style={[
+                  styles.finalTotalValue,
+                  { color: colors.primary, fontSize: getFontSize(17) },
+                ]}
+              >
                 {formatCurrency(data.summary.total)}
               </Text>
             </View>
@@ -353,7 +469,12 @@ export default function BillDetail() {
           <TouchableOpacity
             style={[styles.reuseButton, { backgroundColor: colors.primary }]}
           >
-            <Text style={[styles.reuseButtonText, { color: colors.accent }]}>
+            <Text
+              style={[
+                styles.reuseButtonText,
+                { color: colors.accent, fontSize: getFontSize(16) },
+              ]}
+            >
               Reutilizar Conta
             </Text>
           </TouchableOpacity>

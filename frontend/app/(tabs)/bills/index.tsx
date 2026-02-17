@@ -30,7 +30,7 @@ const DATE_FILTERS = [
 
 export default function BillsScreen() {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, getFontSize } = useTheme();
   const [selectedDateFilter, setSelectedDateFilter] = useState<string>("all");
   const [showFilters, setShowFilters] = useState(false);
   const [searchText, setSearchText] = useState<string>("");
@@ -132,10 +132,20 @@ export default function BillsScreen() {
       activeOpacity={0.7}
     >
       <View style={styles.cardContent}>
-        <Text style={[styles.cardTitle, { color: colors.text }]}>
+        <Text
+          style={[
+            styles.cardTitle,
+            { color: colors.text, fontSize: getFontSize(16) },
+          ]}
+        >
           {item.establishmentName || "Sem nome"}
         </Text>
-        <Text style={[styles.cardDate, { color: colors.textSecondary }]}>
+        <Text
+          style={[
+            styles.cardDate,
+            { color: colors.textSecondary, fontSize: getFontSize(14) },
+          ]}
+        >
           {new Date(item.createdAt).toLocaleDateString("pt-BR")}
         </Text>
       </View>
@@ -153,7 +163,12 @@ export default function BillsScreen() {
       <View
         style={[styles.filterHeader, { borderBottomColor: colors.divider }]}
       >
-        <Text style={[styles.filterTitle, { color: colors.text }]}>
+        <Text
+          style={[
+            styles.filterTitle,
+            { color: colors.text, fontSize: getFontSize(16) },
+          ]}
+        >
           Filtrar por data
         </Text>
         <TouchableOpacity onPress={() => setShowFilters(false)}>
@@ -186,7 +201,12 @@ export default function BillsScreen() {
                 />
               )}
             </View>
-            <Text style={[styles.filterOptionText, { color: colors.text }]}>
+            <Text
+              style={[
+                styles.filterOptionText,
+                { color: colors.text, fontSize: getFontSize(14) },
+              ]}
+            >
               {filter.label}
             </Text>
           </TouchableOpacity>
@@ -201,7 +221,12 @@ export default function BillsScreen() {
       return (
         <View style={styles.emptyContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+          <Text
+            style={[
+              styles.emptyText,
+              { color: colors.textSecondary, fontSize: getFontSize(16) },
+            ]}
+          >
             Carregando contas...
           </Text>
         </View>
@@ -211,11 +236,22 @@ export default function BillsScreen() {
     if (isError) {
       return (
         <View style={styles.emptyContainer}>
-          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+          <Text
+            style={[
+              styles.emptyText,
+              { color: colors.textSecondary, fontSize: getFontSize(16) },
+            ]}
+          >
             Erro ao carregar contas.
           </Text>
           <TouchableOpacity onPress={() => refetch()} style={{ marginTop: 10 }}>
-            <Text style={{ color: colors.primary, fontWeight: "bold" }}>
+            <Text
+              style={{
+                color: colors.primary,
+                fontWeight: "bold",
+                fontSize: getFontSize(14),
+              }}
+            >
               Tentar novamente
             </Text>
           </TouchableOpacity>
@@ -225,7 +261,12 @@ export default function BillsScreen() {
 
     return (
       <View style={styles.emptyContainer}>
-        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+        <Text
+          style={[
+            styles.emptyText,
+            { color: colors.textSecondary, fontSize: getFontSize(16) },
+          ]}
+        >
           Nenhuma conta encontrada
         </Text>
       </View>
@@ -247,7 +288,14 @@ export default function BillsScreen() {
       style={[styles.container, { backgroundColor: colors.background }]}
     >
       <View style={[styles.header, { backgroundColor: colors.background }]}>
-        <Text style={[styles.title, { color: colors.text }]}>Contas</Text>
+        <Text
+          style={[
+            styles.title,
+            { color: colors.text, fontSize: getFontSize(24) },
+          ]}
+        >
+          Contas
+        </Text>
       </View>
 
       <View style={styles.searchFilterRow}>
@@ -267,7 +315,10 @@ export default function BillsScreen() {
             style={styles.searchIcon}
           />
           <TextInput
-            style={[styles.searchInput, { color: colors.text }]}
+            style={[
+              styles.searchInput,
+              { color: colors.text, fontSize: getFontSize(14) },
+            ]}
             placeholder="Buscar...."
             placeholderTextColor={colors.placeholderText}
             value={searchText}
@@ -284,7 +335,12 @@ export default function BillsScreen() {
             size={20}
             color={colors.primary}
           />
-          <Text style={[styles.filterButtonText, { color: colors.primary }]}>
+          <Text
+            style={[
+              styles.filterButtonText,
+              { color: colors.primary, fontSize: getFontSize(12) },
+            ]}
+          >
             Filtro
           </Text>
         </TouchableOpacity>

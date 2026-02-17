@@ -61,7 +61,7 @@ const newBillSchema = z
 
 export default function NewBillScreen() {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, getFontSize } = useTheme();
   // const { id } = useLocalSearchParams();
   const [isLoading, setIsLoading] = useState(false);
 
@@ -124,7 +124,12 @@ export default function NewBillScreen() {
       >
         <View style={styles.content}>
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            <Text
+              style={[
+                styles.sectionTitle,
+                { color: colors.text, fontSize: getFontSize(24) },
+              ]}
+            >
               Adicionar pessoas
             </Text>
 
@@ -145,7 +150,12 @@ export default function NewBillScreen() {
               )}
             />
 
-            <Text style={[styles.label, { color: colors.text }]}>
+            <Text
+              style={[
+                styles.label,
+                { color: colors.text, fontSize: getFontSize(14) },
+              ]}
+            >
               Deseja definir o nome?
             </Text>
             <View style={styles.radioGroup}>
@@ -168,7 +178,12 @@ export default function NewBillScreen() {
                     />
                   )}
                 </View>
-                <Text style={[styles.radioLabel, { color: colors.text }]}>
+                <Text
+                  style={[
+                    styles.radioLabel,
+                    { color: colors.text, fontSize: getFontSize(14) },
+                  ]}
+                >
                   Sim
                 </Text>
               </TouchableOpacity>
@@ -193,7 +208,12 @@ export default function NewBillScreen() {
                     />
                   )}
                 </View>
-                <Text style={[styles.radioLabel, { color: colors.text }]}>
+                <Text
+                  style={[
+                    styles.radioLabel,
+                    { color: colors.text, fontSize: getFontSize(14) },
+                  ]}
+                >
                   Não
                 </Text>
               </TouchableOpacity>
@@ -226,7 +246,9 @@ export default function NewBillScreen() {
                   )}
                 />
                 {errors.billName && (
-                  <Text style={styles.errorText}>
+                  <Text
+                    style={[styles.errorText, { fontSize: getFontSize(12) }]}
+                  >
                     {errors.billName.message}
                   </Text>
                 )}
@@ -235,7 +257,12 @@ export default function NewBillScreen() {
           </View>
 
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            <Text
+              style={[
+                styles.sectionTitle,
+                { color: colors.text, fontSize: getFontSize(24) },
+              ]}
+            >
               Definir a taxa de serviço
             </Text>
 
@@ -275,7 +302,12 @@ export default function NewBillScreen() {
           {isLoading ? (
             <ActivityIndicator color={colors.accent} />
           ) : (
-            <Text style={[styles.buttonText, { color: colors.accent }]}>
+            <Text
+              style={[
+                styles.buttonText,
+                { color: colors.accent, fontSize: getFontSize(18) },
+              ]}
+            >
               Confirmar
             </Text>
           )}

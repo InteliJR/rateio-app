@@ -19,7 +19,7 @@ import { API_URL } from "../../services/api.service";
 import { useTheme } from "../../contexts/ThemeContext";
 
 export default function SecurityScreen() {
-  const { colors } = useTheme();
+  const { colors, getFontSize } = useTheme();
   const router = useRouter();
   const [userName, setUserName] = React.useState("");
   const [avatarUrl, setAvatarUrl] = React.useState<string | null>(null);
@@ -141,7 +141,12 @@ export default function SecurityScreen() {
               </View>
             )}
           </View>
-          <Text style={[styles.userName, { color: colors.text }]}>
+          <Text
+            style={[
+              styles.userName,
+              { color: colors.text, fontSize: getFontSize(24) },
+            ]}
+          >
             {userName || "Usuário"}
           </Text>
         </View>
@@ -163,7 +168,12 @@ export default function SecurityScreen() {
             ]}
             onPress={openPasswordModal}
           >
-            <Text style={[styles.optionText, { color: colors.text }]}>
+            <Text
+              style={[
+                styles.optionText,
+                { color: colors.text, fontSize: getFontSize(16) },
+              ]}
+            >
               Alterar Senha
             </Text>
             <Ionicons
@@ -193,18 +203,28 @@ export default function SecurityScreen() {
           >
             <View style={styles.modalHeader}>
               <TouchableOpacity onPress={closePasswordModal}>
-                <Text style={[styles.modalCancel, { color: colors.error }]}>
+                <Text
+                  style={[
+                    styles.modalCancel,
+                    { color: colors.error, fontSize: getFontSize(16) },
+                  ]}
+                >
                   Cancelar
                 </Text>
               </TouchableOpacity>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>
+              <Text
+                style={[
+                  styles.modalTitle,
+                  { color: colors.text, fontSize: getFontSize(18) },
+                ]}
+              >
                 Alterar Senha
               </Text>
               <TouchableOpacity onPress={handleSavePassword} disabled={loading}>
                 <Text
                   style={[
                     styles.modalSave,
-                    { color: colors.primary },
+                    { color: colors.primary, fontSize: getFontSize(16) },
                     loading && styles.modalSaveDisabled,
                   ]}
                 >
@@ -216,7 +236,12 @@ export default function SecurityScreen() {
             <ScrollView style={styles.modalBody}>
               {/* Senha Atual */}
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.text }]}>
+                <Text
+                  style={[
+                    styles.inputLabel,
+                    { color: colors.text, fontSize: getFontSize(14) },
+                  ]}
+                >
                   Senha Atual
                 </Text>
                 <View
@@ -252,7 +277,12 @@ export default function SecurityScreen() {
 
               {/* Nova Senha */}
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.text }]}>
+                <Text
+                  style={[
+                    styles.inputLabel,
+                    { color: colors.text, fontSize: getFontSize(14) },
+                  ]}
+                >
                   Nova Senha
                 </Text>
                 <View
@@ -288,7 +318,12 @@ export default function SecurityScreen() {
 
               {/* Confirmar Senha */}
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.text }]}>
+                <Text
+                  style={[
+                    styles.inputLabel,
+                    { color: colors.text, fontSize: getFontSize(14) },
+                  ]}
+                >
                   Confirmar Nova Senha
                 </Text>
                 <View

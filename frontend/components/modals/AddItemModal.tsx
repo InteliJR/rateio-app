@@ -26,7 +26,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
   onClose,
   onAdd,
 }) => {
-  const { colors } = useTheme();
+  const { colors, getFontSize } = useTheme();
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("");
   const [value, setValue] = useState("");
@@ -130,11 +130,25 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
         <TouchableOpacity onPress={handleClose} style={styles.backButton}>
           <Ionicons name="close" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.text }]}>Novo Item</Text>
+        <Text
+          style={[
+            styles.title,
+            { color: colors.text, fontSize: getFontSize(20) },
+          ]}
+        >
+          Novo Item
+        </Text>
         <View style={{ width: 24 }} />
       </View>
 
-      <Text style={[styles.label, { color: colors.text }]}>Nome</Text>
+      <Text
+        style={[
+          styles.label,
+          { color: colors.text, fontSize: getFontSize(14) },
+        ]}
+      >
+        Nome
+      </Text>
       <TextInput
         style={[
           styles.input,
@@ -164,12 +178,24 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
         importantForAutofill="no"
       />
       {errors.name ? (
-        <Text style={[styles.errorText, { color: colors.error }]}>
+        <Text
+          style={[
+            styles.errorText,
+            { color: colors.error, fontSize: getFontSize(12) },
+          ]}
+        >
           {errors.name}
         </Text>
       ) : null}
 
-      <Text style={[styles.label, { color: colors.text }]}>Quantidade</Text>
+      <Text
+        style={[
+          styles.label,
+          { color: colors.text, fontSize: getFontSize(14) },
+        ]}
+      >
+        Quantidade
+      </Text>
       <TextInput
         style={[
           styles.input,
@@ -200,12 +226,24 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
         importantForAutofill="no"
       />
       {errors.quantity ? (
-        <Text style={[styles.errorText, { color: colors.error }]}>
+        <Text
+          style={[
+            styles.errorText,
+            { color: colors.error, fontSize: getFontSize(12) },
+          ]}
+        >
           {errors.quantity}
         </Text>
       ) : null}
 
-      <Text style={[styles.label, { color: colors.text }]}>Preço Unitário</Text>
+      <Text
+        style={[
+          styles.label,
+          { color: colors.text, fontSize: getFontSize(14) },
+        ]}
+      >
+        Preço Unitário
+      </Text>
       <TextInput
         style={[
           styles.input,
@@ -233,7 +271,12 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
         importantForAutofill="no"
       />
       {errors.value ? (
-        <Text style={[styles.errorText, { color: colors.error }]}>
+        <Text
+          style={[
+            styles.errorText,
+            { color: colors.error, fontSize: getFontSize(12) },
+          ]}
+        >
           {errors.value}
         </Text>
       ) : null}
@@ -242,7 +285,12 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
         style={[styles.addButton, { backgroundColor: colors.primary }]}
         onPress={handleAdd}
       >
-        <Text style={[styles.addButtonText, { color: colors.accent }]}>
+        <Text
+          style={[
+            styles.addButtonText,
+            { color: colors.accent, fontSize: getFontSize(16) },
+          ]}
+        >
           Adicionar
         </Text>
       </TouchableOpacity>

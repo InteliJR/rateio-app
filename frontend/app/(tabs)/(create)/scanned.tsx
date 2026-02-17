@@ -23,7 +23,7 @@ import participantsService, {
 import { useTheme } from "../../../contexts/ThemeContext";
 
 export default function ScannedBillScreen() {
-  const { colors } = useTheme();
+  const { colors, getFontSize } = useTheme();
   const { id, participants: participantsParam } = useLocalSearchParams();
   const router = useRouter();
 
@@ -621,7 +621,12 @@ export default function ScannedBillScreen() {
                 style={[styles.addItemBtn, { backgroundColor: colors.primary }]}
                 onPress={() => setIsModalVisible(true)}
               >
-                <Text style={[styles.addItemBtnText, { color: colors.accent }]}>
+                <Text
+                  style={[
+                    styles.addItemBtnText,
+                    { color: colors.accent, fontSize: getFontSize(12) },
+                  ]}
+                >
                   + Item
                 </Text>
               </TouchableOpacity>
@@ -631,13 +636,18 @@ export default function ScannedBillScreen() {
             {processingOcr && (
               <View style={styles.processingContainer}>
                 <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={[styles.processingText, { color: colors.text }]}>
+                <Text
+                  style={[
+                    styles.processingText,
+                    { color: colors.text, fontSize: getFontSize(16) },
+                  ]}
+                >
                   Processando imagem e reconhecendo itens...
                 </Text>
                 <Text
                   style={[
                     styles.processingSubtext,
-                    { color: colors.secondaryText },
+                    { color: colors.secondaryText, fontSize: getFontSize(14) },
                   ]}
                 >
                   Isso pode levar alguns segundos
@@ -653,11 +663,19 @@ export default function ScannedBillScreen() {
                   size={48}
                   color="#FF6B6B"
                 />
-                <Text style={[styles.errorTitle, { color: colors.text }]}>
+                <Text
+                  style={[
+                    styles.errorTitle,
+                    { color: colors.text, fontSize: getFontSize(18) },
+                  ]}
+                >
                   Não foi possível reconhecer os itens
                 </Text>
                 <Text
-                  style={[styles.errorText, { color: colors.secondaryText }]}
+                  style={[
+                    styles.errorText,
+                    { color: colors.secondaryText, fontSize: getFontSize(14) },
+                  ]}
                 >
                   Você pode adicionar os itens manualmente usando o botão "+
                   Item"
@@ -713,7 +731,10 @@ export default function ScannedBillScreen() {
                             <Text
                               style={[
                                 styles.itemCardNameText,
-                                { color: colors.text },
+                                {
+                                  color: colors.text,
+                                  fontSize: getFontSize(14),
+                                },
                               ]}
                               numberOfLines={1}
                               ellipsizeMode="tail"
@@ -769,7 +790,12 @@ export default function ScannedBillScreen() {
                           selectionColor={colors.primary}
                         />
                       </View>
-                      <Text style={[styles.qtySuffix, { color: colors.text }]}>
+                      <Text
+                        style={[
+                          styles.qtySuffix,
+                          { color: colors.text, fontSize: getFontSize(14) },
+                        ]}
+                      >
                         x
                       </Text>
                       <View style={styles.inputWrapper}>
@@ -872,7 +898,10 @@ export default function ScannedBillScreen() {
                                 <Text
                                   style={[
                                     styles.participantName,
-                                    { color: colors.text },
+                                    {
+                                      color: colors.text,
+                                      fontSize: getFontSize(13),
+                                    },
                                   ]}
                                 >
                                   {participant}
@@ -905,7 +934,10 @@ export default function ScannedBillScreen() {
                           <Text
                             style={[
                               styles.addItemButtonLabel,
-                              { color: colors.accent },
+                              {
+                                color: colors.accent,
+                                fontSize: getFontSize(13),
+                              },
                             ]}
                           >
                             Adicionar
@@ -925,11 +957,19 @@ export default function ScannedBillScreen() {
                   { backgroundColor: colors.cardBackground },
                 ]}
               >
-                <Text style={[styles.totalCardLabel, { color: colors.text }]}>
+                <Text
+                  style={[
+                    styles.totalCardLabel,
+                    { color: colors.text, fontSize: getFontSize(15) },
+                  ]}
+                >
                   Total:
                 </Text>
                 <Text
-                  style={[styles.totalCardAmount, { color: colors.primary }]}
+                  style={[
+                    styles.totalCardAmount,
+                    { color: colors.primary, fontSize: getFontSize(15) },
+                  ]}
                 >
                   {formatCurrency(calculateTotal())}
                 </Text>
@@ -942,7 +982,12 @@ export default function ScannedBillScreen() {
                 style={[styles.summaryBtn, { backgroundColor: colors.primary }]}
                 onPress={handleSummary}
               >
-                <Text style={[styles.summaryBtnText, { color: colors.accent }]}>
+                <Text
+                  style={[
+                    styles.summaryBtnText,
+                    { color: colors.accent, fontSize: getFontSize(16) },
+                  ]}
+                >
                   Visualizar resumo
                 </Text>
               </TouchableOpacity>

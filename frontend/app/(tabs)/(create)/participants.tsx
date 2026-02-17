@@ -17,7 +17,7 @@ import participantsService, {
 import { useTheme } from "../../../contexts/ThemeContext";
 
 export default function ParticipantsScreen() {
-  const { colors } = useTheme();
+  const { colors, getFontSize } = useTheme();
   const { id, participantCount } = useLocalSearchParams();
   const router = useRouter();
 
@@ -115,7 +115,12 @@ export default function ParticipantsScreen() {
         ]}
       >
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.text }]}>
+        <Text
+          style={[
+            styles.loadingText,
+            { color: colors.text, fontSize: getFontSize(16) },
+          ]}
+        >
           Carregando participantes...
         </Text>
       </View>
@@ -125,7 +130,12 @@ export default function ParticipantsScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={[styles.title, { color: colors.text }]}>
+        <Text
+          style={[
+            styles.title,
+            { color: colors.text, fontSize: getFontSize(24) },
+          ]}
+        >
           Defina os nomes (
           {participants.filter((p) => !p.name.startsWith("Pessoa ")).length}/
           {participants.length})
@@ -157,7 +167,12 @@ export default function ParticipantsScreen() {
             onPress={handleAddOrUpdateNext}
             disabled={isSaving}
           >
-            <Text style={[styles.okButtonText, { color: colors.accent }]}>
+            <Text
+              style={[
+                styles.okButtonText,
+                { color: colors.accent, fontSize: getFontSize(14) },
+              ]}
+            >
               OK
             </Text>
           </TouchableOpacity>
@@ -173,14 +188,22 @@ export default function ParticipantsScreen() {
               ]}
             >
               <View style={styles.participantInfo}>
-                <Text style={[styles.participantName, { color: colors.text }]}>
+                <Text
+                  style={[
+                    styles.participantName,
+                    { color: colors.text, fontSize: getFontSize(16) },
+                  ]}
+                >
                   {participant.name}
                 </Text>
                 {participant.name.startsWith("Pessoa ") && (
                   <Text
                     style={[
                       styles.participantHint,
-                      { color: colors.secondaryText },
+                      {
+                        color: colors.secondaryText,
+                        fontSize: getFontSize(12),
+                      },
                     ]}
                   >
                     Opcional - pode manter esse nome
@@ -233,7 +256,12 @@ export default function ParticipantsScreen() {
           onPress={handleScan}
           disabled={isSaving}
         >
-          <Text style={[styles.scanButtonText, { color: colors.accent }]}>
+          <Text
+            style={[
+              styles.scanButtonText,
+              { color: colors.accent, fontSize: getFontSize(18) },
+            ]}
+          >
             Escanear
           </Text>
         </TouchableOpacity>
