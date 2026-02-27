@@ -1,9 +1,20 @@
 // mobile/services/api.service.ts
 
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
 import { storageService } from './storage.service';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+export const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+
+// Configurações de retry
+const RETRY_CONFIG = {
+  maxRetries: 3,
+  retryDelay: 1000, // 1 segundo inicial
+  retryableStatuses: [408, 429, 500, 502, 503, 504], // Status codes que devem ser retentados (incluindo 429)
+  retryableErrors: ['ECONNABORTED', 'ETIMEDOUT', 'ENOTFOUND', 'ENETUNREACH', 'ERR_NETWORK'],
+};
+
+// Função de delay com backoff exponencial
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 class ApiService {
   private api: AxiosInstance;
@@ -68,21 +79,88 @@ class ApiService {
           message: error.message,
         });
 
+        // Retry para Network Errors (sem resposta do servidor)
+        if (!error.response && error.message === 'Network Error') {
+          const retryCount = originalRequest._networkRetryCount || 0;
+          
+          if (retryCount < RETRY_CONFIG.maxRetries) {
+            originalRequest._networkRetryCount = retryCount + 1;
+            
+            // Backoff exponencial: 1s, 2s, 4s
+            const waitTime = RETRY_CONFIG.retryDelay * Math.pow(2, retryCount);
+            console.log(`[API] Network error. Retrying in ${waitTime}ms... (attempt ${retryCount + 1}/${RETRY_CONFIG.maxRetries})`);
+            
+            await delay(waitTime);
+            return this.api(originalRequest);
+          } else {
+            console.error("[API] Max retries reached for network error");
+          }
+        }
+
+        // Retry para erros 429 (Too Many Requests)
+        if (error.response?.status === 429) {
+          const retryCount = originalRequest._retryCount || 0;
+          
+          if (retryCount < RETRY_CONFIG.maxRetries) {
+            originalRequest._retryCount = retryCount + 1;
+            
+            // Backoff exponencial: 2s, 4s, 8s
+            const waitTime = RETRY_CONFIG.retryDelay * Math.pow(2, retryCount);
+            console.log(`[API] Rate limited. Retrying in ${waitTime}ms... (attempt ${retryCount + 1}/${RETRY_CONFIG.maxRetries})`);
+            
+            await delay(waitTime);
+            return this.api(originalRequest);
+          } else {
+            console.error("[API] Max retries reached for rate limit");
+          }
+        }
+
         // Se erro for 401 e não for uma tentativa de refresh
         if (error.response?.status === 401 && !originalRequest._retry) {
           // Se a requisição falhou no endpoint de refresh, fazer logout direto
           if (originalRequest.url?.includes("/auth/refresh")) {
+            console.log("[API] Refresh token endpoint failed, logging out");
             await this.handleLogout();
             return Promise.reject(error);
           }
 
+          // Evitar múltiplas tentativas simultâneas de refresh
+          if ((this as any)._isRefreshing) {
+            console.log("[API] Token refresh already in progress, waiting...");
+            // Aguardar o refresh atual terminar
+            return new Promise(async (resolve, reject) => {
+              const maxWait = 5000; // 5 segundos máximo
+              const startTime = Date.now();
+              const checkRefresh = setInterval(async () => {
+                if (!(this as any)._isRefreshing) {
+                  clearInterval(checkRefresh);
+                  // Retentar com novo token
+                  const newToken = await storageService.getItem("accessToken");
+                  if (newToken) {
+                    originalRequest.headers.Authorization = `Bearer ${newToken}`;
+                    resolve(this.api(originalRequest));
+                  } else {
+                    clearInterval(checkRefresh);
+                    reject(error);
+                  }
+                } else if (Date.now() - startTime > maxWait) {
+                  clearInterval(checkRefresh);
+                  reject(new Error("Token refresh timeout"));
+                }
+              }, 100);
+            });
+          }
+
           originalRequest._retry = true;
+          (this as any)._isRefreshing = true;
 
           try {
             const refreshToken = await storageService.getItem("refreshToken");
 
             if (!refreshToken) {
+              console.log("[API] No refresh token found, logging out");
               await this.handleLogout();
+              (this as any)._isRefreshing = false;
               return Promise.reject(error);
             }
 
@@ -104,6 +182,9 @@ class ApiService {
 
             console.log("[API] Token refreshed successfully");
 
+            // Marcar refresh como completo
+            (this as any)._isRefreshing = false;
+
             // Atualizar header da requisição original
             originalRequest.headers.Authorization = `Bearer ${accessToken}`;
 
@@ -111,6 +192,7 @@ class ApiService {
             return this.api(originalRequest);
           } catch (refreshError) {
             console.error("[API] Token refresh failed:", refreshError);
+            (this as any)._isRefreshing = false;
             await this.handleLogout();
             return Promise.reject(refreshError);
           }
@@ -133,6 +215,89 @@ class ApiService {
 
   getApi() {
     return this.api;
+  }
+
+  /**
+   * Verifica se o erro é retentável
+   */
+  private isRetryableError(error: AxiosError): boolean {
+    // Erro de rede (sem resposta)
+    if (!error.response) {
+      const errorCode = (error as any).code;
+      return RETRY_CONFIG.retryableErrors.some(code =>
+        errorCode === code || error.message?.includes('Network')
+      );
+    }
+
+    // Erro com status retentável
+    return RETRY_CONFIG.retryableStatuses.includes(error.response.status);
+  }
+
+  /**
+   * Executa uma requisição com retry automático
+   */
+  async requestWithRetry<T>(
+    config: AxiosRequestConfig,
+    customRetries?: number
+  ): Promise<T> {
+    const maxRetries = customRetries ?? RETRY_CONFIG.maxRetries;
+    let lastError: AxiosError | null = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 0) {
+          const backoffDelay = RETRY_CONFIG.retryDelay * Math.pow(2, attempt - 1);
+          console.log(`[API] Retry attempt ${attempt}/${maxRetries} after ${backoffDelay}ms...`);
+          await delay(backoffDelay);
+        }
+
+        const response = await this.api.request<T>(config);
+
+        if (attempt > 0) {
+          console.log(`[API] Request succeeded on retry attempt ${attempt}`);
+        }
+
+        return response.data;
+      } catch (error) {
+        lastError = error as AxiosError;
+
+        // Se não é retentável ou é a última tentativa, lança o erro
+        if (!this.isRetryableError(lastError) || attempt === maxRetries) {
+          if (attempt > 0) {
+            console.error(`[API] All ${maxRetries} retry attempts failed`);
+          }
+          throw error;
+        }
+
+        console.warn(`[API] Request failed (attempt ${attempt + 1}/${maxRetries + 1}):`, {
+          url: config.url,
+          error: lastError.message,
+          code: (lastError as any).code,
+        });
+      }
+    }
+
+    throw lastError;
+  }
+
+  /**
+   * POST com retry automático - ideal para uploads
+   */
+  async postWithRetry<T>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig,
+    customRetries?: number
+  ): Promise<T> {
+    return this.requestWithRetry<T>(
+      {
+        method: 'POST',
+        url,
+        data,
+        ...config,
+      },
+      customRetries
+    );
   }
 }
 

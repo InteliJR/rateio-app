@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { useRouter } from "expo-router";
 import {
   View,
@@ -11,57 +11,53 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Keyboard,
 } from "react-native";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { Ionicons } from "@expo/vector-icons";
 import billService from "../../../services/bill.service";
 import { useBillStore } from "../../../store/billStore";
 import { NumericInput } from "../../../components/common/NumericInput";
 
 interface INewBillFormData {
-  numPeople: string;
-  defineNameOption: "sim" | "nao";
   billName?: string;
   serviceRate: string;
+  couvertValue?: string;
 }
 
-const newBillSchema = z
-  .object({
-    numPeople: z
-      .string()
-      .min(1, "Campo obrigatório")
-      .refine(
-        (val) => !isNaN(Number(val)) && Number(val) >= 1,
-        "Mínimo de 1 participante"
-      ),
-    defineNameOption: z.enum(["sim", "nao"]),
-    billName: z.string().optional(),
-    serviceRate: z
-      .string()
-      .min(1, "Campo obrigatório")
-      .refine(
-        (val) => !isNaN(Number(val)) && Number(val) >= 0 && Number(val) <= 100,
-        "A taxa deve ser entre 0% e 100%"
-      ),
-  })
-  .superRefine((data, ctx) => {
-    if (
-      data.defineNameOption === "sim" &&
-      (!data.billName || data.billName.trim().length === 0)
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Nome da conta é obrigatório",
-        path: ["billName"],
-      });
-    }
-  });
+interface ParticipantInput {
+  id: number;
+  name: string;
+}
+
+const newBillSchema = z.object({
+  billName: z.string().optional(),
+  serviceRate: z
+    .string()
+    .min(1, "Campo obrigatório")
+    .refine(
+      (val) => !isNaN(Number(val)) && Number(val) >= 0 && Number(val) <= 100,
+      "A taxa deve ser entre 0% e 100%"
+    ),
+  couvertValue: z
+    .string()
+    .optional()
+    .refine(
+      (val) => !val || val === "" || (!isNaN(Number(val)) && Number(val) >= 0),
+      "O valor deve ser um número positivo"
+    ),
+});
 
 export default function NewBillScreen() {
   const router = useRouter();
-  // const { id } = useLocalSearchParams();
+  const scrollViewRef = useRef<ScrollView>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [participants, setParticipants] = useState<ParticipantInput[]>([
+    { id: 1, name: "Pessoa 1" },
+  ]);
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   // Get store actions
   const { addBill } = useBillStore();
@@ -69,37 +65,66 @@ export default function NewBillScreen() {
   const {
     control,
     handleSubmit,
-    watch,
-    setValue,
     formState: { errors, isValid },
   } = useForm<INewBillFormData>({
     resolver: zodResolver(newBillSchema),
     defaultValues: {
-      numPeople: "",
-      defineNameOption: "nao",
       billName: "",
       serviceRate: "",
+      couvertValue: "",
     },
     mode: "onChange",
   });
 
-  const defineNameOption = watch("defineNameOption");
+  const addParticipant = () => {
+    const nextId = participants.length + 1;
+    setParticipants([...participants, { id: nextId, name: `Pessoa ${nextId}` }]);
+  };
+
+  const removeParticipant = (id: number) => {
+    if (participants.length <= 1) {
+      Alert.alert("Atenção", "É necessário pelo menos 1 participante");
+      return;
+    }
+    setParticipants(participants.filter((p) => p.id !== id));
+  };
+
+  const updateParticipantName = (id: number, name: string) => {
+    setParticipants(
+      participants.map((p) => (p.id === id ? { ...p, name } : p))
+    );
+  };
 
   const onSubmit = async (data: INewBillFormData) => {
+    if (participants.length === 0) {
+      Alert.alert("Atenção", "Adicione pelo menos 1 participante");
+      return;
+    }
+
     setIsLoading(true);
     try {
+      const participantNames = participants.map((p) => p.name.trim() || `Pessoa ${p.id}`);
+      
       const newBill = await billService.createBillSetup({
-        participantCount: Number(data.numPeople),
-        billName: data.defineNameOption === "sim" ? data.billName : undefined,
+        participantCount: participants.length,
+        billName: data.billName?.trim() || undefined,
         serviceFeePercentage: Number(data.serviceRate),
+        coverChargeValue: data.couvertValue && data.couvertValue.trim() !== "" 
+          ? Number(data.couvertValue) 
+          : undefined,
+        coverChargeType: data.couvertValue && data.couvertValue.trim() !== "" 
+          ? 'per_person' 
+          : undefined,
+        participantNames,
       });
 
       // Add to global store
       addBill(newBill);
 
+      // Ir direto para a câmera
       router.push({
-        pathname: "/(tabs)/(create)/participants",
-        params: { id: newBill.id, participantCount: data.numPeople },
+        pathname: "/(tabs)/(create)/camera",
+        params: { id: newBill.id },
       });
     } catch (error: any) {
       Alert.alert(
@@ -115,105 +140,45 @@ export default function NewBillScreen() {
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.container}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
     >
       <ScrollView
+        ref={scrollViewRef}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
         <View style={styles.content}>
+          {/* Seção: Nome da Conta */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Adicionar pessoas</Text>
-
+            <Text style={styles.sectionTitle}>Nome da conta</Text>
             <Controller
               control={control}
-              name="numPeople"
+              name="billName"
               render={({ field: { onChange, value, onBlur } }) => (
-                <NumericInput
-                  label="Quantas pessoas irão participar dessa conta?"
-                  placeholder="5"
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ex: Jantar de aniversário (opcional)"
                   value={value}
-                  onChange={onChange}
+                  onChangeText={onChange}
                   onBlur={onBlur}
                   editable={!isLoading}
-                  error={errors.numPeople?.message}
-                  min={1}
                 />
               )}
             />
-
-            <Text style={styles.label}>Deseja definir o nome?</Text>
-            <View style={styles.radioGroup}>
-              <TouchableOpacity
-                style={styles.radioOption}
-                onPress={() =>
-                  setValue("defineNameOption", "sim", { shouldValidate: true })
-                }
-                disabled={isLoading}
-              >
-                <View style={styles.radioCircle}>
-                  {defineNameOption === "sim" && (
-                    <View style={styles.radioCircleFilled} />
-                  )}
-                </View>
-                <Text style={styles.radioLabel}>Sim</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.radioOption}
-                onPress={() => {
-                  setValue("defineNameOption", "nao", { shouldValidate: true });
-                  setValue("billName", ""); // Clear name when switching to 'nao'
-                }}
-                disabled={isLoading}
-              >
-                <View style={styles.radioCircle}>
-                  {defineNameOption === "nao" && (
-                    <View style={styles.radioCircleFilled} />
-                  )}
-                </View>
-                <Text style={styles.radioLabel}>Não</Text>
-              </TouchableOpacity>
-            </View>
-
-            {defineNameOption === "sim" && (
-              <View>
-                <Controller
-                  control={control}
-                  name="billName"
-                  render={({ field: { onChange, value, onBlur } }) => (
-                    <TextInput
-                      style={[
-                        styles.input,
-                        styles.conditionalInput,
-                        errors.billName ? styles.inputError : null,
-                      ]}
-                      placeholder="Nome da conta"
-                      value={value}
-                      onChangeText={onChange}
-                      onBlur={onBlur}
-                      editable={!isLoading}
-                    />
-                  )}
-                />
-                {errors.billName && (
-                  <Text style={styles.errorText}>
-                    {errors.billName.message}
-                  </Text>
-                )}
-              </View>
-            )}
           </View>
 
+          {/* Seção: Taxa de Serviço */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Definir a taxa de serviço</Text>
+            <Text style={styles.sectionTitle}>Taxa de serviço</Text>
 
             <Controller
               control={control}
               name="serviceRate"
               render={({ field: { onChange, value, onBlur } }) => (
                 <NumericInput
-                  label="Defina a porcentagem da taxa de serviço?"
-                  placeholder="10"
+                  label="Porcentagem da taxa de serviço"
+                  placeholder="Ex: 10"
                   value={value}
                   onChange={onChange}
                   onBlur={onBlur}
@@ -221,29 +186,115 @@ export default function NewBillScreen() {
                   error={errors.serviceRate?.message}
                   min={0}
                   max={100}
+                  suffix="%"
                 />
               )}
             />
           </View>
+
+          {/* Seção: Couvert */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Couvert (opcional)</Text>
+
+            <Controller
+              control={control}
+              name="couvertValue"
+              render={({ field: { onChange, value, onBlur } }) => (
+                <NumericInput
+                  label="Valor por pessoa"
+                  placeholder="Ex: 20.00"
+                  value={value ?? ""}
+                  onChange={onChange}
+                  onBlur={onBlur}
+                  editable={!isLoading}
+                  error={errors.couvertValue?.message}
+                  min={0}
+                  prefix="R$"
+                  allowDecimal={true}
+                />
+              )}
+            />
+          </View>
+
+          {/* Seção: Participantes */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>
+                Participantes ({participants.length})
+              </Text>
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={addParticipant}
+                disabled={isLoading}
+              >
+                <Ionicons name="add" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.participantsList}>
+              {participants.map((participant) => (
+                <View key={participant.id} style={styles.participantRow}>
+                  {editingId === participant.id ? (
+                    <TextInput
+                      style={styles.participantInput}
+                      value={participant.name}
+                      onChangeText={(text) => updateParticipantName(participant.id, text)}
+                      onBlur={() => setEditingId(null)}
+                      onFocus={() => {
+                        setTimeout(() => {
+                          scrollViewRef.current?.scrollToEnd({ animated: true });
+                        }, 100);
+                      }}
+                      autoFocus
+                      selectTextOnFocus
+                      editable={!isLoading}
+                    />
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.participantNameButton}
+                      onPress={() => setEditingId(participant.id)}
+                      disabled={isLoading}
+                    >
+                      <Text style={styles.participantNameText}>
+                        {participant.name}
+                      </Text>
+                      <Ionicons name="pencil" size={16} color="#999" />
+                    </TouchableOpacity>
+                  )}
+                  
+                  <TouchableOpacity
+                    style={styles.removeButton}
+                    onPress={() => removeParticipant(participant.id)}
+                    disabled={isLoading || participants.length <= 1}
+                  >
+                    <Ionicons 
+                      name="close-circle" 
+                      size={24} 
+                      color={participants.length <= 1 ? "#ddd" : "#ff4d4d"} 
+                    />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* Botão Escanear */}
+          <TouchableOpacity
+            style={[
+              styles.button,
+              (!isValid || isLoading || participants.length === 0) && styles.buttonDisabled,
+            ]}
+            onPress={handleSubmit(onSubmit)}
+            disabled={!isValid || isLoading || participants.length === 0}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#FFFF00" />
+            ) : (
+              <Text style={styles.buttonText}>Escanear conta</Text>
+            )}
+          </TouchableOpacity>
         </View>
       </ScrollView>
-
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity
-          style={[
-            styles.button,
-            (!isValid || isLoading) && styles.buttonDisabled,
-          ]}
-          onPress={handleSubmit(onSubmit)}
-          disabled={!isValid || isLoading}
-        >
-          {isLoading ? (
-            <ActivityIndicator color="#FFFF00" />
-          ) : (
-            <Text style={styles.buttonText}>Confirmar</Text>
-          )}
-        </TouchableOpacity>
-      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -255,7 +306,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 100,
+    paddingBottom: 40,
     paddingTop: 24,
   },
   content: {
@@ -263,19 +314,61 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   section: {
-    marginBottom: 32,
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 24,
-    fontWeight: "500",
+    fontSize: 20,
+    fontWeight: "600",
     color: "#333",
-    marginBottom: 16,
   },
-  label: {
-    fontSize: 14,
+  addButton: {
+    backgroundColor: "#81007F",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  participantsList: {
+    gap: 8,
+  },
+  participantRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  participantNameButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#f5f5f5",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  participantNameText: {
+    fontSize: 16,
     color: "#333",
-    marginBottom: 8,
-    marginTop: 8,
+  },
+  participantInput: {
+    flex: 1,
+    backgroundColor: "#fff",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    fontSize: 16,
+    borderWidth: 2,
+    borderColor: "#81007F",
+  },
+  removeButton: {
+    padding: 4,
   },
   input: {
     backgroundColor: "#fff",
@@ -286,54 +379,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#ddd",
   },
-  inputError: {
-    borderColor: "#ff4d4d",
-  },
-  errorText: {
-    color: "#ff4d4d",
+  hintText: {
+    color: "#999",
     fontSize: 12,
     marginTop: 4,
+    marginBottom: 12,
     marginLeft: 8,
-  },
-  conditionalInput: {
-    marginTop: 12,
-  },
-  radioGroup: {
-    flexDirection: "row",
-    gap: 24,
-    marginTop: 4,
-  },
-  radioOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  radioCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: "#81007F",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  radioCircleFilled: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#81007F",
-  },
-  radioLabel: {
-    fontSize: 14,
-    color: "#333",
-  },
-  buttonContainer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 24,
-    backgroundColor: "#fff",
   },
   button: {
     backgroundColor: "#81007F",
@@ -341,6 +392,7 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     justifyContent: "center",
     alignItems: "center",
+    marginTop: 24,
   },
   buttonDisabled: {
     opacity: 0.6,
