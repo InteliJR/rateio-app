@@ -34,7 +34,7 @@ export interface UploadBillError {
 export interface CreateBillSetupConfig {
   participantCount: number;
   billName?: string;
-  serviceFeePercentage: number;
+  serviceFeePercentage?: number;
   coverChargeValue?: number;
   /** @deprecated Mantido para compatibilidade - sempre tratado como 'per_person' */
   coverChargeType?: 'total' | 'per_person';

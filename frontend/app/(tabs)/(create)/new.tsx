@@ -111,7 +111,9 @@ export default function NewBillScreen() {
       const newBill = await billService.createBillSetup({
         participantCount: participants.length,
         billName: data.billName?.trim() || undefined,
-        serviceFeePercentage: Number(data.serviceRate),
+        serviceFeePercentage: data.serviceRate && data.serviceRate.trim() !== ""
+          ? Number(data.serviceRate)
+          : undefined,
         coverChargeValue: data.couvertValue && data.couvertValue.trim() !== "" 
           ? Number(data.couvertValue) 
           : undefined,
