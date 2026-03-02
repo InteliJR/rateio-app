@@ -21,11 +21,7 @@ import billService from "../../../services/bill.service";
 import { useBillStore } from "../../../store/billStore";
 import { NumericInput } from "../../../components/common/NumericInput";
 
-interface INewBillFormData {
-  billName?: string;
-  serviceRate: string;
-  couvertValue?: string;
-}
+type INewBillFormData = z.infer<typeof newBillSchema>;
 
 interface ParticipantInput {
   id: number;
@@ -33,12 +29,19 @@ interface ParticipantInput {
 }
 
 const newBillSchema = z.object({
-  billName: z.string().optional(),
+  billName: z
+    .string()
+    .optional()
+    .refine(
+      (val) => !val || val.trim().length > 0,
+      "O nome da conta não pode ser apenas espaços"
+    ),
   serviceRate: z
     .string()
-    .min(1, "Campo obrigatório")
+    .optional()
     .refine(
-      (val) => !isNaN(Number(val)) && Number(val) >= 0 && Number(val) <= 100,
+      (val) =>
+        !val || val === "" || (!isNaN(Number(val)) && Number(val) >= 0 && Number(val) <= 100),
       "A taxa deve ser entre 0% e 100%"
     ),
   couvertValue: z
@@ -179,7 +182,7 @@ export default function NewBillScreen() {
                 <NumericInput
                   label="Porcentagem da taxa de serviço"
                   placeholder="Ex: 10"
-                  value={value}
+                  value={value ?? ""}
                   onChange={onChange}
                   onBlur={onBlur}
                   editable={!isLoading}
@@ -278,14 +281,21 @@ export default function NewBillScreen() {
             </View>
           </View>
 
+          {/* Erro de participantes */}
+          {participants.length < 1 && (
+            <Text style={styles.errorText}>
+              É necessário pelo menos 1 participante
+            </Text>
+          )}
+
           {/* Botão Escanear */}
           <TouchableOpacity
             style={[
               styles.button,
-              (!isValid || isLoading || participants.length === 0) && styles.buttonDisabled,
+              (!isValid || isLoading || participants.length < 1) && styles.buttonDisabled,
             ]}
             onPress={handleSubmit(onSubmit)}
-            disabled={!isValid || isLoading || participants.length === 0}
+            disabled={!isValid || isLoading || participants.length < 1}
           >
             {isLoading ? (
               <ActivityIndicator color="#FFFF00" />
@@ -401,5 +411,12 @@ const styles = StyleSheet.create({
     color: "#FFFF00",
     fontSize: 18,
     fontWeight: "500",
+  },
+  errorText: {
+    color: "#cc0000",
+    fontSize: 13,
+    marginTop: -8,
+    marginBottom: 8,
+    marginLeft: 4,
   },
 });
