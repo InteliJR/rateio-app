@@ -228,17 +228,38 @@ export default function BillDetail() {
 
           {/* Aviso de Falha (Se houver) */}
           {data.bill.status === "OCR_FAILED" && (
-            <View style={[styles.warningCard, { backgroundColor: colors.warningLight ?? "#FFEBEE" }]}>
+            <View
+              style={[
+                styles.warningCard,
+                { backgroundColor: colors.warningLight ?? "#FFEBEE" },
+              ]}
+            >
               <MaterialCommunityIcons
                 name="alert-circle-outline"
                 size={24}
                 color={colors.error ?? "#D32F2F"}
               />
               <View style={styles.warningContent}>
-                <Text style={[styles.warningTitle, { color: colors.error ?? "#D32F2F", fontSize: getFontSize(15) }]}>
+                <Text
+                  style={[
+                    styles.warningTitle,
+                    {
+                      color: colors.error ?? "#D32F2F",
+                      fontSize: getFontSize(15),
+                    },
+                  ]}
+                >
                   Falha no processamento
                 </Text>
-                <Text style={[styles.warningText, { color: colors.secondaryText ?? "#B71C1C", fontSize: getFontSize(13) }]}>
+                <Text
+                  style={[
+                    styles.warningText,
+                    {
+                      color: colors.secondaryText ?? "#B71C1C",
+                      fontSize: getFontSize(13),
+                    },
+                  ]}
+                >
                   Não foi possível ler os itens da nota automaticamente. Por
                   favor, verifique os valores ou edite manualmente.
                 </Text>
@@ -273,14 +294,32 @@ export default function BillDetail() {
                 ]}
               >
                 <View style={styles.itemInfo}>
-                  <Text style={[styles.itemName, { color: colors.text, fontSize: getFontSize(15) }]}>
+                  <Text
+                    style={[
+                      styles.itemName,
+                      { color: colors.text, fontSize: getFontSize(15) },
+                    ]}
+                  >
                     {item.name}
                   </Text>
-                  <Text style={[styles.itemQty, { color: colors.secondaryText, fontSize: getFontSize(13) }]}>
+                  <Text
+                    style={[
+                      styles.itemQty,
+                      {
+                        color: colors.secondaryText,
+                        fontSize: getFontSize(13),
+                      },
+                    ]}
+                  >
                     {item.quantity}x {formatCurrency(item.unitPrice)}
                   </Text>
                 </View>
-                <Text style={[styles.itemTotal, { color: colors.text, fontSize: getFontSize(15) }]}>
+                <Text
+                  style={[
+                    styles.itemTotal,
+                    { color: colors.text, fontSize: getFontSize(15) },
+                  ]}
+                >
                   {formatCurrency(item.totalPrice)}
                 </Text>
               </View>
@@ -289,8 +328,20 @@ export default function BillDetail() {
               style={[styles.divider, { backgroundColor: colors.divider }]}
             />
             <View style={styles.totalRow}>
-              <Text style={[styles.totalLabel, { color: colors.text, fontSize: getFontSize(15) }]}>Subtotal</Text>
-              <Text style={[styles.totalValue, { color: colors.primary, fontSize: getFontSize(15) }]}>
+              <Text
+                style={[
+                  styles.totalLabel,
+                  { color: colors.text, fontSize: getFontSize(15) },
+                ]}
+              >
+                Subtotal
+              </Text>
+              <Text
+                style={[
+                  styles.totalValue,
+                  { color: colors.primary, fontSize: getFontSize(15) },
+                ]}
+              >
                 {formatCurrency(data.summary?.subtotal)}
               </Text>
             </View>
@@ -357,7 +408,7 @@ export default function BillDetail() {
                   {/* Itens do participante */}
                   {(participant.items || []).map((item) => (
                     <View key={item.id} style={styles.detailRow}>
-                    <Text
+                      <Text
                         style={[
                           styles.detailText,
                           { color: colors.text, fontSize: getFontSize(14) },
@@ -381,7 +432,12 @@ export default function BillDetail() {
                   {participant.feeDetails &&
                     participant.feeDetails.length > 0 && (
                       <>
-                        <View style={[styles.detailDivider, { backgroundColor: colors.divider }]} />
+                        <View
+                          style={[
+                            styles.detailDivider,
+                            { backgroundColor: colors.divider },
+                          ]}
+                        />
                         {participant.feeDetails.map((fee) => (
                           <View
                             key={fee.id}
@@ -396,7 +452,10 @@ export default function BillDetail() {
                             <Text
                               style={[
                                 styles.detailTextFee,
-                                { color: colors.secondaryText, fontSize: getFontSize(13) },
+                                {
+                                  color: colors.secondaryText,
+                                  fontSize: getFontSize(13),
+                                },
                                 fee.type === "COVER_CHARGE" &&
                                   styles.detailTextCouvert,
                               ]}
@@ -410,7 +469,10 @@ export default function BillDetail() {
                             <Text
                               style={[
                                 styles.detailValueFee,
-                                { color: colors.secondaryText, fontSize: getFontSize(13) },
+                                {
+                                  color: colors.secondaryText,
+                                  fontSize: getFontSize(13),
+                                },
                                 fee.type === "COVER_CHARGE" &&
                                   styles.detailValueCouvert,
                               ]}
@@ -434,20 +496,56 @@ export default function BillDetail() {
             ]}
           >
             <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: colors.text, fontSize: getFontSize(15) }]}>Subtotal</Text>
-              <Text style={[styles.summaryValue, { color: colors.text, fontSize: getFontSize(15) }]}>
+              <Text
+                style={[
+                  styles.summaryLabel,
+                  { color: colors.text, fontSize: getFontSize(15) },
+                ]}
+              >
+                Subtotal
+              </Text>
+              <Text
+                style={[
+                  styles.summaryValue,
+                  { color: colors.text, fontSize: getFontSize(15) },
+                ]}
+              >
                 {formatCurrency(data.summary.subtotal)}
               </Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: colors.text, fontSize: getFontSize(15) }]}>Taxas / Serviço</Text>
-              <Text style={[styles.summaryValue, { color: colors.text, fontSize: getFontSize(15) }]}>
+              <Text
+                style={[
+                  styles.summaryLabel,
+                  { color: colors.text, fontSize: getFontSize(15) },
+                ]}
+              >
+                Taxas / Serviço
+              </Text>
+              <Text
+                style={[
+                  styles.summaryValue,
+                  { color: colors.text, fontSize: getFontSize(15) },
+                ]}
+              >
                 {formatCurrency(data.summary.totalFees)}
               </Text>
             </View>
             <View style={[styles.summaryRow, styles.marginTop]}>
-              <Text style={[styles.finalTotalLabel, { color: colors.primary, fontSize: getFontSize(17) }]}>Total Geral</Text>
-              <Text style={[styles.finalTotalValue, { color: colors.primary, fontSize: getFontSize(17) }]}>
+              <Text
+                style={[
+                  styles.finalTotalLabel,
+                  { color: colors.primary, fontSize: getFontSize(17) },
+                ]}
+              >
+                Total Geral
+              </Text>
+              <Text
+                style={[
+                  styles.finalTotalValue,
+                  { color: colors.primary, fontSize: getFontSize(17) },
+                ]}
+              >
                 {formatCurrency(data.summary.total)}
               </Text>
             </View>
@@ -464,9 +562,22 @@ export default function BillDetail() {
             disabled={duplicating}
           >
             {duplicating ? (
-              <ActivityIndicator size="small" color={colors.accent ?? "#ffff00"} />
+              <ActivityIndicator
+                size="small"
+                color={colors.accent ?? "#ffff00"}
+              />
             ) : (
-              <Text style={[styles.reuseButtonText, { color: colors.accent ?? "#ffff00", fontSize: getFontSize(16) }]}>Reutilizar Conta</Text>
+              <Text
+                style={[
+                  styles.reuseButtonText,
+                  {
+                    color: colors.accent ?? "#ffff00",
+                    fontSize: getFontSize(16),
+                  },
+                ]}
+              >
+                Reutilizar Conta
+              </Text>
             )}
           </TouchableOpacity>
         </View>

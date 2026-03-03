@@ -47,21 +47,21 @@ export const NumericInput: React.FC<NumericInputProps> = ({
     }
 
     let numericValue: string;
-    
+
     if (allowDecimal) {
       // Permite números e um ponto decimal
-      numericValue = text.replace(/[^0-9.]/g, '');
+      numericValue = text.replace(/[^0-9.]/g, "");
       // Garante apenas um ponto decimal
-      const parts = numericValue.split('.');
+      const parts = numericValue.split(".");
       if (parts.length > 2) {
-        numericValue = parts[0] + '.' + parts.slice(1).join('');
+        numericValue = parts[0] + "." + parts.slice(1).join("");
       }
       // Limita casas decimais a 2
       if (parts.length === 2 && parts[1].length > 2) {
-        numericValue = parts[0] + '.' + parts[1].slice(0, 2);
+        numericValue = parts[0] + "." + parts[1].slice(0, 2);
       }
     } else {
-      numericValue = text.replace(/[^0-9]/g, '');
+      numericValue = text.replace(/[^0-9]/g, "");
     }
 
     if (max !== undefined && Number(numericValue) > max) {
@@ -139,8 +139,8 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   input: {
     flex: 1,
@@ -162,12 +162,12 @@ const styles = StyleSheet.create({
   },
   prefix: {
     fontSize: 16,
-    color: '#666',
+    color: "#666",
     marginRight: 4,
   },
   suffix: {
     fontSize: 16,
-    color: '#666',
+    color: "#666",
     marginLeft: 4,
   },
   errorText: {

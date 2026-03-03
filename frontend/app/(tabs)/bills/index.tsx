@@ -138,10 +138,22 @@ export default function BillsScreen() {
       activeOpacity={0.7}
     >
       <View style={styles.cardContent}>
-        <Text style={[styles.cardTitle, { color: colors.text, fontSize: getFontSize(16) }]} numberOfLines={1} ellipsizeMode="tail">
+        <Text
+          style={[
+            styles.cardTitle,
+            { color: colors.text, fontSize: getFontSize(16) },
+          ]}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+        >
           {item.establishmentName || "Sem nome"}
         </Text>
-        <Text style={[styles.cardDate, { color: colors.textSecondary, fontSize: getFontSize(14) }]}>
+        <Text
+          style={[
+            styles.cardDate,
+            { color: colors.textSecondary, fontSize: getFontSize(14) },
+          ]}
+        >
           {new Date(item.createdAt).toLocaleDateString("pt-BR")}
         </Text>
       </View>
@@ -241,7 +253,13 @@ export default function BillsScreen() {
             Erro ao carregar contas.
           </Text>
           <TouchableOpacity onPress={() => refetch()} style={{ marginTop: 10 }}>
-            <Text style={{ color: colors.primary, fontWeight: "bold", fontSize: getFontSize(14) }}>
+            <Text
+              style={{
+                color: colors.primary,
+                fontWeight: "bold",
+                fontSize: getFontSize(14),
+              }}
+            >
               Tentar novamente
             </Text>
           </TouchableOpacity>
@@ -325,7 +343,14 @@ export default function BillsScreen() {
             size={20}
             color={colors.primary}
           />
-          <Text style={[styles.filterButtonText, { color: colors.primary, fontSize: getFontSize(12) }]}>Filtro</Text>
+          <Text
+            style={[
+              styles.filterButtonText,
+              { color: colors.primary, fontSize: getFontSize(12) },
+            ]}
+          >
+            Filtro
+          </Text>
         </TouchableOpacity>
       </View>
 

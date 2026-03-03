@@ -40,14 +40,14 @@ const newBillSchema = z.object({
     .min(1, "Campo obrigatório")
     .refine(
       (val) => !isNaN(Number(val)) && Number(val) >= 0 && Number(val) <= 100,
-      "A taxa deve ser entre 0% e 100%"
+      "A taxa deve ser entre 0% e 100%",
     ),
   couvertValue: z
     .string()
     .optional()
     .refine(
       (val) => !val || val === "" || (!isNaN(Number(val)) && Number(val) >= 0),
-      "O valor deve ser um número positivo"
+      "O valor deve ser um número positivo",
     ),
 });
 
@@ -80,7 +80,10 @@ export default function NewBillScreen() {
 
   const addParticipant = () => {
     const nextId = participants.length + 1;
-    setParticipants([...participants, { id: nextId, name: `Pessoa ${nextId}` }]);
+    setParticipants([
+      ...participants,
+      { id: nextId, name: `Pessoa ${nextId}` },
+    ]);
   };
 
   const removeParticipant = (id: number) => {
@@ -93,7 +96,7 @@ export default function NewBillScreen() {
 
   const updateParticipantName = (id: number, name: string) => {
     setParticipants(
-      participants.map((p) => (p.id === id ? { ...p, name } : p))
+      participants.map((p) => (p.id === id ? { ...p, name } : p)),
     );
   };
 
@@ -105,18 +108,22 @@ export default function NewBillScreen() {
 
     setIsLoading(true);
     try {
-      const participantNames = participants.map((p) => p.name.trim() || `Pessoa ${p.id}`);
-      
+      const participantNames = participants.map(
+        (p) => p.name.trim() || `Pessoa ${p.id}`,
+      );
+
       const newBill = await billService.createBillSetup({
         participantCount: participants.length,
         billName: data.billName?.trim() || undefined,
         serviceFeePercentage: Number(data.serviceRate),
-        coverChargeValue: data.couvertValue && data.couvertValue.trim() !== "" 
-          ? Number(data.couvertValue) 
-          : undefined,
-        coverChargeType: data.couvertValue && data.couvertValue.trim() !== "" 
-          ? 'per_person' 
-          : undefined,
+        coverChargeValue:
+          data.couvertValue && data.couvertValue.trim() !== ""
+            ? Number(data.couvertValue)
+            : undefined,
+        coverChargeType:
+          data.couvertValue && data.couvertValue.trim() !== ""
+            ? "per_person"
+            : undefined,
         participantNames,
       });
 
@@ -153,7 +160,14 @@ export default function NewBillScreen() {
         <View style={styles.content}>
           {/* Seção: Nome da Conta */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text, fontSize: getFontSize(20) }]}>Nome da conta</Text>
+            <Text
+              style={[
+                styles.sectionTitle,
+                { color: colors.text, fontSize: getFontSize(20) },
+              ]}
+            >
+              Nome da conta
+            </Text>
             <Controller
               control={control}
               name="billName"
@@ -172,7 +186,14 @@ export default function NewBillScreen() {
 
           {/* Seção: Taxa de Serviço */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text, fontSize: getFontSize(20) }]}>Taxa de serviço</Text>
+            <Text
+              style={[
+                styles.sectionTitle,
+                { color: colors.text, fontSize: getFontSize(20) },
+              ]}
+            >
+              Taxa de serviço
+            </Text>
 
             <Controller
               control={control}
@@ -240,11 +261,15 @@ export default function NewBillScreen() {
                     <TextInput
                       style={styles.participantInput}
                       value={participant.name}
-                      onChangeText={(text) => updateParticipantName(participant.id, text)}
+                      onChangeText={(text) =>
+                        updateParticipantName(participant.id, text)
+                      }
                       onBlur={() => setEditingId(null)}
                       onFocus={() => {
                         setTimeout(() => {
-                          scrollViewRef.current?.scrollToEnd({ animated: true });
+                          scrollViewRef.current?.scrollToEnd({
+                            animated: true,
+                          });
                         }, 100);
                       }}
                       autoFocus
@@ -263,16 +288,16 @@ export default function NewBillScreen() {
                       <Ionicons name="pencil" size={16} color="#999" />
                     </TouchableOpacity>
                   )}
-                  
+
                   <TouchableOpacity
                     style={styles.removeButton}
                     onPress={() => removeParticipant(participant.id)}
                     disabled={isLoading || participants.length <= 1}
                   >
-                    <Ionicons 
-                      name="close-circle" 
-                      size={24} 
-                      color={participants.length <= 1 ? "#ddd" : "#ff4d4d"} 
+                    <Ionicons
+                      name="close-circle"
+                      size={24}
+                      color={participants.length <= 1 ? "#ddd" : "#ff4d4d"}
                     />
                   </TouchableOpacity>
                 </View>
@@ -284,7 +309,8 @@ export default function NewBillScreen() {
           <TouchableOpacity
             style={[
               styles.button,
-              (!isValid || isLoading || participants.length === 0) && styles.buttonDisabled,
+              (!isValid || isLoading || participants.length === 0) &&
+                styles.buttonDisabled,
             ]}
             onPress={handleSubmit(onSubmit)}
             disabled={!isValid || isLoading || participants.length === 0}

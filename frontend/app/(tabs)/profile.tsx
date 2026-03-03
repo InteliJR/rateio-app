@@ -37,7 +37,7 @@ export default function ProfileScreen() {
         lastLoadTime.current = now;
         loadUserData();
       }
-    }, [])
+    }, []),
   );
 
   const buildAvatarUrl = (rawUrl: string | null | undefined): string | null => {
@@ -45,7 +45,7 @@ export default function ProfileScreen() {
 
     if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
       // Adicionar timestamp para evitar cache
-      const separator = rawUrl.includes('?') ? '&' : '?';
+      const separator = rawUrl.includes("?") ? "&" : "?";
       return `${rawUrl}${separator}t=${Date.now()}`;
     }
 
