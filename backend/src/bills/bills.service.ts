@@ -528,32 +528,28 @@ export class BillsService {
       0,
     );
 
-    // Calcular valor total das taxas
+    const participantCount = bill.participants.length;
+
+    // Calcular valor total real das taxas (por tipo)
     let totalFees = 0;
     for (const fee of bill.fees) {
       if (fee.type === 'SERVICE_PERCENTAGE') {
         totalFees += subtotal * (Number(fee.value) / 100);
+      } else if (fee.type === 'COVER_CHARGE') {
+        // fee.value é por pessoa (salvo na criação da conta)
+        totalFees += Number(fee.value) * participantCount;
       } else {
         totalFees += Number(fee.value);
       }
     }
 
-    // Calcular valores por participante
-    const participants = bill.participants.map((participant) => {
-      // Soma dos itens consumidos pelo participante
+    // 1ª passagem: calcular valores brutos por participante (sem arredondar)
+    const participantRawData = bill.participants.map((participant) => {
       const itemsSubtotal = participant.divisions.reduce(
         (acc, division) => acc + Number(division.shareAmount),
         0,
       );
 
-      // Taxa proporcional ao consumo
-      const participantFees =
-        subtotal > 0 ? (itemsSubtotal / subtotal) * totalFees : 0;
-
-      // Total do participante (itens + taxas)
-      const total = Math.round((itemsSubtotal + participantFees) * 100) / 100;
-
-      // Itens consumidos pelo participante
       const items = participant.divisions.map((division) => ({
         id: division.billItem.id,
         name: division.billItem.name,
@@ -563,37 +559,66 @@ export class BillsService {
         shareAmount: Number(division.shareAmount),
       }));
 
-      // Taxas proporcionais do participante
-      const fees = bill.fees.map((fee) => {
-        let feeValue = 0;
+      // Distribuição por tipo de taxa
+      const feeDetails = bill.fees.map((fee) => {
+        let rawFeeValue = 0;
         if (fee.type === 'SERVICE_PERCENTAGE') {
-          feeValue =
-            subtotal > 0
-              ? (itemsSubtotal / subtotal) *
-              (subtotal * (Number(fee.value) / 100))
-              : 0;
+          // Proporcional ao consumo individual
+          rawFeeValue = itemsSubtotal * (Number(fee.value) / 100);
+        } else if (fee.type === 'COVER_CHARGE') {
+          // Valor fixo por pessoa (fee.value já é por pessoa)
+          rawFeeValue = Number(fee.value);
         } else {
-          feeValue =
-            subtotal > 0 ? (itemsSubtotal / subtotal) * Number(fee.value) : 0;
+          // SERVICE_FIXED: dividido igualmente entre todos
+          rawFeeValue = participantCount > 0 ? Number(fee.value) / participantCount : 0;
         }
-
         return {
           id: fee.id,
           type: fee.type,
           description: fee.description,
           originalValue: Number(fee.value),
-          participantShare: Math.round(feeValue * 100) / 100,
+          rawFeeValue,
         };
       });
 
+      const rawFees = feeDetails.reduce((acc, f) => acc + f.rawFeeValue, 0);
+      return { participant, itemsSubtotal, items, feeDetails, rawFees };
+    });
+
+    // 2ª passagem: arredondar com correção de resto no último participante
+    let runningFeesSum = 0;
+    const participants = participantRawData.map((data, idx) => {
+      const isLast = idx === participantRawData.length - 1;
+      const totalRawFees = participantRawData.reduce((acc, d) => acc + d.rawFees, 0);
+
+      let participantFees: number;
+      if (isLast) {
+        // Último absorve o resto do arredondamento para garantir soma exata
+        participantFees = Math.round((totalRawFees - runningFeesSum) * 100) / 100;
+      } else {
+        participantFees = Math.round(data.rawFees * 100) / 100;
+        runningFeesSum += participantFees;
+      }
+
+      const subtotalRounded = Math.round(data.itemsSubtotal * 100) / 100;
+      const total = Math.round((subtotalRounded + participantFees) * 100) / 100;
+
+      const feeDetails = data.feeDetails.map((f) => ({
+        id: f.id,
+        type: f.type,
+        description: f.description,
+        originalValue: f.originalValue,
+        participantShare: Math.round(f.rawFeeValue * 100) / 100,
+      }));
+
       return {
-        id: participant.id,
-        name: participant.name,
-        subtotal: Math.round(itemsSubtotal * 100) / 100,
-        fees: Math.round(participantFees * 100) / 100,
+        id: data.participant.id,
+        name: data.participant.name,
+        subtotal: subtotalRounded,
+        fees: participantFees,
         total,
-        items,
-        feeDetails: fees,
+        items: data.items,
+        feeDetails,
       };
     });
 
@@ -854,22 +879,59 @@ export class BillsService {
       }
     }
 
-    // Calcular total por participante incluindo taxas (proporcionalmente)
+    // Calcular total por participante incluindo taxas
+    // Taxas percentuais: proporcionais ao consumo
+    // Taxas fixas/couvert: divididas igualmente (com correção de resto no último)
     const participantTotalsWithFees: Record<
       string,
       { subtotal: number; fees: number; total: number }
     > = {};
 
-    for (const participantId of Object.keys(participantTotals)) {
-      const participantSubtotal = participantTotals[participantId];
-      // Taxa proporcional ao consumo do participante
-      const participantFees =
-        subtotal > 0 ? (participantSubtotal / subtotal) * totalFees : 0;
+    const servicePctFees = (finalizeBillDto.fees || [])
+      .filter((f) => f.type === 'SERVICE_PERCENTAGE')
+      .reduce((acc, f) => acc + subtotal * (Number(f.value) / 100), 0);
 
+    const fixedFees = (finalizeBillDto.fees || [])
+      .filter((f) => f.type !== 'SERVICE_PERCENTAGE')
+      .reduce((acc, f) => acc + Number(f.value), 0);
+
+    const participantIds = Object.keys(participantTotals);
+    const finParticipantCount = participantIds.length;
+    let runningPctAllocated = 0;
+    let runningFixedAllocated = 0;
+
+    for (let i = 0; i < participantIds.length; i++) {
+      const participantId = participantIds[i];
+      const isLast = i === participantIds.length - 1;
+      const participantSubtotal = participantTotals[participantId];
+
+      // Taxa percentual: proporcional ao consumo
+      let pctFee: number;
+      if (isLast) {
+        pctFee = Math.round((servicePctFees - runningPctAllocated) * 100) / 100;
+      } else {
+        pctFee = subtotal > 0
+          ? Math.round((participantSubtotal / subtotal) * servicePctFees * 100) / 100
+          : 0;
+        runningPctAllocated += pctFee;
+      }
+
+      // Taxa fixa/couvert: dividida igualmente
+      let fixedFee: number;
+      if (isLast) {
+        fixedFee = Math.round((fixedFees - runningFixedAllocated) * 100) / 100;
+      } else {
+        fixedFee = finParticipantCount > 0
+          ? Math.round((fixedFees / finParticipantCount) * 100) / 100
+          : 0;
+        runningFixedAllocated += fixedFee;
+      }
+
+      const totalParticipantFees = Math.round((pctFee + fixedFee) * 100) / 100;
       participantTotalsWithFees[participantId] = {
-        subtotal: participantSubtotal,
-        fees: Math.round(participantFees * 100) / 100, // Arredondar para 2 casas decimais
-        total: Math.round((participantSubtotal + participantFees) * 100) / 100,
+        subtotal: Math.round(participantSubtotal * 100) / 100,
+        fees: totalParticipantFees,
+        total: Math.round((participantSubtotal + totalParticipantFees) * 100) / 100,
       };
     }
 
@@ -942,6 +1004,7 @@ export class BillsService {
       include: {
         items: true,
         fees: true,
+        participants: { select: { id: true } },
       },
     });
 
@@ -965,11 +1028,19 @@ export class BillsService {
       0,
     );
 
-    // Calcular soma das taxas
-    const feesSum = bill.fees.reduce(
-      (acc, fee) => acc + Number(fee.value),
-      0,
-    );
+    const recalcParticipantCount = bill.participants.length;
+
+    // Calcular soma real das taxas (por tipo)
+    const feesSum = bill.fees.reduce((acc, fee) => {
+      if (fee.type === 'SERVICE_PERCENTAGE') {
+        return acc + itemsSum * (Number(fee.value) / 100);
+      }
+      if (fee.type === 'COVER_CHARGE') {
+        // fee.value é por pessoa na criação; taxa total = valor × nº participantes
+        return acc + Number(fee.value) * recalcParticipantCount;
+      }
+      return acc + Number(fee.value);
+    }, 0);
 
     const calculatedTotal = itemsSum + feesSum;
 
