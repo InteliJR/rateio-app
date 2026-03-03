@@ -173,9 +173,16 @@ export default function NewBillScreen() {
               name="billName"
               render={({ field: { onChange, value, onBlur } }) => (
                 <TextInput
-                  style={styles.input}
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: colors.inputBackground,
+                      color: colors.text,
+                      borderColor: colors.inputBorder,
+                    },
+                  ]}
                   placeholder="Ex: Jantar de aniversário (opcional)"
-                  value={value}
+                  placeholderTextColor={colors.placeholderText}
                   onChangeText={onChange}
                   onBlur={onBlur}
                   editable={!isLoading}
@@ -217,7 +224,14 @@ export default function NewBillScreen() {
 
           {/* Seção: Couvert */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Couvert (opcional)</Text>
+            <Text
+              style={[
+                styles.sectionTitle,
+                { color: colors.text, fontSize: getFontSize(20) },
+              ]}
+            >
+              Couvert (opcional)
+            </Text>
 
             <Controller
               control={control}
@@ -242,7 +256,12 @@ export default function NewBillScreen() {
           {/* Seção: Participantes */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>
+              <Text
+                style={[
+                  styles.sectionTitle,
+                  { color: colors.text, fontSize: getFontSize(20) },
+                ]}
+              >
                 Participantes ({participants.length})
               </Text>
               <TouchableOpacity
@@ -259,7 +278,14 @@ export default function NewBillScreen() {
                 <View key={participant.id} style={styles.participantRow}>
                   {editingId === participant.id ? (
                     <TextInput
-                      style={styles.participantInput}
+                      style={[
+                        styles.participantInput,
+                        {
+                          backgroundColor: colors.inputBackground,
+                          color: colors.text,
+                        },
+                      ]}
+                      placeholderTextColor={colors.placeholderText}
                       value={participant.name}
                       onChangeText={(text) =>
                         updateParticipantName(participant.id, text)
@@ -278,11 +304,19 @@ export default function NewBillScreen() {
                     />
                   ) : (
                     <TouchableOpacity
-                      style={styles.participantNameButton}
+                      style={[
+                        styles.participantNameButton,
+                        { backgroundColor: colors.backgroundSecondary },
+                      ]}
                       onPress={() => setEditingId(participant.id)}
                       disabled={isLoading}
                     >
-                      <Text style={styles.participantNameText}>
+                      <Text
+                        style={[
+                          styles.participantNameText,
+                          { color: colors.text },
+                        ]}
+                      >
                         {participant.name}
                       </Text>
                       <Ionicons name="pencil" size={16} color="#999" />
