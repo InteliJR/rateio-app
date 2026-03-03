@@ -167,7 +167,7 @@ export class BillsService {
         try {
           const participantCount = Number(createBillDto.participantCount);
           const participantNames = createBillDto.participantNames || [];
-          
+
           const participants = Array.from({ length: participantCount }, (_, i) => ({
             billId: bill.id,
             // Usar nome fornecido se existir, senão usar nome padrão
@@ -586,10 +586,10 @@ export class BillsService {
     });
 
     // 2ª passagem: arredondar com correção de resto no último participante
+    const totalRawFees = participantRawData.reduce((acc, d) => acc + d.rawFees, 0);
     let runningFeesSum = 0;
     const participants = participantRawData.map((data, idx) => {
       const isLast = idx === participantRawData.length - 1;
-      const totalRawFees = participantRawData.reduce((acc, d) => acc + d.rawFees, 0);
 
       let participantFees: number;
       if (isLast) {
@@ -857,20 +857,28 @@ export class BillsService {
     let totalFees = 0;
     const persistedFees: Awaited<ReturnType<typeof this.prisma.fee.create>>[] =
       [];
+    // Número de participantes para normalizar COVER_CHARGE por pessoa
+    const finParticipantCount = participants.length;
 
     if (finalizeBillDto.fees && finalizeBillDto.fees.length > 0) {
       for (const fee of finalizeBillDto.fees) {
+        // COVER_CHARGE: o frontend envia o total (couvertPerPerson × N pagantes).
+        const storedValue =
+          fee.type === 'COVER_CHARGE' && finParticipantCount > 0
+            ? fee.value / finParticipantCount
+            : fee.value;
+
         const persistedFee = await this.prisma.fee.create({
           data: {
             billId: id,
             type: fee.type,
             description: fee.description,
-            value: fee.value,
+            value: storedValue,
           },
         });
         persistedFees.push(persistedFee);
 
-        // Calcular valor real da taxa
+        // Calcular valor real da taxa para o sumário de retorno
         if (fee.type === 'SERVICE_PERCENTAGE') {
           totalFees += subtotal * (Number(fee.value) / 100);
         } else {
@@ -896,7 +904,6 @@ export class BillsService {
       .reduce((acc, f) => acc + Number(f.value), 0);
 
     const participantIds = Object.keys(participantTotals);
-    const finParticipantCount = participantIds.length;
     let runningPctAllocated = 0;
     let runningFixedAllocated = 0;
 
@@ -989,7 +996,7 @@ export class BillsService {
       orderBy: { createdAt: 'desc' },
       select: { id: true },
     });
-    
+
     return latestBill?.id === billId;
   }
 
@@ -1323,8 +1330,8 @@ export class BillsService {
       data: {
         userId,
         status: BillStatus.DIVIDING,
-        establishmentName: originalBill.establishmentName 
-          ? `${originalBill.establishmentName} (Cópia)` 
+        establishmentName: originalBill.establishmentName
+          ? `${originalBill.establishmentName} (Cópia)`
           : 'Conta Reutilizada',
         imageUrl: '', // Nova conta não tem imagem
         imageKey: '',
