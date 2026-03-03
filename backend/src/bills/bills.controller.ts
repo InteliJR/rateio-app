@@ -32,38 +32,6 @@ export class BillsController {
   constructor(private readonly billsService: BillsService) { }
 
   /**
-   * Upload de foto da conta + OCR automático
-   */
-  @Post()
-  @UseInterceptors(FileInterceptor('image'))
-  async create(
-    @UploadedFile() file: Express.Multer.File | undefined,
-    @Body() createBillDto: CreateBillDto,
-    @Request() req: any,
-  ) {
-    // if (!file) check removed to allow manual creation
-    return this.billsService.create(file, req.user.id, createBillDto);
-  }
-
-
-
-  /**
-   * Upload de foto para conta existente + OCR
-   */
-  @Post(':id/image')
-  @UseInterceptors(FileInterceptor('image'))
-  async uploadImage(
-    @Param('id') id: string,
-    @UploadedFile() file: Express.Multer.File | undefined,
-    @Request() req: any,
-  ) {
-    if (!file) {
-      throw new BadRequestException('Imagem obrigatória');
-    }
-    return this.billsService.uploadImage(id, file, req.user.id);
-  }
-
-  /**
    * Listar contas do usuário com paginação, filtros e ordenação
    */
   @SkipThrottle()
@@ -139,11 +107,42 @@ export class BillsController {
   }
 
   /**
+   * Upload de foto da conta + OCR automático
+   */
+  @Post()
+  @UseInterceptors(FileInterceptor('image'))
+  async create(
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Body() createBillDto: CreateBillDto,
+    @Request() req: any,
+  ) {
+    // if (!file) check removed to allow manual creation
+    return this.billsService.create(file, req.user.id, createBillDto);
+  }
+
+  /**
    * Retornar resumo da conta com valores por participante
    */
   @Get(':id/summary')
   getSummary(@Param('id') id: string, @Request() req: any) {
     return this.billsService.getSummary(id, req.user.id);
+  }
+
+  /**
+   * Upload de foto para conta existente + OCR
+   * IMPORTANTE: Esta rota deve vir ANTES de outras rotas POST com :id
+   */
+  @Post(':id/image')
+  @UseInterceptors(FileInterceptor('image'))
+  async uploadImage(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Request() req: any,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Imagem obrigatória');
+    }
+    return this.billsService.uploadImage(id, file, req.user.id);
   }
 
   /**
@@ -224,6 +223,14 @@ export class BillsController {
     @Request() req: any,
   ) {
     return this.billsService.finalize(id, req.user.id, finalizeBillDto);
+  }
+
+  /**
+   * Duplicar conta (reutilizar) - cria uma nova conta com os mesmos itens e participantes
+   */
+  @Post(':id/duplicate')
+  duplicate(@Param('id') id: string, @Request() req: any) {
+    return this.billsService.duplicate(id, req.user.id);
   }
 
   /**

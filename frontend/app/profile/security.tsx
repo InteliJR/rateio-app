@@ -40,10 +40,13 @@ export default function SecurityScreen() {
     if (!rawUrl) return null;
 
     if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
-      return rawUrl;
+      // Adicionar timestamp para evitar cache
+      const separator = rawUrl.includes('?') ? '&' : '?';
+      return `${rawUrl}${separator}t=${Date.now()}`;
     }
 
-    return `${API_URL}${rawUrl}`;
+    // Adicionar timestamp para evitar cache
+    return `${API_URL}${rawUrl}?t=${Date.now()}`;
   };
 
   const loadUserData = async () => {

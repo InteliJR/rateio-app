@@ -9,6 +9,8 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -20,16 +22,21 @@ import itemsService from "../../../services/items.service";
 import participantsService, {
   Participant,
 } from "../../../services/participants.service";
-import { useTheme } from "../../../contexts/ThemeContext";
+import divisionsService from "../../../services/divisions.service";
+import feesService, { Fee, FeeType } from "../../../services/fees.service";
 
 export default function ScannedBillScreen() {
-  const { colors, getFontSize } = useTheme();
-  const { id, participants: participantsParam } = useLocalSearchParams();
+  const {
+    id,
+    participants: participantsParam,
+    editMode,
+  } = useLocalSearchParams();
   const router = useRouter();
+  const isEditMode = editMode === "true";
 
   const [billName, setBillName] = useState("");
   const [items, setItems] = useState<BillItem[]>([]);
-  const [participants, setParticipants] = useState<string[]>([]);
+  const [participants, setParticipants] = useState<Participant[]>([]);
   const [expandedItemId, setExpandedItemId] = useState<string>("");
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -38,6 +45,10 @@ export default function ScannedBillScreen() {
   >(null);
   const [processingOcr, setProcessingOcr] = useState(false);
   const [savingName, setSavingName] = useState(false);
+  const [isCompleted, setIsCompleted] = useState(false);
+  const [savingDivisions, setSavingDivisions] = useState<string | null>(null);
+
+  // Estados de edição inline
   const [editingItemNameId, setEditingItemNameId] = useState<string | null>(
     null,
   );
@@ -51,7 +62,26 @@ export default function ScannedBillScreen() {
   const [itemQuantities, setItemQuantities] = useState<Record<string, string>>(
     {},
   );
-  const saveTimeoutsRef = useRef<Record<string, NodeJS.Timeout>>({});
+
+  // Estados de edição de participantes
+  const [editingParticipantId, setEditingParticipantId] = useState<
+    string | null
+  >(null);
+  const [participantNameInput, setParticipantNameInput] = useState<string>("");
+  const [savingParticipantId, setSavingParticipantId] = useState<string | null>(
+    null,
+  );
+
+  // Estados de taxas
+  const [fees, setFees] = useState<Fee[]>([]);
+  const [serviceFeeInput, setServiceFeeInput] = useState<string>("");
+  const [couvertInput, setCouvertInput] = useState<string>("");
+  const [editingServiceFee, setEditingServiceFee] = useState(false);
+  const [editingCouvert, setEditingCouvert] = useState(false);
+  const [savingFee, setSavingFee] = useState(false);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const saveTimeoutsRef = useRef<{ [key: string]: any }>({});
 
   useEffect(() => {
     loadBillData();
@@ -65,77 +95,72 @@ export default function ScannedBillScreen() {
     };
   }, [id]);
 
-  // Polling para verificar quando OCR terminar
+  // Polling quando status for PENDING_OCR
   useEffect(() => {
-    if (billStatus === "PENDING_OCR" && id) {
-      setProcessingOcr(true);
-      let attempts = 0;
-      const maxAttempts = 20; // Máximo de ~2 minutos (20 * 6 segundos)
+    if (!id || billStatus !== "PENDING_OCR") return;
 
-      const pollInterval = setInterval(async () => {
-        attempts++;
+    console.log("[Scanned] Starting polling for OCR completion...");
+    setProcessingOcr(true);
+    let attempts = 0;
+    const maxAttempts = 20; // Máximo de ~2 minutos
 
-        // Limite de tentativas para evitar polling infinito
-        if (attempts > maxAttempts) {
+    const pollInterval = setInterval(async () => {
+      attempts++;
+
+      // Limite de tentativas para evitar polling infinito
+      if (attempts > maxAttempts) {
+        clearInterval(pollInterval);
+        setProcessingOcr(false);
+        Alert.alert(
+          "Tempo limite excedido",
+          "O processamento está demorando mais que o esperado. Você pode adicionar os itens manualmente.",
+          [{ text: "OK" }],
+        );
+        return;
+      }
+
+      try {
+        const billData = await billService.getBill(id as string);
+        console.log("[Scanned] Polling - Status:", billData.status);
+
+        if (billData.status !== "PENDING_OCR") {
+          // OCR terminou ou falhou, limpar cache e recarregar dados
+          console.log(
+            "[Scanned] OCR completed, clearing cache and reloading data...",
+          );
+          itemsService.clearCache(id as string);
           clearInterval(pollInterval);
           setProcessingOcr(false);
-          Alert.alert(
-            "Tempo limite excedido",
-            "O processamento está demorando mais que o esperado. Você pode adicionar os itens manualmente.",
-            [{ text: "OK" }],
-          );
-          return;
-        }
+          loadBillData();
 
-        try {
-          const billData = await billService.getBill(id as string);
-          setBillStatus(billData.status);
-
-          if (billData.status !== "PENDING_OCR") {
-            // OCR terminou, carregar itens
-            clearInterval(pollInterval);
-            setProcessingOcr(false);
-
-            if (
-              billData.status === "REVIEWING" ||
-              billData.status === "DIVIDING"
-            ) {
-              // Carregar itens agora que estão disponíveis
-              const itemsData = await itemsService.getItems(id as string);
-              setItems(itemsData);
-
-              // Atualizar nome se disponível
-              if (billData.establishmentName) {
-                setBillName(billData.establishmentName);
-              }
-            } else if (billData.status === "OCR_FAILED") {
-              Alert.alert(
-                "OCR Falhou",
-                "Não foi possível reconhecer os itens da conta. Você pode adicionar os itens manualmente.",
-                [{ text: "OK" }],
-              );
-            }
-          }
-        } catch (error: any) {
-          console.error("Error polling bill status:", error);
-
-          // Se for erro 429 (Too Many Requests), aumentar intervalo
-          if (
-            error.response?.status === 429 ||
-            error.message?.includes("Too Many Requests")
-          ) {
-            console.warn(
-              "Rate limit atingido no polling, aguardando mais tempo...",
+          if (billData.status === "OCR_FAILED") {
+            Alert.alert(
+              "OCR Falhou",
+              "Não foi possível reconhecer os itens da conta. Você pode adicionar os itens manualmente.",
+              [{ text: "OK" }],
             );
-            // Não fazer nada, o intervalo já está adequado
           }
-          // Continuar tentando mesmo com erro até o limite
         }
-      }, 6000); // Verificar a cada 6 segundos (10 req/min = 1 req a cada 6s)
+      } catch (error: any) {
+        console.error("[Scanned] Error polling:", error);
 
-      return () => clearInterval(pollInterval);
-    }
-  }, [billStatus, id]);
+        // Se for erro 429 (Too Many Requests), aumentar intervalo
+        if (
+          error.response?.status === 429 ||
+          error.message?.includes("Too Many Requests")
+        ) {
+          console.warn(
+            "Rate limit atingido no polling, aguardando mais tempo...",
+          );
+        }
+      }
+    }, 5000); // Poll a cada 5 segundos
+
+    return () => {
+      console.log("[Scanned] Stopping polling");
+      clearInterval(pollInterval);
+    };
+  }, [id, billStatus]);
 
   // Inicializar nomes, preços e quantidades dos itens quando items mudarem
   useEffect(() => {
@@ -144,7 +169,6 @@ export default function ScannedBillScreen() {
     const quantities: Record<string, string> = {};
     items.forEach((item) => {
       names[item.id] = item.name;
-      // `item.price` no frontend agora é o VALOR UNITÁRIO
       prices[item.id] = item.price.toFixed(2).replace(".", ",");
       quantities[item.id] = item.quantity.toString();
     });
@@ -156,39 +180,162 @@ export default function ScannedBillScreen() {
   const loadBillData = async () => {
     try {
       setLoading(true);
+      console.log("[Scanned] Loading bill data for ID:", id);
 
       // Limpar cache para garantir dados atualizados
       itemsService.clearCache(id as string);
 
-      // Load bill details
+      // 1. Carregar informações da conta
       const billData = await billService.getBill(id as string);
+      console.log("[Scanned] Bill data:", billData);
+
       setBillStatus(billData.status);
+      // Se estiver em modo de edição (editMode), permitir edição mesmo se COMPLETED
+      setIsCompleted(billData.status === "COMPLETED" && !isEditMode);
       setBillName(billData.establishmentName || "");
 
       // Se o OCR ainda está processando, não tentar carregar itens ainda
       if (billData.status === "PENDING_OCR") {
         setProcessingOcr(true);
         setItems([]);
-      } else {
-        // Load items - garantir que os IDs sejam os UUIDs reais do backend
-        const itemsData = await itemsService.getItems(id as string);
-        setItems(itemsData);
-        setProcessingOcr(false);
+        setParticipants([]);
+        setLoading(false);
+        return;
       }
 
-      // Load participants (sempre tentar carregar)
+      setProcessingOcr(false);
+
+      if (billData.status === "COMPLETED") {
+        console.log("[Scanned] Bill is completed - read-only mode");
+      }
+
+      // 2. Carregar itens da conta
+      const itemsData = await itemsService.getItems(id as string);
+      console.log("[Scanned] Items loaded:", itemsData.length);
+
+      // 3. Carregar participantes
+      let participantsData: Participant[] = [];
       try {
-        const participantsData =
-          await participantsService.getParticipantsByBill(id as string);
-        setParticipants(participantsData.map((p: Participant) => p.name));
-      } catch (error) {
-        // Se não houver participantes ainda, não é erro crítico
-        console.log("No participants found yet");
+        participantsData = await participantsService.getParticipantsByBill(
+          id as string,
+        );
+        console.log("[Scanned] Participants loaded:", participantsData.length);
+
+        if (participantsData.length === 0) {
+          console.warn("[Scanned] No participants found for this bill");
+        }
+
+        setParticipants(participantsData);
+      } catch (error: any) {
+        console.error("[Scanned] Error loading participants:", error);
         setParticipants([]);
       }
-    } catch (error) {
-      console.error("Error loading bill data:", error);
-      Alert.alert("Erro", "Não foi possível carregar os dados da conta");
+
+      // 4. Carregar taxas (fees)
+      try {
+        const feesResponse = await feesService.findAllByBill(id as string);
+        console.log("[Scanned] Fees loaded:", feesResponse);
+
+        // feesResponse pode ser array ou objeto com fees
+        const feesData = Array.isArray(feesResponse)
+          ? feesResponse
+          : (feesResponse as any).fees || [];
+
+        setFees(feesData);
+
+        // Inicializar inputs de taxas
+        const serviceFee = feesData.find(
+          (f: Fee) => f.type === FeeType.SERVICE_PERCENTAGE,
+        );
+        const couvert = feesData.find(
+          (f: Fee) => f.type === FeeType.COVER_CHARGE,
+        );
+
+        setServiceFeeInput(serviceFee ? serviceFee.value.toString() : "0");
+        setCouvertInput(
+          couvert ? couvert.value.toFixed(2).replace(".", ",") : "0,00",
+        );
+      } catch (error: any) {
+        console.warn("[Scanned] Error loading fees:", error.message);
+        setFees([]);
+        setServiceFeeInput("0");
+        setCouvertInput("0,00");
+      }
+
+      // 5. Carregar divisões existentes (assignments)
+      let divisionsData: any[] = [];
+      try {
+        const divisionsResponse = await divisionsService.findAllByBill(
+          id as string,
+        );
+        console.log(
+          "[Scanned] Divisions response:",
+          JSON.stringify(divisionsResponse, null, 2),
+        );
+
+        // Backend retorna: { billId, items: [{ billItem, divisions: [], totalDivided }], totalDivisions }
+        if (divisionsResponse && typeof divisionsResponse === "object") {
+          if (
+            "items" in divisionsResponse &&
+            Array.isArray((divisionsResponse as any).items)
+          ) {
+            // Extrair todas as divisões de todos os itens
+            const allDivisions: any[] = [];
+            (divisionsResponse as any).items.forEach((itemGroup: any) => {
+              if (
+                itemGroup &&
+                itemGroup.divisions &&
+                Array.isArray(itemGroup.divisions)
+              ) {
+                allDivisions.push(...itemGroup.divisions);
+              }
+            });
+            divisionsData = allDivisions;
+          } else if (Array.isArray(divisionsResponse)) {
+            // Se for array direto (fallback)
+            divisionsData = divisionsResponse;
+          }
+        }
+        console.log("[Scanned] Divisions loaded:", divisionsData.length);
+      } catch (error: any) {
+        console.warn(
+          "[Scanned] Error loading divisions (may not exist yet):",
+          error.message,
+        );
+        divisionsData = [];
+      }
+
+      // 5. Mapear divisões para assignedParticipants nos itens
+      const itemsWithAssignments = itemsData.map((item) => {
+        // Encontrar todas as divisões deste item
+        const itemDivisions = divisionsData.filter(
+          (div: any) => div.billItemId === item.id,
+        );
+
+        // Mapear participantIds para nomes de participantes
+        const assignedParticipantNames = itemDivisions
+          .map((div: any) => {
+            const participant = participantsData.find(
+              (p: Participant) => p.id === div.participantId,
+            );
+            return participant?.name || "";
+          })
+          .filter(Boolean);
+
+        return {
+          ...item,
+          assignedParticipants: assignedParticipantNames,
+        };
+      });
+
+      setItems(itemsWithAssignments);
+      console.log("[Scanned] Items with assignments:", itemsWithAssignments);
+    } catch (error: any) {
+      console.error("[Scanned] Error loading bill data:", error);
+      Alert.alert(
+        "Erro",
+        error.message || "Não foi possível carregar os dados da conta",
+      );
     } finally {
       setLoading(false);
     }
@@ -210,56 +357,325 @@ export default function ScannedBillScreen() {
     }
   };
 
-  useEffect(() => {
-    if (participantsParam) {
-      try {
-        const parsed = JSON.parse(participantsParam as string);
-        setParticipants(parsed);
-      } catch (e) {
-        console.error("Error parsing participants:", e);
-        setParticipants([]);
-      }
-    }
-  }, [participantsParam]);
+  // Participantes agora são carregados do backend no loadBillData
 
-  const toggleParticipant = (itemId: string, participant: string) => {
+  /**
+   * Recalcula as divisões de um item quando preço ou quantidade muda
+   * Remove todas as divisões existentes e cria novas com o valor atualizado
+   */
+  const recalculateDivisionsForItem = async (
+    itemId: string,
+    updatedItem: BillItem,
+  ) => {
+    try {
+      console.log("[Scanned] Recalculating divisions for item:", itemId);
+
+      // Buscar divisões atuais do item
+      const allDivisions = await divisionsService.findAllByBill(id as string);
+      const currentItemDivisions = allDivisions.filter(
+        (div: any) => div.billItemId === itemId,
+      );
+
+      if (currentItemDivisions.length === 0) {
+        console.log("[Scanned] No divisions to recalculate for item:", itemId);
+        return;
+      }
+
+      // Calcular novo valor total do item e shareAmount
+      const totalItemPrice = updatedItem.price * (updatedItem.quantity || 1);
+      const participantCount = updatedItem.assignedParticipants.length;
+      const newShareAmount = divisionsService.calculateShareAmount(
+        totalItemPrice,
+        participantCount,
+      );
+
+      console.log("[Scanned] New total price:", totalItemPrice);
+      console.log("[Scanned] New share amount:", newShareAmount);
+
+      // Remover todas as divisões existentes deste item em paralelo
+      await Promise.all(
+        currentItemDivisions.map((div: any) => divisionsService.remove(div.id)),
+      );
+
+      // Criar novas divisões com valores recalculados
+      const participantIds = currentItemDivisions.map(
+        (div: any) => div.participantId,
+      );
+      const divisions = participantIds.map((participantId: string) => ({
+        participantId,
+        shareAmount: newShareAmount,
+      }));
+
+      await divisionsService.createBatch(itemId, divisions);
+      console.log(
+        "[Scanned] Divisions recalculated for item:",
+        itemId,
+        "New share:",
+        newShareAmount,
+      );
+    } catch (error: any) {
+      console.error("[Scanned] Error recalculating divisions:", error);
+      // Não mostrar alert para não interromper o fluxo
+    }
+  };
+
+  const toggleParticipant = async (itemId: string, participantName: string) => {
+    if (isCompleted) {
+      Alert.alert(
+        "Conta Finalizada",
+        "Esta conta já foi finalizada e não pode ser editada.",
+        [{ text: "OK" }],
+      );
+      return;
+    }
+
+    // Encontrar o participante pelo nome
+    const participant = participants.find((p) => p.name === participantName);
+    if (!participant) {
+      console.error("[Scanned] Participant not found:", participantName);
+      return;
+    }
+
+    // Encontrar o item
+    const item = items.find((i) => i.id === itemId);
+    if (!item) {
+      console.error("[Scanned] Item not found:", itemId);
+      console.error(
+        "[Scanned] Available items:",
+        items.map((i) => ({ id: i.id, name: i.name })),
+      );
+      Alert.alert("Erro", "Item não encontrado. Tente recarregar a página.");
+      return;
+    }
+
+    console.log(
+      "[Scanned] Toggling participant:",
+      participantName,
+      "for item:",
+      itemId,
+      "Item name:",
+      item.name,
+    );
+
+    const isAssigned = item.assignedParticipants.includes(participantName);
+
+    // Atualizar estado local imediatamente (otimista)
     setItems((prevItems) =>
-      prevItems.map((item) => {
-        if (item.id === itemId) {
-          const isAssigned = item.assignedParticipants.includes(participant);
+      prevItems.map((i) => {
+        if (i.id === itemId) {
           return {
-            ...item,
+            ...i,
             assignedParticipants: isAssigned
-              ? item.assignedParticipants.filter((p) => p !== participant)
-              : [...item.assignedParticipants, participant],
+              ? i.assignedParticipants.filter((p) => p !== participantName)
+              : [...i.assignedParticipants, participantName],
           };
         }
-        return item;
+        return i;
       }),
     );
+
+    // Salvar no backend
+    try {
+      setSavingDivisions(itemId);
+
+      // Buscar divisões atuais deste item
+      const allDivisions = await divisionsService.findAllByBill(id as string);
+      const currentItemDivisions = allDivisions.filter(
+        (div: any) => div.billItemId === itemId,
+      );
+
+      if (isAssigned) {
+        // Remover participante: recalcular todas as divisões do item
+        const newAssignedCount = item.assignedParticipants.length - 1;
+
+        if (newAssignedCount === 0) {
+          // Se não há mais participantes, remover todas as divisões
+          for (const div of currentItemDivisions) {
+            await divisionsService.remove(div.id);
+          }
+          console.log("[Scanned] All divisions removed (no participants left)");
+        } else {
+          // Recalcular divisões para os participantes restantes
+          // item.price é unitPrice, precisamos do totalPrice = unitPrice * quantity
+          const totalItemPrice = item.price * (item.quantity || 1);
+          const shareAmount = divisionsService.calculateShareAmount(
+            totalItemPrice,
+            newAssignedCount,
+          );
+
+          // Remover todas as divisões existentes deste item em paralelo
+          await Promise.all(
+            currentItemDivisions.map((div: any) =>
+              divisionsService.remove(div.id),
+            ),
+          );
+
+          // Criar novas divisões com valores recalculados para os participantes restantes
+          const remainingAssignments = item.assignedParticipants
+            .filter((name) => name !== participantName)
+            .map((name) => {
+              const p = participants.find((pp) => pp.name === name);
+              return p!;
+            });
+
+          const divisions = remainingAssignments.map((p) => ({
+            participantId: p.id,
+            shareAmount: shareAmount,
+          }));
+
+          console.log(
+            "[Scanned] Creating batch divisions for item:",
+            itemId,
+            "with divisions:",
+            divisions,
+          );
+          await divisionsService.createBatch(itemId, divisions);
+          console.log(
+            "[Scanned] Divisions recalculated after removal for item:",
+            itemId,
+            "Share amount:",
+            shareAmount,
+          );
+        }
+      } else {
+        // Adicionar participante: recalcular todas as divisões do item
+        const newAssignedCount = item.assignedParticipants.length + 1;
+        // item.price é unitPrice, precisamos do totalPrice = unitPrice * quantity
+        const totalItemPrice = item.price * (item.quantity || 1);
+        const shareAmount = divisionsService.calculateShareAmount(
+          totalItemPrice,
+          newAssignedCount,
+        );
+
+        // Remover todas as divisões existentes deste item em paralelo
+        await Promise.all(
+          currentItemDivisions.map((div: any) =>
+            divisionsService.remove(div.id),
+          ),
+        );
+
+        // Criar novas divisões com valores recalculados para todos os participantes
+        const newAssignments = [
+          ...item.assignedParticipants.map((name) => {
+            const p = participants.find((pp) => pp.name === name);
+            return p!;
+          }),
+          participant,
+        ];
+
+        const divisions = newAssignments.map((p) => ({
+          participantId: p.id,
+          shareAmount: shareAmount,
+        }));
+
+        console.log(
+          "[Scanned] Creating batch divisions for item:",
+          itemId,
+          "with divisions:",
+          divisions,
+        );
+        await divisionsService.createBatch(itemId, divisions);
+        console.log(
+          "[Scanned] Divisions recalculated for item:",
+          itemId,
+          "Share amount:",
+          shareAmount,
+        );
+      }
+    } catch (error: any) {
+      console.error("[Scanned] Error saving division:", error);
+      Alert.alert(
+        "Erro",
+        error.message || "Não foi possível salvar a divisão. Tente novamente.",
+      );
+
+      // Reverter mudança local em caso de erro
+      setItems((prevItems) =>
+        prevItems.map((i) => {
+          if (i.id === itemId) {
+            return {
+              ...i,
+              assignedParticipants: isAssigned
+                ? [...i.assignedParticipants, participantName]
+                : i.assignedParticipants.filter((p) => p !== participantName),
+            };
+          }
+          return i;
+        }),
+      );
+    } finally {
+      setSavingDivisions(null);
+    }
   };
 
   const handleAddNewItem = async (
     newItem: Omit<BillItem, "id" | "assignedParticipants">,
   ) => {
     try {
-      const createdItem = await itemsService.createItem(id as string, newItem);
-      setItems([...items, createdItem]);
+      // Criar item no backend
+      const createdItems = await itemsService.createItem(id as string, newItem);
+
+      // Atualizar estado local com os itens retornados do backend
+      if (Array.isArray(createdItems)) {
+        setItems(createdItems);
+      } else {
+        // Se retornar um único item, adicionar à lista existente
+        setItems([...items, createdItems]);
+      }
       setIsModalVisible(false);
-      // Feedback de sucesso silencioso - item aparece na lista
     } catch (error: any) {
-      console.error("Error adding item:", error);
-      Alert.alert("Erro", error.message || "Não foi possível adicionar o item");
+      console.error("[Scanned] Error adding item:", error);
+      Alert.alert(
+        "Erro",
+        error.message || "Não foi possível adicionar o item. Tente novamente.",
+      );
     }
   };
 
   const deleteItem = (itemId: string) => {
-    setItems(items.filter((item) => item.id !== itemId));
-    if (expandedItemId === itemId) {
-      setExpandedItemId("");
+    if (isCompleted) {
+      Alert.alert(
+        "Conta Finalizada",
+        "Esta conta já foi finalizada e não pode ser editada.",
+        [{ text: "OK" }],
+      );
+      return;
     }
+
+    Alert.alert("Excluir item", "Tem certeza que deseja excluir este item?", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Excluir",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            // Deletar item no backend (isso também remove as divisões relacionadas)
+            const result = await itemsService.deleteItem(id as string, itemId);
+
+            // Se retornar a lista atualizada, usar ela; senão filtrar localmente
+            if (Array.isArray(result)) {
+              setItems(result);
+            } else {
+              setItems(items.filter((item) => item.id !== itemId));
+            }
+
+            if (expandedItemId === itemId) {
+              setExpandedItemId("");
+            }
+          } catch (error: any) {
+            console.error("[Scanned] Error deleting item:", error);
+            Alert.alert(
+              "Erro",
+              error.message ||
+                "Não foi possível deletar o item. Tente novamente.",
+            );
+          }
+        },
+      },
+    ]);
   };
 
+  // === FUNÇÕES DE EDIÇÃO DE NOME ===
   const handleItemNameChange = (itemId: string, newName: string) => {
     setItemNames((prev) => ({
       ...prev,
@@ -276,17 +692,10 @@ export default function ScannedBillScreen() {
 
     const trimmedName = itemNames[itemId]?.trim();
 
-    // Validar que nome não está vazio
+    // Validar que nome não está vazio - mostrar alerta e manter em modo edição
     if (!trimmedName) {
-      // Reverter para o valor original
-      const originalItem = items.find((item) => item.id === itemId);
-      if (originalItem) {
-        setItemNames((prev) => ({
-          ...prev,
-          [itemId]: originalItem.name,
-        }));
-      }
-      setEditingItemNameId(null);
+      Alert.alert("Atenção", "O nome do item não pode ficar vazio");
+      // Manter o foco no campo para o usuário digitar
       return;
     }
 
@@ -327,7 +736,6 @@ export default function ScannedBillScreen() {
         ) {
           errorMessage =
             "Muitas requisições. Aguarde um momento e tente novamente.";
-          // Aguardar um pouco antes de permitir nova tentativa
           await new Promise((resolve) => setTimeout(resolve, 2000));
         }
 
@@ -348,11 +756,12 @@ export default function ScannedBillScreen() {
         setSavingItemId(null);
         setEditingItemNameId(null);
       }
-    }, 500); // Debounce de 500ms
+    }, 1000); // Debounce de 1 segundo para reduzir chamadas
 
     saveTimeoutsRef.current[itemId] = timeoutId;
   };
 
+  // === FUNÇÕES DE EDIÇÃO DE PREÇO ===
   const handleItemPriceChange = (itemId: string, newPrice: string) => {
     // Permitir apenas números, vírgula e ponto
     const cleaned = newPrice.replace(/[^0-9,.]/g, "").replace(",", ".");
@@ -369,14 +778,14 @@ export default function ScannedBillScreen() {
       delete saveTimeoutsRef.current[itemId];
     }
 
-    const priceStr = itemPrices[itemId]?.replace(",", ".") || "0";
+    const priceStr = itemPrices[itemId]?.replace(",", ".") || "";
     const newUnitPrice = parseFloat(priceStr);
     const originalItem = items.find((item) => item.id === itemId);
 
     if (!originalItem) return;
 
-    // Validar valor unitário > 0
-    if (isNaN(newUnitPrice) || newUnitPrice <= 0) {
+    // Se campo está vazio ou valor é inválido, reverter para valor original
+    if (priceStr === "" || isNaN(newUnitPrice) || newUnitPrice <= 0) {
       setItemPrices((prev) => ({
         ...prev,
         [itemId]: originalItem.price.toFixed(2).replace(".", ","),
@@ -399,15 +808,21 @@ export default function ScannedBillScreen() {
         await itemsService.updateItemPrice(id as string, itemId, newUnitPrice);
 
         // Atualizar estado local: manter convenção `price` = unitário
+        const updatedItem = { ...originalItem, price: newUnitPrice };
         setItems((prevItems) =>
-          prevItems.map((item) =>
-            item.id === itemId ? { ...item, price: newUnitPrice } : item,
-          ),
+          prevItems.map((item) => (item.id === itemId ? updatedItem : item)),
         );
+
+        // Recalcular divisões se houver participantes atribuídos
+        if (
+          originalItem.assignedParticipants &&
+          originalItem.assignedParticipants.length > 0
+        ) {
+          await recalculateDivisionsForItem(itemId, updatedItem);
+        }
       } catch (error: any) {
         console.error("Error updating item price:", error);
 
-        // Extrair mensagem de erro mais amigável
         let errorMessage = "Não foi possível atualizar o valor do item";
         if (error.response?.data?.message) {
           errorMessage = error.response.data.message;
@@ -415,18 +830,15 @@ export default function ScannedBillScreen() {
           errorMessage = error.message;
         }
 
-        // Tratar erro 429 (Too Many Requests)
         if (
           error.response?.status === 429 ||
           error.message?.includes("Too Many Requests")
         ) {
           errorMessage =
             "Muitas requisições. Aguarde um momento e tente novamente.";
-          // Aguardar um pouco antes de permitir nova tentativa
           await new Promise((resolve) => setTimeout(resolve, 2000));
         }
 
-        // Só mostrar alert se não for erro 404
         if (error.response?.status !== 404) {
           Alert.alert("Erro", errorMessage);
         }
@@ -440,17 +852,18 @@ export default function ScannedBillScreen() {
         setSavingItemId(null);
         setEditingItemPriceId(null);
       }
-    }, 500); // Debounce de 500ms
+    }, 1000); // Debounce de 1 segundo para reduzir chamadas
 
     saveTimeoutsRef.current[itemId] = timeoutId;
   };
 
+  // === FUNÇÕES DE EDIÇÃO DE QUANTIDADE ===
   const handleItemQuantityChange = (itemId: string, newQty: string) => {
     // Permitir campo vazio durante a edição, apenas remover caracteres não numéricos
     const cleaned = newQty.replace(/[^0-9]/g, "");
     setItemQuantities((prev) => ({
       ...prev,
-      [itemId]: cleaned, // Pode ser string vazia durante a edição
+      [itemId]: cleaned,
     }));
   };
 
@@ -481,7 +894,7 @@ export default function ScannedBillScreen() {
       return;
     }
 
-    // Salvar nova QUANTIDADE no backend (preço unitário é mantido)
+    // Salvar nova QUANTIDADE no backend
     const timeoutId = setTimeout(async () => {
       try {
         setSavingItemId(itemId);
@@ -491,15 +904,21 @@ export default function ScannedBillScreen() {
           newQuantity,
         );
 
+        const updatedItem = { ...originalItem, quantity: newQuantity };
         setItems((prevItems) =>
-          prevItems.map((item) =>
-            item.id === itemId ? { ...item, quantity: newQuantity } : item,
-          ),
+          prevItems.map((item) => (item.id === itemId ? updatedItem : item)),
         );
+
+        // Recalcular divisões se houver participantes atribuídos
+        if (
+          originalItem.assignedParticipants &&
+          originalItem.assignedParticipants.length > 0
+        ) {
+          await recalculateDivisionsForItem(itemId, updatedItem);
+        }
       } catch (error: any) {
         console.error("Error updating item quantity:", error);
 
-        // Extrair mensagem de erro mais amigável
         let errorMessage = "Não foi possível atualizar a quantidade do item";
         if (error.response?.data?.message) {
           errorMessage = error.response.data.message;
@@ -507,18 +926,15 @@ export default function ScannedBillScreen() {
           errorMessage = error.message;
         }
 
-        // Tratar erro 429 (Too Many Requests)
         if (
           error.response?.status === 429 ||
           error.message?.includes("Too Many Requests")
         ) {
           errorMessage =
             "Muitas requisições. Aguarde um momento e tente novamente.";
-          // Aguardar um pouco antes de permitir nova tentativa
           await new Promise((resolve) => setTimeout(resolve, 2000));
         }
 
-        // Só mostrar alert se não for erro 404
         if (error.response?.status !== 404) {
           Alert.alert("Erro", errorMessage);
         }
@@ -531,7 +947,7 @@ export default function ScannedBillScreen() {
         setSavingItemId(null);
         setEditingItemQtyId(null);
       }
-    }, 500); // Debounce de 500ms
+    }, 1000); // Debounce de 1 segundo para reduzir chamadas
 
     saveTimeoutsRef.current[itemId] = timeoutId;
   };
@@ -540,11 +956,28 @@ export default function ScannedBillScreen() {
     router.push({
       pathname: "/(tabs)/(create)/summary",
       params: {
-        billName: billName,
-        items: JSON.stringify(items),
-        participants: JSON.stringify(participants),
+        id: id as string, // Pass bill ID for backend data fetching
       },
     });
+  };
+
+  // Função para concluir edição e voltar aos detalhes da conta
+  const handleSaveAndGoBack = () => {
+    Alert.alert(
+      "Concluir edição",
+      "Deseja finalizar a edição e voltar para os detalhes da conta?",
+      [
+        { text: "Continuar editando", style: "cancel" },
+        {
+          text: "Concluir",
+          onPress: () =>
+            router.replace({
+              pathname: "/(tabs)/bills/[id]",
+              params: { id: id as string },
+            }),
+        },
+      ],
+    );
   };
 
   const formatCurrency = (value: number) => {
@@ -552,449 +985,1053 @@ export default function ScannedBillScreen() {
   };
 
   /**
+   * Inicia edição do nome do participante
+   */
+  const startEditingParticipant = (participant: Participant) => {
+    if (isCompleted) return;
+    setEditingParticipantId(participant.id);
+    setParticipantNameInput(participant.name);
+  };
+
+  /**
+   * Cancela edição do participante
+   */
+  const cancelEditingParticipant = () => {
+    setEditingParticipantId(null);
+    setParticipantNameInput("");
+  };
+
+  /**
+   * Salva novo nome do participante
+   */
+  const saveParticipantName = async (participantId: string) => {
+    const newName = participantNameInput.trim();
+    if (!newName) {
+      Alert.alert("Erro", "O nome não pode estar vazio");
+      return;
+    }
+
+    const participant = participants.find((p) => p.id === participantId);
+    if (!participant) return;
+
+    // Se o nome não mudou, apenas cancelar edição
+    if (newName === participant.name) {
+      cancelEditingParticipant();
+      return;
+    }
+
+    try {
+      setSavingParticipantId(participantId);
+
+      // Atualizar no backend
+      await participantsService.updateParticipant(participantId, newName);
+
+      // Atualizar nome nos itens que tinham esse participante atribuído
+      const oldName = participant.name;
+      setItems((prevItems) =>
+        prevItems.map((item) => ({
+          ...item,
+          assignedParticipants: item.assignedParticipants.map((name) =>
+            name === oldName ? newName : name,
+          ),
+        })),
+      );
+
+      // Atualizar lista de participantes local
+      setParticipants((prev) =>
+        prev.map((p) => (p.id === participantId ? { ...p, name: newName } : p)),
+      );
+
+      console.log(
+        "[Scanned] Participant name updated:",
+        participantId,
+        "->",
+        newName,
+      );
+    } catch (error: any) {
+      console.error("Error updating participant name:", error);
+      Alert.alert(
+        "Erro",
+        error.message || "Não foi possível atualizar o nome do participante",
+      );
+    } finally {
+      setSavingParticipantId(null);
+      cancelEditingParticipant();
+    }
+  };
+
+  /**
+   * Adiciona um novo participante à conta
+   */
+  const addParticipant = async () => {
+    if (isCompleted) return;
+
+    try {
+      const newName = `Pessoa ${participants.length + 1}`;
+      const newParticipant = await participantsService.createParticipant(
+        id as string,
+        newName,
+      );
+
+      setParticipants((prev) => [...prev, newParticipant]);
+      console.log("[Scanned] New participant added:", newParticipant.name);
+    } catch (error: any) {
+      console.error("Error adding participant:", error);
+      Alert.alert(
+        "Erro",
+        error.message || "Não foi possível adicionar participante",
+      );
+    }
+  };
+
+  /**
+   * Remove um participante da conta
+   */
+  const removeParticipant = async (participantId: string) => {
+    if (isCompleted) return;
+
+    const participant = participants.find((p) => p.id === participantId);
+    if (!participant) return;
+
+    // Confirmar remoção
+    Alert.alert(
+      "Remover Participante",
+      `Deseja remover "${participant.name}"? As divisões atribuídas a este participante serão removidas.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Remover",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await participantsService.deleteParticipant(participantId);
+
+              // Atualizar lista de participantes local
+              setParticipants((prev) =>
+                prev.filter((p) => p.id !== participantId),
+              );
+
+              // Remover participante das atribuições dos itens
+              setItems((prevItems) =>
+                prevItems.map((item) => ({
+                  ...item,
+                  assignedParticipants: item.assignedParticipants.filter(
+                    (name) => name !== participant.name,
+                  ),
+                })),
+              );
+
+              console.log("[Scanned] Participant removed:", participant.name);
+            } catch (error: any) {
+              console.error("Error removing participant:", error);
+              Alert.alert(
+                "Erro",
+                error.message || "Não foi possível remover o participante",
+              );
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  /**
+   * Salva a taxa de serviço (porcentagem)
+   */
+  const saveServiceFee = async () => {
+    if (isCompleted) return;
+
+    const newValue = parseFloat(serviceFeeInput) || 0;
+
+    // Validar: deve estar entre 0 e 100
+    if (newValue < 0 || newValue > 100) {
+      Alert.alert("Erro", "A taxa de serviço deve estar entre 0% e 100%");
+      return;
+    }
+
+    try {
+      setSavingFee(true);
+
+      const existingFee = fees.find(
+        (f) => f.type === FeeType.SERVICE_PERCENTAGE,
+      );
+
+      if (existingFee) {
+        // Atualizar taxa existente
+        if (newValue === 0) {
+          // Se valor é 0, deletar a taxa
+          await feesService.remove(existingFee.id);
+          setFees((prev) => prev.filter((f) => f.id !== existingFee.id));
+        } else {
+          // Atualizar valor
+          const updated = await feesService.update(existingFee.id, {
+            value: newValue,
+          });
+          setFees((prev) =>
+            prev.map((f) => (f.id === existingFee.id ? updated : f)),
+          );
+        }
+      } else if (newValue > 0) {
+        // Criar nova taxa
+        const newFee = await feesService.create({
+          billId: id as string,
+          type: FeeType.SERVICE_PERCENTAGE,
+          value: newValue,
+        });
+        setFees((prev) => [...prev, newFee]);
+      }
+
+      setEditingServiceFee(false);
+      console.log("[Scanned] Service fee saved:", newValue);
+    } catch (error: any) {
+      console.error("Error saving service fee:", error);
+      Alert.alert(
+        "Erro",
+        error.message || "Não foi possível salvar a taxa de serviço",
+      );
+    } finally {
+      setSavingFee(false);
+    }
+  };
+
+  /**
+   * Salva o couvert (valor por pessoa)
+   */
+  const saveCouvert = async () => {
+    if (isCompleted) return;
+
+    const newValue = parseFloat(couvertInput.replace(",", ".")) || 0;
+
+    if (newValue < 0) {
+      Alert.alert("Erro", "O valor do couvert não pode ser negativo");
+      return;
+    }
+
+    try {
+      setSavingFee(true);
+
+      const existingFee = fees.find((f) => f.type === FeeType.COVER_CHARGE);
+
+      if (existingFee) {
+        if (newValue === 0) {
+          // Se valor é 0, deletar a taxa
+          await feesService.remove(existingFee.id);
+          setFees((prev) => prev.filter((f) => f.id !== existingFee.id));
+        } else {
+          // Atualizar valor
+          const updated = await feesService.update(existingFee.id, {
+            value: newValue,
+          });
+          setFees((prev) =>
+            prev.map((f) => (f.id === existingFee.id ? updated : f)),
+          );
+        }
+      } else if (newValue > 0) {
+        // Criar nova taxa
+        const newFee = await feesService.create({
+          billId: id as string,
+          type: FeeType.COVER_CHARGE,
+          value: newValue,
+          description: "Couvert por pessoa",
+        });
+        setFees((prev) => [...prev, newFee]);
+      }
+
+      setEditingCouvert(false);
+      console.log("[Scanned] Couvert saved:", newValue);
+    } catch (error: any) {
+      console.error("Error saving couvert:", error);
+      Alert.alert("Erro", error.message || "Não foi possível salvar o couvert");
+    } finally {
+      setSavingFee(false);
+    }
+  };
+
+  /**
    * IMPORTANTE:
-   * - Agora no frontend, o campo `price` do BillItem representa o VALOR UNITÁRIO.
+   * - No frontend, o campo `price` do BillItem representa o VALOR UNITÁRIO.
    * - O total da conta deve ser a soma de (quantidade × valor unitário) para cada item.
    */
   const calculateTotal = () => {
-    return items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    // item.price é unitPrice, então total = unitPrice × quantity
+    const total = items.reduce((sum, item) => {
+      const unitPrice = Number(item.price) || 0;
+      const quantity = Number(item.quantity) || 1;
+      const itemTotal = unitPrice * quantity;
+      console.log(
+        `[Scanned] Item: ${item.name}, UnitPrice: ${unitPrice}, Qty: ${quantity}, Total: ${itemTotal}`,
+      );
+      return sum + itemTotal;
+    }, 0);
+    console.log("[Scanned] Calculated total:", total);
+    return total;
   };
 
   return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: colors.background }]}
-    >
-      {loading ? (
-        <View
-          style={[
-            styles.loadingContainer,
-            { backgroundColor: colors.background },
-          ]}
-        >
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      ) : (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-        >
-          <View style={styles.contentContainer}>
-            {/* Header */}
-            <View style={styles.header}>
-              <View style={styles.billNameContainer}>
-                <View style={styles.billNameInputWrapper}>
-                  <TextInput
-                    style={[
-                      styles.billNameInput,
-                      {
-                        backgroundColor: colors.inputBackground,
-                        borderColor: colors.inputBorder,
-                        color: colors.text,
-                      },
-                      !savingName && billName && styles.billNameInputEditable,
-                    ]}
-                    value={billName}
-                    onChangeText={setBillName}
-                    onBlur={saveBillName}
-                    onFocus={() => {}}
-                    placeholder="Nome da conta"
-                    placeholderTextColor={colors.placeholderText}
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoidingContainer}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+      >
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#81007F" />
+          </View>
+        ) : (
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.contentContainer}>
+              {/* Banner de Modo Edição */}
+              {isEditMode && (
+                <View style={styles.editModeBanner}>
+                  <View style={styles.editModeIconContainer}>
+                    <MaterialCommunityIcons
+                      name="pencil-outline"
+                      size={18}
+                      color="#fff"
+                    />
+                  </View>
+                  <View style={styles.editModeBannerContent}>
+                    <Text style={styles.editModeBannerTitle}>
+                      Modo de Edição
+                    </Text>
+                    <Text style={styles.editModeBannerSubtitle}>
+                      Edite os valores e participantes abaixo
+                    </Text>
+                  </View>
+                </View>
+              )}
+              {/* Banner de Conta Finalizada (só mostra se não estiver em modo edição) */}
+              {isCompleted && !isEditMode && (
+                <View style={styles.completedBanner}>
+                  <MaterialCommunityIcons
+                    name="check-circle"
+                    size={20}
+                    color="#10b981"
                   />
-                  {!savingName && billName && (
-                    <Ionicons
-                      name="create-outline"
-                      size={16}
-                      color={colors.primary}
-                      style={styles.billNameEditIcon}
+                  <Text style={styles.completedBannerText}>
+                    Conta finalizada - Somente leitura
+                  </Text>
+                </View>
+              )}
+
+              {/* Header */}
+              <View style={styles.header}>
+                <View style={styles.billNameContainer}>
+                  <View style={styles.billNameInputWrapper}>
+                    <TextInput
+                      style={[
+                        styles.billNameInput,
+                        !savingName && billName && styles.billNameInputEditable,
+                      ]}
+                      value={billName}
+                      onChangeText={setBillName}
+                      onBlur={saveBillName}
+                      onFocus={() => {}}
+                      placeholder="Nome da conta"
+                      placeholderTextColor="#999"
+                      editable={!isCompleted}
+                    />
+                    {!savingName && billName && !isCompleted && (
+                      <Ionicons
+                        name="create-outline"
+                        size={16}
+                        color="#8B2E8F"
+                        style={styles.billNameEditIcon}
+                      />
+                    )}
+                  </View>
+                  {savingName && (
+                    <ActivityIndicator
+                      size="small"
+                      color="#81007F"
+                      style={styles.savingIndicator}
                     />
                   )}
                 </View>
-                {savingName && (
-                  <ActivityIndicator
-                    size="small"
-                    color={colors.primary}
-                    style={styles.savingIndicator}
+                <TouchableOpacity
+                  style={styles.addItemBtn}
+                  onPress={() => setIsModalVisible(true)}
+                  disabled={isCompleted}
+                >
+                  <Text style={styles.addItemBtnText}>+ Item</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Mensagem de processamento OCR */}
+              {processingOcr && (
+                <View style={styles.processingContainer}>
+                  <ActivityIndicator size="large" color="#81007F" />
+                  <Text style={styles.processingText}>
+                    Processando imagem e reconhecendo itens...
+                  </Text>
+                  <Text style={styles.processingSubtext}>
+                    Isso pode levar alguns segundos
+                  </Text>
+                </View>
+              )}
+
+              {/* Mensagem quando OCR falhou */}
+              {billStatus === "OCR_FAILED" && items.length === 0 && (
+                <View style={styles.errorContainer}>
+                  <Ionicons
+                    name="alert-circle-outline"
+                    size={48}
+                    color="#FF6B6B"
                   />
+                  <Text style={styles.errorTitle}>
+                    Não foi possível reconhecer os itens
+                  </Text>
+                  <Text style={styles.errorText}>
+                    Você pode adicionar os itens manualmente usando o botão "+
+                    Item"
+                  </Text>
+                </View>
+              )}
+
+              {/* Lista de items vazia */}
+              {!processingOcr &&
+                items.length === 0 &&
+                billStatus !== "OCR_FAILED" && (
+                  <View style={styles.emptyContainer}>
+                    <MaterialCommunityIcons
+                      name="receipt"
+                      size={48}
+                      color="#ccc"
+                    />
+                    <Text style={styles.emptyText}>Nenhum item encontrado</Text>
+                    <Text style={styles.emptySubtext}>
+                      Adicione itens manualmente usando o botão "+ Item"
+                    </Text>
+                  </View>
                 )}
-              </View>
-              <TouchableOpacity
-                style={[styles.addItemBtn, { backgroundColor: colors.primary }]}
-                onPress={() => setIsModalVisible(true)}
-              >
-                <Text
-                  style={[
-                    styles.addItemBtnText,
-                    { color: colors.accent, fontSize: getFontSize(12) },
-                  ]}
-                >
-                  + Item
-                </Text>
-              </TouchableOpacity>
-            </View>
 
-            {/* Mensagem de processamento OCR */}
-            {processingOcr && (
-              <View style={styles.processingContainer}>
-                <ActivityIndicator size="large" color={colors.primary} />
-                <Text
-                  style={[
-                    styles.processingText,
-                    { color: colors.text, fontSize: getFontSize(16) },
-                  ]}
-                >
-                  Processando imagem e reconhecendo itens...
-                </Text>
-                <Text
-                  style={[
-                    styles.processingSubtext,
-                    { color: colors.secondaryText, fontSize: getFontSize(14) },
-                  ]}
-                >
-                  Isso pode levar alguns segundos
-                </Text>
-              </View>
-            )}
-
-            {/* Mensagem quando OCR falhou */}
-            {billStatus === "OCR_FAILED" && items.length === 0 && (
-              <View style={styles.errorContainer}>
-                <Ionicons
-                  name="alert-circle-outline"
-                  size={48}
-                  color="#FF6B6B"
-                />
-                <Text
-                  style={[
-                    styles.errorTitle,
-                    { color: colors.text, fontSize: getFontSize(18) },
-                  ]}
-                >
-                  Não foi possível reconhecer os itens
-                </Text>
-                <Text
-                  style={[
-                    styles.errorText,
-                    { color: colors.secondaryText, fontSize: getFontSize(14) },
-                  ]}
-                >
-                  Você pode adicionar os itens manualmente usando o botão "+
-                  Item"
-                </Text>
-              </View>
-            )}
-
-            {/* Lista de items */}
-            {!processingOcr &&
-              items.map((item, index) => (
-                <View
-                  key={item.id}
-                  style={[
-                    styles.itemCardWrapper,
-                    { backgroundColor: colors.cardBackground },
-                  ]}
-                >
-                  <View style={styles.itemCardMain}>
-                    <View style={styles.itemCardLeft}>
-                      <View
-                        style={[styles.inputWrapper, styles.nameInputWrapper]}
-                      >
-                        {editingItemNameId === item.id ? (
-                          <TextInput
-                            style={[
-                              styles.itemCardName,
-                              styles.itemCardNameFocused,
-                              {
-                                backgroundColor: colors.inputBackground,
-                                borderColor: colors.inputBorder,
-                                color: colors.text,
-                              },
-                            ]}
-                            value={itemNames[item.id] || item.name}
-                            onChangeText={(text) =>
-                              handleItemNameChange(item.id, text)
-                            }
-                            onBlur={() => handleItemNameBlur(item.id)}
-                            placeholder="Nome do item"
-                            placeholderTextColor={colors.placeholderText}
-                            editable={true}
-                            underlineColorAndroid="transparent"
-                            selectionColor={colors.primary}
-                            multiline={false}
-                            numberOfLines={1}
-                          />
-                        ) : (
-                          <TouchableOpacity
-                            style={styles.itemCardNameContainer}
-                            onPress={() => setEditingItemNameId(item.id)}
-                            activeOpacity={0.7}
-                          >
-                            <Text
-                              style={[
-                                styles.itemCardNameText,
-                                {
-                                  color: colors.text,
-                                  fontSize: getFontSize(14),
-                                },
-                              ]}
-                              numberOfLines={1}
-                              ellipsizeMode="tail"
-                            >
-                              {itemNames[item.id] || item.name}
-                            </Text>
-                            <Ionicons
-                              name="create-outline"
-                              size={14}
-                              color={colors.primary}
-                              style={styles.editIconInContainer}
-                            />
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                      {savingItemId === item.id && (
-                        <ActivityIndicator
-                          size="small"
-                          color={colors.primary}
-                          style={styles.savingItemIndicator}
-                        />
-                      )}
-                    </View>
-                    <View style={styles.itemCardRight}>
-                      <View style={styles.inputWrapper}>
-                        <TextInput
-                          style={[
-                            styles.itemCardQty,
-                            {
-                              backgroundColor: colors.inputBackground,
-                              borderColor: colors.inputBorder,
-                              color: colors.text,
-                            },
-                            editingItemQtyId === item.id &&
-                              styles.itemCardQtyFocused,
-                            editingItemQtyId !== item.id &&
-                              styles.itemCardQtyEditable,
-                          ]}
-                          value={
-                            itemQuantities[item.id] !== undefined
-                              ? itemQuantities[item.id]
-                              : item.quantity.toString()
-                          }
-                          onChangeText={(text) =>
-                            handleItemQuantityChange(item.id, text)
-                          }
-                          onBlur={() => handleItemQuantityBlur(item.id)}
-                          onFocus={() => setEditingItemQtyId(item.id)}
-                          keyboardType="number-pad"
-                          placeholder="1"
-                          placeholderTextColor={colors.placeholderText}
-                          underlineColorAndroid="transparent"
-                          selectionColor={colors.primary}
-                        />
-                      </View>
-                      <Text
-                        style={[
-                          styles.qtySuffix,
-                          { color: colors.text, fontSize: getFontSize(14) },
-                        ]}
-                      >
-                        x
-                      </Text>
-                      <View style={styles.inputWrapper}>
-                        <TextInput
-                          style={[
-                            styles.itemCardAmount,
-                            {
-                              backgroundColor: colors.inputBackground,
-                              borderColor: colors.inputBorder,
-                              color: colors.text,
-                            },
-                            editingItemPriceId === item.id &&
-                              styles.itemCardAmountFocused,
-                            editingItemPriceId !== item.id &&
-                              styles.itemCardAmountEditable,
-                          ]}
-                          value={
-                            itemPrices[item.id] ||
-                            item.price.toFixed(2).replace(".", ",")
-                          }
-                          onChangeText={(text) =>
-                            handleItemPriceChange(item.id, text)
-                          }
-                          onBlur={() => handleItemPriceBlur(item.id)}
-                          onFocus={() => setEditingItemPriceId(item.id)}
-                          keyboardType="numeric"
-                          placeholder="0,00"
-                          placeholderTextColor={colors.placeholderText}
-                          underlineColorAndroid="transparent"
-                          selectionColor={colors.primary}
-                        />
-                      </View>
+              {/* Seção de Participantes - Editável */}
+              {!processingOcr && (
+                <View style={styles.participantsSection}>
+                  <View style={styles.participantsSectionHeader}>
+                    <Text style={styles.participantsSectionTitle}>
+                      Participantes ({participants.length})
+                    </Text>
+                    {!isCompleted && (
                       <TouchableOpacity
-                        onPress={() =>
-                          setExpandedItemId(
-                            expandedItemId === item.id ? "" : item.id,
-                          )
-                        }
-                        activeOpacity={0.7}
+                        style={styles.addParticipantBtn}
+                        onPress={addParticipant}
                       >
-                        <Ionicons
-                          name={
-                            expandedItemId === item.id
-                              ? "chevron-up"
-                              : "chevron-down"
-                          }
-                          size={20}
-                          color={colors.iconColor}
-                        />
+                        <Ionicons name="add" size={18} color="#8B2E8F" />
+                        <Text style={styles.addParticipantBtnText}>
+                          Adicionar
+                        </Text>
                       </TouchableOpacity>
-                    </View>
+                    )}
                   </View>
 
-                  {/* Dropdown com checkboxes */}
-                  {expandedItemId === item.id && (
-                    <View
-                      style={[
-                        styles.dropdownWrapper,
-                        { backgroundColor: colors.dropdownBackground },
-                      ]}
-                    >
-                      <ScrollView
-                        style={styles.checkboxesScroll}
-                        scrollEnabled={true}
-                        showsVerticalScrollIndicator={true}
-                      >
-                        <View style={styles.checkboxesList}>
-                          {participants.map((participant, idx) => {
-                            const isAssigned =
-                              item.assignedParticipants.includes(participant);
-                            return (
-                              <TouchableOpacity
-                                key={idx}
-                                style={styles.checkboxRow}
-                                onPress={() =>
-                                  toggleParticipant(item.id, participant)
-                                }
-                                activeOpacity={0.6}
-                              >
-                                <View
-                                  style={[
-                                    styles.checkbox,
-                                    { borderColor: colors.divider },
-                                    isAssigned && [
-                                      styles.checkboxActive,
-                                      {
-                                        backgroundColor: colors.checkboxActive,
-                                      },
-                                    ],
-                                  ]}
+                  {participants.length === 0 ? (
+                    <Text style={styles.noParticipantsText}>
+                      Nenhum participante. Adicione pelo menos um participante.
+                    </Text>
+                  ) : (
+                    <View style={styles.participantsList}>
+                      {participants.map((participant) => {
+                        const isEditingThis =
+                          editingParticipantId === participant.id;
+                        const isSavingThis =
+                          savingParticipantId === participant.id;
+
+                        return (
+                          <View
+                            key={participant.id}
+                            style={styles.participantChip}
+                          >
+                            {isEditingThis ? (
+                              <View style={styles.participantChipEditContainer}>
+                                <TextInput
+                                  style={styles.participantChipInput}
+                                  value={participantNameInput}
+                                  onChangeText={setParticipantNameInput}
+                                  autoFocus
+                                  selectTextOnFocus
+                                  editable={!isSavingThis}
+                                />
+                                <TouchableOpacity
+                                  onPress={() =>
+                                    saveParticipantName(participant.id)
+                                  }
+                                  disabled={isSavingThis}
                                 >
-                                  {isAssigned && (
+                                  {isSavingThis ? (
+                                    <ActivityIndicator
+                                      size="small"
+                                      color="#8B2E8F"
+                                    />
+                                  ) : (
                                     <Ionicons
                                       name="checkmark"
-                                      size={10}
-                                      color={colors.primary}
+                                      size={18}
+                                      color="#10b981"
                                     />
                                   )}
-                                </View>
-                                <Text
-                                  style={[
-                                    styles.participantName,
-                                    {
-                                      color: colors.text,
-                                      fontSize: getFontSize(13),
-                                    },
-                                  ]}
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  onPress={cancelEditingParticipant}
+                                  disabled={isSavingThis}
                                 >
-                                  {participant}
-                                </Text>
-                              </TouchableOpacity>
-                            );
-                          })}
-                        </View>
-                      </ScrollView>
-
-                      {/* Buttons Footer Row */}
-                      <View style={styles.footerRow}>
-                        <TouchableOpacity
-                          style={styles.deleteIconButton}
-                          onPress={() => deleteItem(item.id)}
-                        >
-                          <MaterialCommunityIcons
-                            name="trash-can-outline"
-                            size={20}
-                            color={colors.secondaryText}
-                          />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[
-                            styles.addItemButton,
-                            { backgroundColor: colors.primary },
-                          ]}
-                          onPress={() => setIsModalVisible(true)}
-                        >
-                          <Text
-                            style={[
-                              styles.addItemButtonLabel,
-                              {
-                                color: colors.accent,
-                                fontSize: getFontSize(13),
-                              },
-                            ]}
-                          >
-                            Adicionar
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
+                                  <Ionicons
+                                    name="close"
+                                    size={18}
+                                    color="#ef4444"
+                                  />
+                                </TouchableOpacity>
+                              </View>
+                            ) : (
+                              <>
+                                <TouchableOpacity
+                                  style={styles.participantChipNameArea}
+                                  onPress={() =>
+                                    !isCompleted &&
+                                    startEditingParticipant(participant)
+                                  }
+                                  disabled={isCompleted}
+                                >
+                                  <Text style={styles.participantChipName}>
+                                    {participant.name}
+                                  </Text>
+                                  {!isCompleted && (
+                                    <Ionicons
+                                      name="pencil"
+                                      size={12}
+                                      color="#999"
+                                    />
+                                  )}
+                                </TouchableOpacity>
+                                {!isCompleted && (
+                                  <TouchableOpacity
+                                    style={styles.participantChipRemove}
+                                    onPress={() =>
+                                      removeParticipant(participant.id)
+                                    }
+                                  >
+                                    <Ionicons
+                                      name="close-circle"
+                                      size={18}
+                                      color="#ef4444"
+                                    />
+                                  </TouchableOpacity>
+                                )}
+                              </>
+                            )}
+                          </View>
+                        );
+                      })}
                     </View>
                   )}
                 </View>
-              ))}
+              )}
 
-            {/* Card do Total - só mostrar se não estiver processando e houver itens */}
-            {!processingOcr && items.length > 0 && (
-              <View
-                style={[
-                  styles.totalCardWrapper,
-                  { backgroundColor: colors.cardBackground },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.totalCardLabel,
-                    { color: colors.text, fontSize: getFontSize(15) },
-                  ]}
-                >
-                  Total:
-                </Text>
-                <Text
-                  style={[
-                    styles.totalCardAmount,
-                    { color: colors.primary, fontSize: getFontSize(15) },
-                  ]}
-                >
-                  {formatCurrency(calculateTotal())}
-                </Text>
-              </View>
-            )}
+              {/* Seção de Taxas - Editável */}
+              {!processingOcr && (
+                <View style={styles.feesSection}>
+                  <Text style={styles.feesSectionTitle}>Taxas</Text>
 
-            {/* Botão Visualizar Resumo - só mostrar se não estiver processando e houver itens */}
-            {!processingOcr && items.length > 0 && (
-              <TouchableOpacity
-                style={[styles.summaryBtn, { backgroundColor: colors.primary }]}
-                onPress={handleSummary}
-              >
-                <Text
-                  style={[
-                    styles.summaryBtnText,
-                    { color: colors.accent, fontSize: getFontSize(16) },
-                  ]}
-                >
-                  Visualizar resumo
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </ScrollView>
-      )}
+                  {/* Taxa de Serviço */}
+                  <View style={styles.feeRow}>
+                    <Text style={styles.feeLabel}>Taxa de Serviço</Text>
+                    {editingServiceFee && !isCompleted ? (
+                      <View style={styles.feeEditContainer}>
+                        <TextInput
+                          style={styles.feeInput}
+                          value={serviceFeeInput}
+                          onChangeText={setServiceFeeInput}
+                          keyboardType="numeric"
+                          placeholder="0"
+                          editable={!savingFee}
+                        />
+                        <Text style={styles.feeInputSuffix}>%</Text>
+                        <TouchableOpacity
+                          onPress={saveServiceFee}
+                          disabled={savingFee}
+                          style={styles.feeActionBtn}
+                        >
+                          {savingFee ? (
+                            <ActivityIndicator size="small" color="#8B2E8F" />
+                          ) : (
+                            <Ionicons
+                              name="checkmark"
+                              size={18}
+                              color="#10b981"
+                            />
+                          )}
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => {
+                            const existingFee = fees.find(
+                              (f) => f.type === FeeType.SERVICE_PERCENTAGE,
+                            );
+                            setServiceFeeInput(
+                              existingFee ? existingFee.value.toString() : "0",
+                            );
+                            setEditingServiceFee(false);
+                          }}
+                          disabled={savingFee}
+                          style={styles.feeActionBtn}
+                        >
+                          <Ionicons name="close" size={18} color="#ef4444" />
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.feeValueContainer}
+                        onPress={() =>
+                          !isCompleted && setEditingServiceFee(true)
+                        }
+                        disabled={isCompleted}
+                      >
+                        <Text style={styles.feeValue}>
+                          {fees.find(
+                            (f) => f.type === FeeType.SERVICE_PERCENTAGE,
+                          )?.value || 0}
+                          %
+                        </Text>
+                        {!isCompleted && (
+                          <Ionicons name="pencil" size={14} color="#999" />
+                        )}
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {/* Couvert */}
+                  <View style={styles.feeRow}>
+                    <Text style={styles.feeLabel}>Couvert (por pessoa)</Text>
+                    {editingCouvert && !isCompleted ? (
+                      <View style={styles.feeEditContainer}>
+                        <Text style={styles.feeInputPrefix}>R$</Text>
+                        <TextInput
+                          style={styles.feeInput}
+                          value={couvertInput}
+                          onChangeText={(text) => {
+                            const cleaned = text.replace(/[^0-9,]/g, "");
+                            setCouvertInput(cleaned);
+                          }}
+                          keyboardType="numeric"
+                          placeholder="0,00"
+                          editable={!savingFee}
+                        />
+                        <TouchableOpacity
+                          onPress={saveCouvert}
+                          disabled={savingFee}
+                          style={styles.feeActionBtn}
+                        >
+                          {savingFee ? (
+                            <ActivityIndicator size="small" color="#8B2E8F" />
+                          ) : (
+                            <Ionicons
+                              name="checkmark"
+                              size={18}
+                              color="#10b981"
+                            />
+                          )}
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => {
+                            const existingFee = fees.find(
+                              (f) => f.type === FeeType.COVER_CHARGE,
+                            );
+                            setCouvertInput(
+                              existingFee
+                                ? existingFee.value.toFixed(2).replace(".", ",")
+                                : "0,00",
+                            );
+                            setEditingCouvert(false);
+                          }}
+                          disabled={savingFee}
+                          style={styles.feeActionBtn}
+                        >
+                          <Ionicons name="close" size={18} color="#ef4444" />
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.feeValueContainer}
+                        onPress={() => !isCompleted && setEditingCouvert(true)}
+                        disabled={isCompleted}
+                      >
+                        <Text style={styles.feeValue}>
+                          R${" "}
+                          {(
+                            fees.find((f) => f.type === FeeType.COVER_CHARGE)
+                              ?.value || 0
+                          )
+                            .toFixed(2)
+                            .replace(".", ",")}
+                        </Text>
+                        {!isCompleted && (
+                          <Ionicons name="pencil" size={14} color="#999" />
+                        )}
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              )}
+
+              {/* Lista de items */}
+              {!processingOcr &&
+                items.map((item, index) => (
+                  <View key={item.id} style={styles.itemCardWrapper}>
+                    <View style={styles.itemCardMain}>
+                      <View style={styles.itemCardLeft}>
+                        <View
+                          style={[styles.inputWrapper, styles.nameInputWrapper]}
+                        >
+                          {editingItemNameId === item.id && !isCompleted ? (
+                            <TextInput
+                              style={[
+                                styles.itemCardName,
+                                styles.itemCardNameFocused,
+                              ]}
+                              value={
+                                itemNames[item.id] !== undefined
+                                  ? itemNames[item.id]
+                                  : item.name
+                              }
+                              onChangeText={(text) =>
+                                handleItemNameChange(item.id, text)
+                              }
+                              onBlur={() => handleItemNameBlur(item.id)}
+                              placeholder="Nome do item"
+                              placeholderTextColor="#999"
+                              editable={true}
+                              underlineColorAndroid="transparent"
+                              selectionColor="#8B2E8F"
+                              multiline={false}
+                              numberOfLines={1}
+                            />
+                          ) : (
+                            <TouchableOpacity
+                              style={styles.itemCardNameContainer}
+                              onPress={() =>
+                                !isCompleted && setEditingItemNameId(item.id)
+                              }
+                              activeOpacity={isCompleted ? 1 : 0.7}
+                            >
+                              <Text
+                                style={styles.itemCardNameText}
+                                numberOfLines={1}
+                                ellipsizeMode="tail"
+                              >
+                                {itemNames[item.id] !== undefined
+                                  ? itemNames[item.id]
+                                  : item.name}
+                              </Text>
+                              {!isCompleted && (
+                                <Ionicons
+                                  name="create-outline"
+                                  size={14}
+                                  color="#8B2E8F"
+                                  style={styles.editIconInContainer}
+                                />
+                              )}
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                        {savingItemId === item.id && (
+                          <ActivityIndicator
+                            size="small"
+                            color="#81007F"
+                            style={styles.savingItemIndicator}
+                          />
+                        )}
+                      </View>
+                      <View style={styles.itemCardRight}>
+                        <View style={styles.inputWrapper}>
+                          <TextInput
+                            style={[
+                              styles.itemCardQty,
+                              editingItemQtyId === item.id &&
+                                styles.itemCardQtyFocused,
+                              editingItemQtyId !== item.id &&
+                                styles.itemCardQtyEditable,
+                            ]}
+                            value={
+                              itemQuantities[item.id] !== undefined
+                                ? itemQuantities[item.id]
+                                : item.quantity.toString()
+                            }
+                            onChangeText={(text) =>
+                              handleItemQuantityChange(item.id, text)
+                            }
+                            onBlur={() => handleItemQuantityBlur(item.id)}
+                            onFocus={() => setEditingItemQtyId(item.id)}
+                            keyboardType="number-pad"
+                            placeholder="1"
+                            placeholderTextColor="#999"
+                            underlineColorAndroid="transparent"
+                            selectionColor="#8B2E8F"
+                            editable={!isCompleted}
+                          />
+                        </View>
+                        <Text style={styles.qtySuffix}>x</Text>
+                        <View style={styles.inputWrapper}>
+                          <TextInput
+                            style={[
+                              styles.itemCardAmount,
+                              editingItemPriceId === item.id &&
+                                styles.itemCardAmountFocused,
+                              editingItemPriceId !== item.id &&
+                                styles.itemCardAmountEditable,
+                            ]}
+                            value={
+                              editingItemPriceId === item.id
+                                ? (itemPrices[item.id] ?? "")
+                                : itemPrices[item.id] ||
+                                  item.price.toFixed(2).replace(".", ",")
+                            }
+                            onChangeText={(text) =>
+                              handleItemPriceChange(item.id, text)
+                            }
+                            onBlur={() => handleItemPriceBlur(item.id)}
+                            onFocus={() => setEditingItemPriceId(item.id)}
+                            keyboardType="numeric"
+                            placeholder="0,00"
+                            placeholderTextColor="#999"
+                            underlineColorAndroid="transparent"
+                            selectionColor="#8B2E8F"
+                            editable={!isCompleted}
+                          />
+                        </View>
+                        <TouchableOpacity
+                          onPress={() =>
+                            setExpandedItemId(
+                              expandedItemId === item.id ? "" : item.id,
+                            )
+                          }
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons
+                            name={
+                              expandedItemId === item.id
+                                ? "chevron-up"
+                                : "chevron-down"
+                            }
+                            size={20}
+                            color="#666"
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    {/* Dropdown com checkboxes */}
+                    {expandedItemId === item.id && (
+                      <View style={styles.dropdownWrapper}>
+                        <ScrollView
+                          style={styles.checkboxesScroll}
+                          scrollEnabled={true}
+                          showsVerticalScrollIndicator={true}
+                        >
+                          <View style={styles.checkboxesList}>
+                            {participants.length === 0 ? (
+                              <View style={styles.emptyParticipantsContainer}>
+                                <Text style={styles.emptyParticipantsText}>
+                                  Nenhum participante encontrado
+                                </Text>
+                                <Text style={styles.emptyParticipantsSubtext}>
+                                  Adicione participantes na tela anterior
+                                </Text>
+                              </View>
+                            ) : (
+                              participants.map((participant, idx) => {
+                                const isAssigned =
+                                  item.assignedParticipants.includes(
+                                    participant.name,
+                                  );
+                                const isSaving = savingDivisions === item.id;
+                                const isEditingThis =
+                                  editingParticipantId === participant.id;
+                                const isSavingName =
+                                  savingParticipantId === participant.id;
+
+                                return (
+                                  <View
+                                    key={participant.id || idx}
+                                    style={styles.checkboxRow}
+                                  >
+                                    <TouchableOpacity
+                                      style={styles.checkboxTouchable}
+                                      onPress={() =>
+                                        toggleParticipant(
+                                          item.id,
+                                          participant.name,
+                                        )
+                                      }
+                                      activeOpacity={0.6}
+                                      disabled={
+                                        isSaving || isCompleted || isEditingThis
+                                      }
+                                    >
+                                      <View
+                                        style={[
+                                          styles.checkbox,
+                                          isAssigned && styles.checkboxActive,
+                                        ]}
+                                      >
+                                        {isAssigned && (
+                                          <Ionicons
+                                            name="checkmark"
+                                            size={10}
+                                            color="#8B2E8F"
+                                          />
+                                        )}
+                                      </View>
+                                    </TouchableOpacity>
+
+                                    {isEditingThis ? (
+                                      <View
+                                        style={styles.participantEditContainer}
+                                      >
+                                        <TextInput
+                                          style={styles.participantEditInput}
+                                          value={participantNameInput}
+                                          onChangeText={setParticipantNameInput}
+                                          autoFocus
+                                          selectTextOnFocus
+                                          editable={!isSavingName}
+                                        />
+                                        <TouchableOpacity
+                                          style={styles.participantEditButton}
+                                          onPress={() =>
+                                            saveParticipantName(participant.id)
+                                          }
+                                          disabled={isSavingName}
+                                        >
+                                          {isSavingName ? (
+                                            <ActivityIndicator
+                                              size="small"
+                                              color="#8B2E8F"
+                                            />
+                                          ) : (
+                                            <Ionicons
+                                              name="checkmark"
+                                              size={18}
+                                              color="#10b981"
+                                            />
+                                          )}
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                          style={styles.participantEditButton}
+                                          onPress={cancelEditingParticipant}
+                                          disabled={isSavingName}
+                                        >
+                                          <Ionicons
+                                            name="close"
+                                            size={18}
+                                            color="#ef4444"
+                                          />
+                                        </TouchableOpacity>
+                                      </View>
+                                    ) : (
+                                      <TouchableOpacity
+                                        style={styles.participantNameContainer}
+                                        onPress={() =>
+                                          startEditingParticipant(participant)
+                                        }
+                                        disabled={isCompleted}
+                                      >
+                                        <Text style={styles.participantName}>
+                                          {participant.name}
+                                        </Text>
+                                        {!isCompleted && (
+                                          <Ionicons
+                                            name="pencil"
+                                            size={14}
+                                            color="#999"
+                                            style={{ marginLeft: 8 }}
+                                          />
+                                        )}
+                                      </TouchableOpacity>
+                                    )}
+
+                                    {isSaving && !isEditingThis && (
+                                      <ActivityIndicator
+                                        size="small"
+                                        color="#8B2E8F"
+                                        style={{ marginLeft: 8 }}
+                                      />
+                                    )}
+                                  </View>
+                                );
+                              })
+                            )}
+                          </View>
+                        </ScrollView>
+
+                        {/* Buttons Footer Row */}
+                        <View style={styles.footerRow}>
+                          {!isCompleted && (
+                            <TouchableOpacity
+                              style={styles.deleteIconButton}
+                              onPress={() => deleteItem(item.id)}
+                            >
+                              <MaterialCommunityIcons
+                                name="trash-can-outline"
+                                size={20}
+                                color="#999"
+                              />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                ))}
+
+              {/* Card do Total - só mostrar se não estiver processando e houver itens */}
+              {!processingOcr && items.length > 0 && (
+                <View style={styles.totalCardWrapper}>
+                  <Text style={styles.totalCardLabel}>Total:</Text>
+                  <Text style={styles.totalCardAmount}>
+                    {formatCurrency(calculateTotal())}
+                  </Text>
+                </View>
+              )}
+
+              {/* Botões - variam conforme o modo */}
+              {!processingOcr && items.length > 0 && (
+                <>
+                  {isEditMode ? (
+                    /* Modo Edição: Botão Concluir Edição */
+                    <TouchableOpacity
+                      style={styles.saveAndGoBackBtn}
+                      onPress={handleSaveAndGoBack}
+                    >
+                      <MaterialCommunityIcons
+                        name="check"
+                        size={20}
+                        color="#fff"
+                      />
+                      <Text style={styles.saveAndGoBackBtnText}>
+                        Concluir Edição
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    /* Modo Normal: Botão Visualizar Resumo */
+                    <TouchableOpacity
+                      style={styles.summaryBtn}
+                      onPress={handleSummary}
+                    >
+                      <Text style={styles.summaryBtnText}>
+                        Visualizar resumo
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              )}
+            </View>
+          </ScrollView>
+        )}
+      </KeyboardAvoidingView>
 
       <AddItemModal
         visible={isModalVisible}
@@ -1010,31 +2047,86 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#fff",
   },
+  keyboardAvoidingContainer: {
+    flex: 1,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
   scrollContent: {
-    paddingBottom: 20,
+    flexGrow: 1,
+    paddingBottom: 32,
   },
   contentContainer: {
+    flex: 1,
+    paddingTop: 16,
     paddingHorizontal: 20,
-    paddingTop: 0,
-    paddingBottom: 8,
-    gap: 10,
-    backgroundColor: "#fff",
+  },
+  editModeBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#8B2E8F",
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+    gap: 12,
+    shadowColor: "#8B2E8F",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  editModeIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  editModeBannerContent: {
+    flex: 1,
+  },
+  editModeBannerTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#fff",
+  },
+  editModeBannerSubtitle: {
+    fontSize: 12,
+    color: "rgba(255, 255, 255, 0.85)",
+    marginTop: 2,
+  },
+  completedBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#d1fae5",
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#10b981",
+  },
+  completedBannerText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#065f46",
   },
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 12,
-    marginBottom: 12,
+    justifyContent: "space-between",
+    marginBottom: 18,
   },
   billNameContainer: {
-    flex: 1,
     flexDirection: "row",
+    flex: 1,
     alignItems: "center",
     marginRight: 12,
   },
@@ -1069,53 +2161,50 @@ const styles = StyleSheet.create({
   savingIndicator: {
     marginLeft: 8,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#000",
-  },
   addItemBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: "transparent",
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderWidth: 1.5,
-    borderColor: "#8B2E8F",
-    borderRadius: 16,
+    borderColor: "#81007F",
   },
   addItemBtnText: {
-    color: "#8B2E8F",
-    fontSize: 12,
+    color: "#81007F",
     fontWeight: "600",
+    fontSize: 14,
   },
   itemCardWrapper: {
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
-    borderRadius: 10,
-    overflow: "hidden",
     backgroundColor: "#fff",
+    borderRadius: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#E5E5E5",
+    overflow: "hidden",
   },
   itemCardMain: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    justifyContent: "space-between",
+    paddingLeft: 16,
+    paddingRight: 12,
+    paddingVertical: 18,
     backgroundColor: "#fff",
   },
   itemCardRight: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    flexShrink: 0, // Não permite que este container encolha
-    maxWidth: "45%", // Limita o tamanho máximo para garantir espaço para o nome
+    gap: 10,
+    flexShrink: 0,
   },
   itemCardLeft: {
     flex: 1,
-    marginRight: 12,
+    marginRight: 8,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    minWidth: 100,
-    flexShrink: 1, // Permite encolher se necessário
+    gap: 6,
+    minWidth: 0,
+    flexShrink: 1,
   },
   inputWrapper: {
     flexDirection: "row",
@@ -1126,7 +2215,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     overflow: "hidden",
-    alignSelf: "stretch", // Garante que ocupe toda a altura disponível
+    alignSelf: "stretch",
     flexShrink: 1,
     marginLeft: 0,
   },
@@ -1146,7 +2235,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "transparent",
     borderColor: "transparent",
-    outlineWidth: 0,
     minHeight: 20,
     minWidth: 0,
     textAlign: "left",
@@ -1175,14 +2263,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     minWidth: 0,
     paddingLeft: 0,
-    paddingRight: 20,
+    paddingRight: 0,
     borderBottomWidth: 1,
     borderBottomColor: "#E8D5EA",
     borderStyle: "dashed",
     paddingBottom: 2,
   },
   itemCardNameText: {
-    flex: 1,
+    flexShrink: 1,
     fontSize: 14,
     fontWeight: "400",
     color: "#000",
@@ -1193,14 +2281,13 @@ const styles = StyleSheet.create({
     position: "absolute",
     right: 0,
     top: "50%",
-    marginTop: -7, // Metade do tamanho do ícone para centralizar verticalmente
+    marginTop: -7,
     opacity: 0.5,
-    pointerEvents: "none", // Permite que o toque passe através do ícone
     width: 16,
     height: 16,
   },
   editIconInContainer: {
-    marginLeft: 4,
+    marginLeft: 12,
     opacity: 0.5,
     flexShrink: 0,
   },
@@ -1222,16 +2309,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "transparent",
     borderColor: "transparent",
-    outlineWidth: 0,
   },
   itemCardQtyEditable: {
-    borderBottomColor: "#E8D5EA",
-    borderBottomWidth: 1,
-    borderStyle: "dashed",
-    backgroundColor: "#FAF9FA",
-    paddingHorizontal: 2,
-    paddingVertical: 2,
-    borderRadius: 4,
+    backgroundColor: "#F0F0F0",
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   itemCardQtyFocused: {
     borderBottomColor: "#8B2E8F",
@@ -1259,16 +2342,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "transparent",
     borderColor: "transparent",
-    outlineWidth: 0,
   },
   itemCardAmountEditable: {
-    borderBottomColor: "#E8D5EA",
-    borderBottomWidth: 1,
-    borderStyle: "dashed",
-    backgroundColor: "#FAF9FA",
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    borderRadius: 4,
+    backgroundColor: "#F0F0F0",
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
   itemCardAmountFocused: {
     borderBottomColor: "#8B2E8F",
@@ -1279,102 +2358,160 @@ const styles = StyleSheet.create({
   dropdownWrapper: {
     backgroundColor: "#F8F8F8",
     borderTopWidth: 1,
-    borderTopColor: "#E0E0E0",
+    borderTopColor: "#E8E8E8",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
   checkboxesScroll: {
-    maxHeight: 160,
+    maxHeight: 140,
   },
   checkboxesList: {
-    paddingRight: 8,
+    gap: 8,
+  },
+  emptyParticipantsContainer: {
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+    alignItems: "center",
+  },
+  emptyParticipantsText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#666",
+    marginBottom: 4,
+  },
+  emptyParticipantsSubtext: {
+    fontSize: 12,
+    color: "#999",
   },
   checkboxRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
     gap: 10,
   },
   checkbox: {
     width: 18,
     height: 18,
-    borderWidth: 1.3,
-    borderColor: "#ccc",
-    borderRadius: 3,
-    justifyContent: "center",
-    alignItems: "center",
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: "#999",
     backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
   },
   checkboxActive: {
     borderColor: "#8B2E8F",
-    backgroundColor: "#fff",
+    backgroundColor: "#F1E4F2",
+  },
+  checkboxTouchable: {
+    padding: 4,
   },
   participantName: {
-    fontSize: 13,
-    fontWeight: "400",
-    color: "#555",
+    fontSize: 14,
+    color: "#333",
+    flex: 1,
+  },
+  participantNameContainer: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  participantEditContainer: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  participantEditInput: {
+    flex: 1,
+    fontSize: 14,
+    color: "#333",
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#8B2E8F",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  participantEditButton: {
+    padding: 4,
   },
   footerRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    justifyContent: "flex-end",
+    marginTop: 12,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: "#E8E8E8",
-    gap: 12,
   },
   deleteIconButton: {
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "center",
+    padding: 6,
   },
-  addItemButton: {
-    paddingVertical: 8,
+  emptyContainer: {
+    paddingVertical: 48,
     paddingHorizontal: 20,
-    borderWidth: 1.5,
-    borderColor: "#8B2E8F",
-    borderRadius: 20,
-    justifyContent: "center",
     alignItems: "center",
+    justifyContent: "center",
   },
-  addItemButtonLabel: {
-    fontSize: 13,
+  emptyText: {
+    fontSize: 16,
     fontWeight: "500",
-    color: "#8B2E8F",
+    color: "#666",
+    marginTop: 16,
+    textAlign: "center",
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: "#999",
+    marginTop: 8,
+    textAlign: "center",
   },
   totalCardWrapper: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    marginBottom: 8,
     borderWidth: 1,
-    borderColor: "#E0E0E0",
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: "#FFFFFF",
-    marginTop: 6,
+    borderColor: "#E5E5E5",
   },
   totalCardLabel: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "400",
-    color: "#000",
+    color: "#333",
+    marginBottom: 4,
   },
   totalCardAmount: {
-    fontSize: 15,
-    fontWeight: "600",
+    fontSize: 18,
+    fontWeight: "700",
     color: "#000",
   },
   summaryBtn: {
-    marginHorizontal: 0,
-    marginTop: 24,
-    marginBottom: 0,
+    backgroundColor: "#81007F",
+    borderRadius: 25,
     paddingVertical: 14,
-    paddingHorizontal: 16,
-    backgroundColor: "#8B2E8F",
-    borderRadius: 28,
+    paddingHorizontal: 24,
     alignItems: "center",
-    justifyContent: "center",
+    marginTop: 16,
   },
   summaryBtnText: {
-    color: "#ffff00",
+    color: "#FFD700",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  saveAndGoBackBtn: {
+    backgroundColor: "#10b981",
+    borderRadius: 25,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    alignItems: "center",
+    marginTop: 16,
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 8,
+  },
+  saveAndGoBackBtnText: {
+    color: "#fff",
     fontSize: 16,
     fontWeight: "600",
   },
@@ -1426,5 +2563,153 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: "center",
     lineHeight: 20,
+  },
+  // Estilos da Seção de Participantes
+  participantsSection: {
+    backgroundColor: "#F9F9FB",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#E8E8ED",
+  },
+  participantsSectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  participantsSectionTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#333",
+  },
+  addParticipantBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#8B2E8F",
+    gap: 4,
+  },
+  addParticipantBtnText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#8B2E8F",
+  },
+  noParticipantsText: {
+    fontSize: 14,
+    color: "#666",
+    fontStyle: "italic",
+  },
+  participantsList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  participantChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    paddingVertical: 6,
+    paddingLeft: 12,
+    paddingRight: 6,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+  },
+  participantChipEditContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  participantChipInput: {
+    fontSize: 14,
+    color: "#333",
+    minWidth: 80,
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: "#8B2E8F",
+  },
+  participantChipNameArea: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  participantChipName: {
+    fontSize: 14,
+    color: "#333",
+  },
+  participantChipRemove: {
+    marginLeft: 4,
+    padding: 2,
+  },
+  // Estilos da Seção de Taxas
+  feesSection: {
+    backgroundColor: "#FFF9F0",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#FFE5C4",
+  },
+  feesSectionTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 12,
+  },
+  feeRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#FFE5C4",
+  },
+  feeLabel: {
+    fontSize: 14,
+    color: "#666",
+  },
+  feeValueContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  feeValue: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#8B2E8F",
+  },
+  feeEditContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  feeInputPrefix: {
+    fontSize: 14,
+    color: "#666",
+  },
+  feeInput: {
+    fontSize: 14,
+    color: "#333",
+    minWidth: 50,
+    textAlign: "right",
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: "#8B2E8F",
+    borderRadius: 6,
+    backgroundColor: "#fff",
+  },
+  feeInputSuffix: {
+    fontSize: 14,
+    color: "#666",
+  },
+  feeActionBtn: {
+    padding: 4,
   },
 });

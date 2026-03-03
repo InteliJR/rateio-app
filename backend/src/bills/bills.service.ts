@@ -127,6 +127,36 @@ export class BillsService {
         }
       }
 
+      // Adicionar couvert se houver (sempre por pessoa)
+      if (
+        createBillDto.coverChargeValue !== undefined &&
+        createBillDto.coverChargeValue !== null &&
+        !isNaN(Number(createBillDto.coverChargeValue)) &&
+        Number(createBillDto.coverChargeValue) > 0
+      ) {
+        try {
+          // O valor do couvert é sempre por pessoa
+          const valuePerPerson = Number(createBillDto.coverChargeValue);
+
+          await this.prisma.fee.create({
+            data: {
+              billId: bill.id,
+              type: 'COVER_CHARGE',
+              value: valuePerPerson,
+              description: 'Couvert por pessoa',
+            },
+          });
+        } catch (feeError) {
+          console.error('[BillsService] Erro ao criar couvert:', feeError);
+          // Se falhar ao criar couvert, deletar fees e bill criadas
+          await this.prisma.fee.deleteMany({ where: { billId: bill.id } }).catch(() => { });
+          await this.prisma.bill.delete({ where: { id: bill.id } });
+          throw new BadRequestException(
+            `Erro ao criar couvert: ${feeError instanceof Error ? feeError.message : 'Erro desconhecido'}`,
+          );
+        }
+      }
+
       // Adicionar participantes iniciais
       if (
         createBillDto.participantCount !== undefined &&
@@ -136,9 +166,12 @@ export class BillsService {
       ) {
         try {
           const participantCount = Number(createBillDto.participantCount);
+          const participantNames = createBillDto.participantNames || [];
+          
           const participants = Array.from({ length: participantCount }, (_, i) => ({
             billId: bill.id,
-            name: `Pessoa ${i + 1}`,
+            // Usar nome fornecido se existir, senão usar nome padrão
+            name: participantNames[i]?.trim() || `Pessoa ${i + 1}`,
           }));
           await this.prisma.participant.createMany({ data: participants });
         } catch (participantError) {
@@ -769,10 +802,20 @@ export class BillsService {
       0,
     );
 
-    // Persistir divisões
+    // Persistir divisões (usar upsert para evitar duplicatas)
+    // As divisões já podem ter sido criadas na tela de divisão
     for (const division of finalizeBillDto.divisions) {
-      await this.prisma.division.create({
-        data: {
+      await this.prisma.division.upsert({
+        where: {
+          billItemId_participantId: {
+            billItemId: division.billItemId,
+            participantId: division.participantId,
+          },
+        },
+        update: {
+          shareAmount: division.shareAmount,
+        },
+        create: {
           billItemId: division.billItemId,
           participantId: division.participantId,
           shareAmount: division.shareAmount,
@@ -781,6 +824,11 @@ export class BillsService {
     }
 
     // Persistir taxas e calcular valor total das taxas
+    // Deletar taxas existentes antes de criar novas (para evitar duplicatas)
+    await this.prisma.fee.deleteMany({
+      where: { billId: id },
+    });
+
     let totalFees = 0;
     const persistedFees: Awaited<ReturnType<typeof this.prisma.fee.create>>[] =
       [];
@@ -871,9 +919,22 @@ export class BillsService {
   }
 
   /**
+   * Verificar se a conta é a mais recente do usuário
+   */
+  private async isLatestBillForUser(billId: string, userId: string): Promise<boolean> {
+    const latestBill = await this.prisma.bill.findFirst({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+    
+    return latestBill?.id === billId;
+  }
+
+  /**
    * Recalcular o totalAmount da conta baseado nos itens + taxas
    * Permite edição livre durante REVIEWING e DIVIDING
-   * Bloqueia apenas COMPLETED
+   * Bloqueia apenas COMPLETED (exceto se for a conta mais recente do usuário)
    */
   private async recalculateBillTotal(billId: string) {
     const bill = await this.prisma.bill.findUnique({
@@ -888,11 +949,14 @@ export class BillsService {
       throw new NotFoundException('Conta não encontrada');
     }
 
-    // Bloquear edição de contas finalizadas
+    // Bloquear edição de contas finalizadas, EXCETO se for a conta mais recente do usuário
     if (bill.status === 'COMPLETED') {
-      throw new BadRequestException(
-        'Não é possível modificar uma conta finalizada.'
-      );
+      const isLatest = await this.isLatestBillForUser(billId, bill.userId);
+      if (!isLatest) {
+        throw new BadRequestException(
+          'Não é possível modificar uma conta finalizada.'
+        );
+      }
     }
 
     // Calcular soma dos itens
@@ -1162,5 +1226,86 @@ export class BillsService {
 
     // Reutilizar FeesService
     return this.feesService.create(userId, createFeeDto);
+  }
+
+  /**
+   * Duplicar conta (reutilizar) - cria uma nova conta com os mesmos itens, participantes e taxas
+   * A nova conta fica em status DIVIDING para edição
+   */
+  async duplicate(billId: string, userId: string) {
+    // 1. Buscar conta original com todos os dados
+    const originalBill = await this.prisma.bill.findFirst({
+      where: { id: billId, userId },
+      include: {
+        items: true,
+        participants: true,
+        fees: true,
+      },
+    });
+
+    if (!originalBill) {
+      throw new NotFoundException('Conta não encontrada');
+    }
+
+    // 2. Criar nova conta (sem imagem, status DIVIDING para edição)
+    const newBill = await this.prisma.bill.create({
+      data: {
+        userId,
+        status: BillStatus.DIVIDING,
+        establishmentName: originalBill.establishmentName 
+          ? `${originalBill.establishmentName} (Cópia)` 
+          : 'Conta Reutilizada',
+        imageUrl: '', // Nova conta não tem imagem
+        imageKey: '',
+        totalAmount: originalBill.totalAmount,
+      },
+    });
+
+    // 3. Duplicar participantes
+    if (originalBill.participants.length > 0) {
+      const participantsData = originalBill.participants.map((p) => ({
+        billId: newBill.id,
+        name: p.name,
+      }));
+      await this.prisma.participant.createMany({ data: participantsData });
+    }
+
+    // 4. Duplicar itens (sem divisões - usuário vai refazer)
+    if (originalBill.items.length > 0) {
+      const itemsData = originalBill.items.map((item) => ({
+        billId: newBill.id,
+        name: item.name,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        totalPrice: item.totalPrice,
+      }));
+      await this.prisma.billItem.createMany({ data: itemsData });
+    }
+
+    // 5. Duplicar taxas
+    if (originalBill.fees.length > 0) {
+      const feesData = originalBill.fees.map((fee) => ({
+        billId: newBill.id,
+        type: fee.type,
+        value: fee.value,
+        description: fee.description,
+      }));
+      await this.prisma.fee.createMany({ data: feesData });
+    }
+
+    // 6. Retornar nova conta com dados completos
+    const newBillWithData = await this.prisma.bill.findUnique({
+      where: { id: newBill.id },
+      include: {
+        items: true,
+        participants: true,
+        fees: true,
+      },
+    });
+
+    return {
+      ...newBillWithData,
+      message: 'Conta duplicada com sucesso. Você pode editar os itens e participantes.',
+    };
   }
 }

@@ -19,8 +19,7 @@ import billService, {
   BillFilters,
 } from "../../../services/bill.service";
 import { useTheme } from "../../../contexts/ThemeContext";
-
-// Interface BillWithStatus removed as it conflicts with UploadBillResponse
+import { useAuthStore } from "../../../store/authStore";
 
 const DATE_FILTERS = [
   { id: "all", label: "Todos" },
@@ -31,6 +30,7 @@ const DATE_FILTERS = [
 export default function BillsScreen() {
   const router = useRouter();
   const { colors, getFontSize } = useTheme();
+  const { user } = useAuthStore();
   const [selectedDateFilter, setSelectedDateFilter] = useState<string>("all");
   const [showFilters, setShowFilters] = useState(false);
   const [searchText, setSearchText] = useState<string>("");
@@ -70,9 +70,15 @@ export default function BillsScreen() {
   }, [debouncedSearch, selectedDateFilter]);
 
   // Estabilizar queryKey para evitar requisições desnecessárias
+  // Inclui o ID do usuário para garantir que dados de outros usuários não sejam retornados do cache
   const queryKey = useMemo(() => {
-    return ["bills", debouncedSearch, selectedDateFilter];
-  }, [debouncedSearch, selectedDateFilter]);
+    return [
+      "bills",
+      user?.id || "anonymous",
+      debouncedSearch,
+      selectedDateFilter,
+    ];
+  }, [user?.id, debouncedSearch, selectedDateFilter]);
 
   // React Query Infinite Query
   const {
@@ -95,7 +101,7 @@ export default function BillsScreen() {
       return undefined;
     },
     initialPageParam: 1,
-    enabled: true, // Garantir que está habilitado
+    enabled: !!user?.id, // Só habilitar quando há usuário logado
   });
 
   // Flatten data for FlatList
@@ -132,20 +138,10 @@ export default function BillsScreen() {
       activeOpacity={0.7}
     >
       <View style={styles.cardContent}>
-        <Text
-          style={[
-            styles.cardTitle,
-            { color: colors.text, fontSize: getFontSize(16) },
-          ]}
-        >
+        <Text style={[styles.cardTitle, { color: colors.text, fontSize: getFontSize(16) }]} numberOfLines={1} ellipsizeMode="tail">
           {item.establishmentName || "Sem nome"}
         </Text>
-        <Text
-          style={[
-            styles.cardDate,
-            { color: colors.textSecondary, fontSize: getFontSize(14) },
-          ]}
-        >
+        <Text style={[styles.cardDate, { color: colors.textSecondary, fontSize: getFontSize(14) }]}>
           {new Date(item.createdAt).toLocaleDateString("pt-BR")}
         </Text>
       </View>
@@ -245,13 +241,7 @@ export default function BillsScreen() {
             Erro ao carregar contas.
           </Text>
           <TouchableOpacity onPress={() => refetch()} style={{ marginTop: 10 }}>
-            <Text
-              style={{
-                color: colors.primary,
-                fontWeight: "bold",
-                fontSize: getFontSize(14),
-              }}
-            >
+            <Text style={{ color: colors.primary, fontWeight: "bold", fontSize: getFontSize(14) }}>
               Tentar novamente
             </Text>
           </TouchableOpacity>
@@ -335,14 +325,7 @@ export default function BillsScreen() {
             size={20}
             color={colors.primary}
           />
-          <Text
-            style={[
-              styles.filterButtonText,
-              { color: colors.primary, fontSize: getFontSize(12) },
-            ]}
-          >
-            Filtro
-          </Text>
+          <Text style={[styles.filterButtonText, { color: colors.primary, fontSize: getFontSize(12) }]}>Filtro</Text>
         </TouchableOpacity>
       </View>
 
@@ -487,16 +470,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: 12,
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: "400",
     color: "#333333",
+    flex: 1,
   },
   cardDate: {
     fontSize: 14,
     color: "#999999",
     fontWeight: "400",
+    flexShrink: 0,
   },
   emptyContainer: {
     flex: 1,

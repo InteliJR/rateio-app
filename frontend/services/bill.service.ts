@@ -35,6 +35,10 @@ export interface CreateBillSetupConfig {
   participantCount: number;
   billName?: string;
   serviceFeePercentage: number;
+  coverChargeValue?: number;
+  /** @deprecated Mantido para compatibilidade - sempre tratado como 'per_person' */
+  coverChargeType?: 'total' | 'per_person';
+  participantNames?: string[];
 }
 
 export interface BillFilters {
@@ -154,30 +158,32 @@ class BillService {
         console.log('[BillService] Nome do estabelecimento adicionado:', establishmentName);
       }
 
-      // Fazer requisição com configurações otimizadas
-      const api = apiService.getApi();
-
+      // Fazer requisição com retry automático para uploads
       console.log('[BillService] Enviando requisição para /bills...');
 
-      const response = await api.post<UploadBillResponse>('/bills', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          // Permitir que o Axios defina o boundary automaticamente
+      const response = await apiService.postWithRetry<UploadBillResponse>(
+        '/bills',
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+          timeout: 60000, // 60 segundos - aumentado para dar tempo para OCR
+          transformRequest: (data, headers) => {
+            // Não transformar FormData - deixar o Axios gerenciar
+            return data;
+          },
         },
-        timeout: 60000, // 60 segundos - aumentado para dar tempo para OCR
-        transformRequest: (data, headers) => {
-          // Não transformar FormData - deixar o Axios gerenciar
-          return data;
-        },
-      });
+        3 // máximo de 3 retentativas
+      );
 
       console.log('[BillService] Upload concluído com sucesso:', {
-        billId: response.data.id,
-        status: response.data.status,
-        message: response.data.message,
+        billId: response.id,
+        status: response.status,
+        message: response.message,
       });
 
-      return response.data;
+      return response;
     } catch (error: any) {
       console.error('[BillService] Erro ao fazer upload:', error);
 
@@ -242,21 +248,38 @@ class BillService {
         type: mimeType,
       } as any);
 
-      const api = apiService.getApi();
-      const response = await api.post<UploadBillResponse>(`/bills/${billId}/image`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
+      // Usar retry automático para upload de imagem
+      const response = await apiService.postWithRetry<UploadBillResponse>(
+        `/bills/${billId}/image`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+          timeout: 60000,
+          transformRequest: (data) => data,
         },
-        timeout: 60000,
-        transformRequest: (data) => data,
-      });
+        3 // máximo de 3 retentativas
+      );
 
-      console.log('[BillService] Upload de imagem concluído:', response.data);
-      return response.data;
+      console.log('[BillService] Upload de imagem concluído:', response);
+      return response;
     } catch (error: any) {
-      console.error('[BillService] Erro ao fazer upload de imagem:', error);
+      console.error('[BillService] Erro ao fazer upload de imagem após todas as tentativas:', error);
+
+      // Mensagens de erro mais específicas
+      let errorMessage = "Erro ao enviar imagem da conta";
+
+      if (error.message?.includes('Network') || !error.response) {
+        errorMessage = "Erro de conexão. Verifique sua internet e tente novamente.";
+      } else if (error.code === 'ECONNABORTED') {
+        errorMessage = "Tempo limite excedido. Verifique sua conexão e tente novamente.";
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+
       throw {
-        message: error.response?.data?.message || "Erro ao enviar imagem da conta",
+        message: errorMessage,
         statusCode: error.response?.status,
       } as UploadBillError;
     }
@@ -410,6 +433,105 @@ class BillService {
       } as UploadBillError;
     }
   }
+
+  /**
+   * Finaliza a conta, salvando todas as divisões e taxas
+   * Muda o status para COMPLETED e bloqueia edições
+   * @param billId - ID da conta
+   * @param data - Dados de finalização (divisões e taxas)
+   * @returns Resumo da conta finalizada
+   */
+  async finalizeBill(billId: string, data: FinalizeBillPayload): Promise<FinalizeBillResponse> {
+    try {
+      console.log('[BillService] Finalizing bill:', billId, data);
+      const api = apiService.getApi();
+      const response = await api.post<FinalizeBillResponse>(
+        `/bills/${billId}/finalize`,
+        data
+      );
+      console.log('[BillService] Bill finalized successfully:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('[BillService] Error finalizing bill:', error);
+
+      // Tratar mensagem de erro que pode ser string ou array
+      let errorMessage = "Erro ao finalizar conta";
+
+      if (error.response?.data?.message) {
+        if (typeof error.response.data.message === 'string') {
+          errorMessage = error.response.data.message;
+        } else if (Array.isArray(error.response.data.message)) {
+          // Se for array, juntar todas as mensagens
+          errorMessage = error.response.data.message.join('\n');
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      throw {
+        message: errorMessage,
+        statusCode: error.response?.status,
+      } as UploadBillError;
+    }
+  }
+
+  /**
+   * Duplica uma conta existente (reutilizar)
+   * Cria uma nova conta com os mesmos itens, participantes e taxas
+   * @param billId - ID da conta original
+   * @returns Nova conta duplicada
+   */
+  async duplicateBill(billId: string): Promise<UploadBillResponse> {
+    try {
+      console.log('[BillService] Duplicating bill:', billId);
+      const api = apiService.getApi();
+      const response = await api.post<UploadBillResponse>(`/bills/${billId}/duplicate`);
+      console.log('[BillService] Bill duplicated successfully:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('[BillService] Error duplicating bill:', error);
+      throw {
+        message: error.response?.data?.message || "Erro ao duplicar conta",
+        statusCode: error.response?.status,
+      } as UploadBillError;
+    }
+  }
+}
+
+export interface FinalizeBillPayload {
+  divisions: Array<{
+    billItemId: string;
+    participantId: string;
+    shareAmount: number;
+  }>;
+  fees: Array<{
+    type: 'SERVICE_PERCENTAGE' | 'SERVICE_FIXED' | 'COVER_CHARGE';
+    value: number;
+    description?: string;
+  }>;
+}
+
+export interface FinalizeBillResponse {
+  bill: UploadBillResponse;
+  summary: {
+    subtotal: number;
+    totalFees: number;
+    grandTotal: number;
+  };
+  participantTotals: Record<string, {
+    subtotal: number;
+    fees: number;
+    total: number;
+  }>;
+  fees: Array<{
+    id: string;
+    billId: string;
+    type: string;
+    description?: string;
+    value: number;
+    createdAt: string;
+    updatedAt: string;
+  }>;
 }
 
 export default new BillService();

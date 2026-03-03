@@ -5,6 +5,7 @@ import { storageService } from "../services/storage.service";
 import { AuthState } from "../types/auth.types";
 import { authService } from "../services/auth.service";
 import { queryClient } from "../lib/queryClient";
+import { useBillStore } from "./billStore";
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
@@ -16,10 +17,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   login: async (email: string, password: string) => {
     set({ isLoading: true });
     try {
-      // Limpar cache do React Query antes de fazer login
+      // Limpar COMPLETAMENTE o cache do React Query antes de fazer login
       // Isso garante que dados do usuário anterior não apareçam
-      queryClient.clear();
-      
+      queryClient.cancelQueries(); // Cancela queries pendentes
+      queryClient.removeQueries(); // Remove todas as queries do cache
+      queryClient.clear(); // Limpa o cache completamente
+
+      // Limpar o store de contas do usuário anterior
+      useBillStore.getState().clearBills();
+
+      // Limpar dados de usuário do AsyncStorage anterior
+      await storageService.deleteItem("userName");
+      await storageService.deleteItem("userEmail");
+
       const response = await authService.login({ email, password });
 
       // Salvar tokens no storage
@@ -44,19 +54,42 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   register: async (name: string, email: string, password: string) => {
     set({ isLoading: true });
     try {
-      // Limpar cache do React Query antes de fazer registro
+      // Limpar COMPLETAMENTE o cache do React Query antes de fazer registro
+      // Isso garante que dados do usuário anterior não apareçam
+      queryClient.cancelQueries();
+      queryClient.removeQueries();
       queryClient.clear();
-      
+
+      // Limpar o store de contas do usuário anterior
+      useBillStore.getState().clearBills();
+
+      // Limpar tokens anteriores para garantir que não há contaminação
+      await storageService.deleteItem("accessToken");
+      await storageService.deleteItem("refreshToken");
+      await storageService.deleteItem("userName");
+      await storageService.deleteItem("userEmail");
+
       const response = await authService.register({ name, email, password });
 
-      // Note: Backend currently does not return tokens on register. User must login afterwards.
-      // console.log("[AuthStore] User registered:", response);
+      // Backend retorna tokens no registro - salvar e autenticar
+      if (response.accessToken && response.refreshToken) {
+        console.log('[AuthStore] Saving tokens from registration...');
+        await storageService.setItem("accessToken", response.accessToken);
+        await storageService.setItem("refreshToken", response.refreshToken);
+        console.log('[AuthStore] Registration tokens saved successfully');
 
-      // set({
-      //   user: response.user,
-      //   isAuthenticated: false, // Wait for explicit login
-      //   isLoading: false,
-      // });
+        set({
+          user: response.user,
+          accessToken: response.accessToken,
+          refreshToken: response.refreshToken,
+          isAuthenticated: true,
+          isLoading: false,
+        });
+      } else {
+        // Fallback caso backend não retorne tokens
+        set({ isLoading: false });
+      }
+
       return response;
     } catch (error) {
       set({ isLoading: false });
@@ -66,13 +99,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: async () => {
     try {
-      // Limpar cache do React Query ao fazer logout
-      // Isso remove todos os dados em cache, incluindo as contas do usuário
-      queryClient.clear();
-      
+      // Limpar COMPLETAMENTE o cache do React Query ao fazer logout
+      queryClient.cancelQueries(); // Cancela queries pendentes
+      queryClient.removeQueries(); // Remove todas as queries do cache
+      queryClient.clear(); // Limpa o cache completamente
+
+      // Limpar o store de contas
+      useBillStore.getState().clearBills();
+
       await authService.logout();
       await storageService.deleteItem("accessToken");
       await storageService.deleteItem("refreshToken");
+
+      // Limpar dados de usuário do AsyncStorage
+      await storageService.deleteItem("userName");
+      await storageService.deleteItem("userEmail");
 
       set({
         user: null,
@@ -82,6 +123,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
     } catch (error) {
       console.error("Erro ao fazer logout:", error);
+      // Mesmo com erro, garantir que os dados locais são limpos
+      try {
+        queryClient.cancelQueries();
+        queryClient.removeQueries();
+        queryClient.clear();
+        useBillStore.getState().clearBills();
+        await storageService.deleteItem("accessToken");
+        await storageService.deleteItem("refreshToken");
+        await storageService.deleteItem("userName");
+        await storageService.deleteItem("userEmail");
+      } catch { }
+
+      set({
+        user: null,
+        accessToken: null,
+        refreshToken: null,
+        isAuthenticated: false,
+      });
     }
   },
 
@@ -110,22 +169,40 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         } catch (profileError: any) {
           console.error('[AuthStore] Failed to fetch profile:', profileError);
 
-          // Se o erro for 401 (Unauthorized), significa que o token é inválido e o refresh falhou/não foi possível
-          // Neste caso, NÃO devemos restaurar os tokens antigos, pois isso sobrescreveria o logout feito pelo interceptor
+          // Se o erro for 401 (Unauthorized), significa que o token é inválido
           if (profileError.response?.status === 401 || profileError.message?.includes('401')) {
             console.log('[AuthStore] Profile fetch returned 401, clearing tokens');
             await get().logout(); // Garante que limpamos tudo
             return; // Interrompe aqui, mantendo estado de deslogado
           }
 
-          // Para outros erros (ex: rede, 500), ainda podemos manter os tokens na memória
-          // pois o usuário pode estar apenas sem internet
-          console.log('[AuthStore] profile fetch failed with non-auth error, keeping local tokens');
+          // Para erros de rede (sem resposta do servidor), manter tokens mas não autenticar
+          // Isso evita problemas quando o servidor está temporariamente indisponível
+          const isNetworkError = !profileError.response ||
+            profileError.code === 'ECONNABORTED' ||
+            profileError.message?.includes('Network') ||
+            profileError.message?.includes('timeout');
+
+          if (isNetworkError) {
+            console.log('[AuthStore] Network error while fetching profile, keeping tokens but not authenticating');
+            set({
+              user: null,
+              accessToken,
+              refreshToken,
+              isAuthenticated: false, // Não autenticar se não conseguir validar
+              isLoading: false,
+            });
+            return;
+          }
+
+          // Para outros erros (ex: 500), tentar novamente após um delay
+          // ou manter tokens mas não autenticar
+          console.log('[AuthStore] Profile fetch failed with server error, keeping tokens but not authenticating');
           set({
             user: null,
             accessToken,
             refreshToken,
-            isAuthenticated: true,
+            isAuthenticated: false, // Não autenticar se não conseguir validar
             isLoading: false,
           });
         }

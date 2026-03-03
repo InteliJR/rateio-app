@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   StyleSheet,
   Text,
@@ -6,11 +6,15 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Ionicons } from "@expo/vector-icons";
+import billService, {
+  BillSummaryResponse,
+} from "../../../services/bill.service";
 import { useTheme } from "../../../contexts/ThemeContext";
 
 interface BillPerson {
@@ -33,23 +37,26 @@ interface BillDetail {
   items?: BillItem[];
 }
 
-import billService, {
-  BillSummaryResponse,
-} from "../../../services/bill.service";
-
 export default function BillDetail() {
   const { colors, getFontSize } = useTheme();
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const [data, setData] = useState<BillSummaryResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [duplicating, setDuplicating] = useState(false);
+  const [isLatestBill, setIsLatestBill] = useState(false);
   const [expandedParticipantId, setExpandedParticipantId] = useState<
     string | null
   >(null);
 
-  useEffect(() => {
-    loadBillDetails();
-  }, [id]);
+  // Usar useFocusEffect para recarregar dados quando a tela ganha foco
+  // Isso garante que os dados sejam atualizados após edição
+  useFocusEffect(
+    useCallback(() => {
+      loadBillDetails();
+      checkIfLatestBill();
+    }, [id]),
+  );
 
   const loadBillDetails = async () => {
     try {
@@ -61,6 +68,68 @@ export default function BillDetail() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const checkIfLatestBill = async () => {
+    try {
+      // Buscar a lista de contas ordenada por data (mais recente primeiro)
+      const response = await billService.listBills(1, 1);
+
+      // Se esta conta é a primeira da lista (mais recente), permitir edição
+      if (response.data.length > 0 && response.data[0].id === id) {
+        setIsLatestBill(true);
+      } else {
+        setIsLatestBill(false);
+      }
+    } catch (err) {
+      console.error("Erro ao verificar conta mais recente:", err);
+      setIsLatestBill(false);
+    }
+  };
+
+  const handleEditBill = () => {
+    // Navegar para a tela de edição (scanned.tsx) com a conta atual
+    // Passamos editMode=true para permitir edição mesmo se a conta estiver COMPLETED
+    router.push({
+      pathname: "/(tabs)/(create)/scanned",
+      params: { id: id as string, editMode: "true" },
+    });
+  };
+
+  const handleReuseBill = () => {
+    Alert.alert(
+      "Reutilizar conta",
+      "Será criada uma cópia desta conta com os mesmos participantes e configurações. Deseja continuar?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Reutilizar",
+          onPress: async () => {
+            try {
+              setDuplicating(true);
+
+              // Duplicar a conta no backend
+              const newBill = await billService.duplicateBill(id as string);
+
+              // Navegar para a tela de edição da nova conta
+              router.push({
+                pathname: "/(tabs)/(create)/scanned",
+                params: { id: newBill.id },
+              });
+            } catch (err: any) {
+              console.error("Erro ao reutilizar conta:", err);
+              Alert.alert(
+                "Erro",
+                err.message ||
+                  "Não foi possível reutilizar a conta. Tente novamente.",
+              );
+            } finally {
+              setDuplicating(false);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const formatCurrency = (value?: number): string => {
@@ -133,7 +202,6 @@ export default function BillDetail() {
             <TouchableOpacity
               style={styles.backButton}
               onPress={() => router.back()}
-              activeOpacity={0.7}
             >
               <Ionicons name="chevron-back" size={22} color={colors.text} />
             </TouchableOpacity>
@@ -145,48 +213,32 @@ export default function BillDetail() {
             >
               {data.bill.establishmentName || "Detalhes"}
             </Text>
-            <TouchableOpacity
-              style={[styles.editButton, { backgroundColor: colors.primary }]}
-            >
-              <Text
-                style={[
-                  styles.editButtonText,
-                  { color: colors.accent, fontSize: getFontSize(13) },
-                ]}
+            {/* Botão Editar - só aparece para a conta mais recente */}
+            {isLatestBill ? (
+              <TouchableOpacity
+                style={styles.editButton}
+                onPress={handleEditBill}
               >
-                Editar
-              </Text>
-            </TouchableOpacity>
+                <Text style={styles.editButtonText}>Editar</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.editButtonPlaceholder} />
+            )}
           </View>
 
           {/* Aviso de Falha (Se houver) */}
           {data.bill.status === "OCR_FAILED" && (
-            <View
-              style={[
-                styles.warningCard,
-                { backgroundColor: colors.warningLight },
-              ]}
-            >
+            <View style={[styles.warningCard, { backgroundColor: colors.warningLight ?? "#FFEBEE" }]}>
               <MaterialCommunityIcons
                 name="alert-circle-outline"
                 size={24}
-                color={colors.error}
+                color={colors.error ?? "#D32F2F"}
               />
               <View style={styles.warningContent}>
-                <Text
-                  style={[
-                    styles.warningTitle,
-                    { color: colors.error, fontSize: getFontSize(15) },
-                  ]}
-                >
+                <Text style={[styles.warningTitle, { color: colors.error ?? "#D32F2F", fontSize: getFontSize(15) }]}>
                   Falha no processamento
                 </Text>
-                <Text
-                  style={[
-                    styles.warningText,
-                    { color: colors.secondaryText, fontSize: getFontSize(13) },
-                  ]}
-                >
+                <Text style={[styles.warningText, { color: colors.secondaryText ?? "#B71C1C", fontSize: getFontSize(13) }]}>
                   Não foi possível ler os itens da nota automaticamente. Por
                   favor, verifique os valores ou edite manualmente.
                 </Text>
@@ -221,32 +273,14 @@ export default function BillDetail() {
                 ]}
               >
                 <View style={styles.itemInfo}>
-                  <Text
-                    style={[
-                      styles.itemName,
-                      { color: colors.text, fontSize: getFontSize(15) },
-                    ]}
-                  >
+                  <Text style={[styles.itemName, { color: colors.text, fontSize: getFontSize(15) }]}>
                     {item.name}
                   </Text>
-                  <Text
-                    style={[
-                      styles.itemQty,
-                      {
-                        color: colors.secondaryText,
-                        fontSize: getFontSize(13),
-                      },
-                    ]}
-                  >
+                  <Text style={[styles.itemQty, { color: colors.secondaryText, fontSize: getFontSize(13) }]}>
                     {item.quantity}x {formatCurrency(item.unitPrice)}
                   </Text>
                 </View>
-                <Text
-                  style={[
-                    styles.itemTotal,
-                    { color: colors.text, fontSize: getFontSize(15) },
-                  ]}
-                >
+                <Text style={[styles.itemTotal, { color: colors.text, fontSize: getFontSize(15) }]}>
                   {formatCurrency(item.totalPrice)}
                 </Text>
               </View>
@@ -255,20 +289,8 @@ export default function BillDetail() {
               style={[styles.divider, { backgroundColor: colors.divider }]}
             />
             <View style={styles.totalRow}>
-              <Text
-                style={[
-                  styles.totalLabel,
-                  { color: colors.text, fontSize: getFontSize(15) },
-                ]}
-              >
-                Subtotal
-              </Text>
-              <Text
-                style={[
-                  styles.totalValue,
-                  { color: colors.primary, fontSize: getFontSize(15) },
-                ]}
-              >
+              <Text style={[styles.totalLabel, { color: colors.text, fontSize: getFontSize(15) }]}>Subtotal</Text>
+              <Text style={[styles.totalValue, { color: colors.primary, fontSize: getFontSize(15) }]}>
                 {formatCurrency(data.summary?.subtotal)}
               </Text>
             </View>
@@ -335,7 +357,7 @@ export default function BillDetail() {
                   {/* Itens do participante */}
                   {(participant.items || []).map((item) => (
                     <View key={item.id} style={styles.detailRow}>
-                      <Text
+                    <Text
                         style={[
                           styles.detailText,
                           { color: colors.text, fontSize: getFontSize(14) },
@@ -359,25 +381,28 @@ export default function BillDetail() {
                   {participant.feeDetails &&
                     participant.feeDetails.length > 0 && (
                       <>
-                        <View
-                          style={[
-                            styles.detailDivider,
-                            { backgroundColor: colors.divider },
-                          ]}
-                        />
+                        <View style={[styles.detailDivider, { backgroundColor: colors.divider }]} />
                         {participant.feeDetails.map((fee) => (
-                          <View key={fee.id} style={styles.detailRow}>
+                          <View
+                            key={fee.id}
+                            style={[
+                              styles.detailRow,
+                              fee.type === "SERVICE_PERCENTAGE" &&
+                                styles.detailRowFee,
+                              fee.type === "COVER_CHARGE" &&
+                                styles.detailRowCouvert,
+                            ]}
+                          >
                             <Text
                               style={[
                                 styles.detailTextFee,
-                                {
-                                  color: colors.secondaryText,
-                                  fontSize: getFontSize(13),
-                                },
+                                { color: colors.secondaryText, fontSize: getFontSize(13) },
+                                fee.type === "COVER_CHARGE" &&
+                                  styles.detailTextCouvert,
                               ]}
                             >
                               {fee.type === "SERVICE_PERCENTAGE"
-                                ? "Serviço"
+                                ? "Taxa de Serviço"
                                 : fee.type === "COVER_CHARGE"
                                   ? "Couvert"
                                   : "Taxa"}
@@ -385,10 +410,9 @@ export default function BillDetail() {
                             <Text
                               style={[
                                 styles.detailValueFee,
-                                {
-                                  color: colors.secondaryText,
-                                  fontSize: getFontSize(13),
-                                },
+                                { color: colors.secondaryText, fontSize: getFontSize(13) },
+                                fee.type === "COVER_CHARGE" &&
+                                  styles.detailValueCouvert,
                               ]}
                             >
                               {formatCurrency(fee.participantShare)}
@@ -410,56 +434,20 @@ export default function BillDetail() {
             ]}
           >
             <View style={styles.summaryRow}>
-              <Text
-                style={[
-                  styles.summaryLabel,
-                  { color: colors.text, fontSize: getFontSize(15) },
-                ]}
-              >
-                Subtotal
-              </Text>
-              <Text
-                style={[
-                  styles.summaryValue,
-                  { color: colors.text, fontSize: getFontSize(15) },
-                ]}
-              >
+              <Text style={[styles.summaryLabel, { color: colors.text, fontSize: getFontSize(15) }]}>Subtotal</Text>
+              <Text style={[styles.summaryValue, { color: colors.text, fontSize: getFontSize(15) }]}>
                 {formatCurrency(data.summary.subtotal)}
               </Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text
-                style={[
-                  styles.summaryLabel,
-                  { color: colors.text, fontSize: getFontSize(15) },
-                ]}
-              >
-                Taxas / Serviço
-              </Text>
-              <Text
-                style={[
-                  styles.summaryValue,
-                  { color: colors.text, fontSize: getFontSize(15) },
-                ]}
-              >
+              <Text style={[styles.summaryLabel, { color: colors.text, fontSize: getFontSize(15) }]}>Taxas / Serviço</Text>
+              <Text style={[styles.summaryValue, { color: colors.text, fontSize: getFontSize(15) }]}>
                 {formatCurrency(data.summary.totalFees)}
               </Text>
             </View>
             <View style={[styles.summaryRow, styles.marginTop]}>
-              <Text
-                style={[
-                  styles.finalTotalLabel,
-                  { color: colors.primary, fontSize: getFontSize(17) },
-                ]}
-              >
-                Total Geral
-              </Text>
-              <Text
-                style={[
-                  styles.finalTotalValue,
-                  { color: colors.primary, fontSize: getFontSize(17) },
-                ]}
-              >
+              <Text style={[styles.finalTotalLabel, { color: colors.primary, fontSize: getFontSize(17) }]}>Total Geral</Text>
+              <Text style={[styles.finalTotalValue, { color: colors.primary, fontSize: getFontSize(17) }]}>
                 {formatCurrency(data.summary.total)}
               </Text>
             </View>
@@ -467,16 +455,19 @@ export default function BillDetail() {
 
           {/* Botão Reutilizar Conta */}
           <TouchableOpacity
-            style={[styles.reuseButton, { backgroundColor: colors.primary }]}
+            style={[
+              styles.reuseButton,
+              { backgroundColor: colors.primary },
+              duplicating && styles.reuseButtonDisabled,
+            ]}
+            onPress={handleReuseBill}
+            disabled={duplicating}
           >
-            <Text
-              style={[
-                styles.reuseButtonText,
-                { color: colors.accent, fontSize: getFontSize(16) },
-              ]}
-            >
-              Reutilizar Conta
-            </Text>
+            {duplicating ? (
+              <ActivityIndicator size="small" color={colors.accent ?? "#ffff00"} />
+            ) : (
+              <Text style={[styles.reuseButtonText, { color: colors.accent ?? "#ffff00", fontSize: getFontSize(16) }]}>Reutilizar Conta</Text>
+            )}
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -487,34 +478,33 @@ export default function BillDetail() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F2F2F7", // iOS background gray
+    backgroundColor: "#FFFFFF",
   },
   scrollContent: {
-    paddingBottom: 40,
+    paddingBottom: 20,
   },
   titleSection: {
     flexDirection: "row",
     justifyContent: "flex-start",
     alignItems: "center",
-    paddingHorizontal: 16,
+    paddingHorizontal: 4,
     paddingVertical: 12,
-    marginHorizontal: -16,
-    marginBottom: 12,
-    backgroundColor: "#FFFFFF", // Header should merge with nav bar visual if possible, or stay white
+    marginBottom: 0,
+    backgroundColor: "#FFFFFF",
     gap: 4,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#FFF",
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  },
+  backButtonText: {
+    fontSize: 28,
+    fontWeight: "300",
+    color: "#000",
+    lineHeight: 28,
   },
   titleText: {
     fontSize: 18,
@@ -529,66 +519,80 @@ const styles = StyleSheet.create({
     borderColor: "#8B2E8F",
     borderRadius: 18,
   },
+  editButtonPlaceholder: {
+    width: 70, // Aproximadamente a largura do botão "Editar"
+  },
   editButtonText: {
     fontSize: 13,
     fontWeight: "500",
     color: "#8B2E8F",
   },
   contentContainer: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingTop: 0,
     paddingBottom: 8,
-    gap: 16,
+    gap: 10,
+    backgroundColor: "#FFFFFF",
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "600",
     color: "#333",
-    marginLeft: 4,
-    marginBottom: -4,
+    marginTop: 8,
+    marginBottom: 8,
+    paddingHorizontal: 4,
   },
   sectionCard: {
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderRadius: 10,
     backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 16,
     overflow: "hidden",
   },
   itemRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   borderBottom: {
-    borderBottomWidth: 0.5,
-    borderBottomColor: "#E5E5EA",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
   },
   itemInfo: {
     flex: 1,
+    marginRight: 12,
   },
   itemName: {
-    fontSize: 15,
-    color: "#000",
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#333",
     marginBottom: 2,
   },
   itemQty: {
-    fontSize: 13,
-    color: "#8E8E93",
+    fontSize: 12,
+    color: "#888",
   },
   itemTotal: {
-    fontSize: 15,
-    fontWeight: "500",
-    color: "#000",
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#333",
+    minWidth: 70,
+    textAlign: "right",
   },
   divider: {
     height: 1,
-    backgroundColor: "#E5E5EA",
-    marginVertical: 12,
+    backgroundColor: "#E0E0E0",
+    marginHorizontal: 16,
   },
   totalRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: "#FAFAFA",
   },
   totalLabel: {
     fontSize: 15,
@@ -601,9 +605,11 @@ const styles = StyleSheet.create({
     color: "#333",
   },
   participantCardWrapper: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderRadius: 10,
     overflow: "hidden",
+    backgroundColor: "#FFFFFF",
   },
   participantHeader: {
     flexDirection: "row",
@@ -653,11 +659,34 @@ const styles = StyleSheet.create({
   },
   detailTextFee: {
     fontSize: 13,
-    color: "#666",
+    fontWeight: "400",
+    color: "#8B2E8F",
+    fontStyle: "italic",
   },
   detailValueFee: {
     fontSize: 13,
-    color: "#666",
+    fontWeight: "500",
+    color: "#8B2E8F",
+  },
+  detailRowFee: {
+    backgroundColor: "#FAF5FA",
+    marginHorizontal: -16,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    marginBottom: 2,
+  },
+  detailRowCouvert: {
+    backgroundColor: "#FFFBF5",
+    marginHorizontal: -16,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    marginBottom: 2,
+  },
+  detailTextCouvert: {
+    color: "#d97706",
+  },
+  detailValueCouvert: {
+    color: "#d97706",
   },
   finalSummaryCard: {
     backgroundColor: "#FFFFFF",
@@ -702,6 +731,10 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     alignItems: "center",
     justifyContent: "center",
+    minHeight: 50,
+  },
+  reuseButtonDisabled: {
+    opacity: 0.7,
   },
   reuseButtonText: {
     fontSize: 16,
