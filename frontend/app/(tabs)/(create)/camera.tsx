@@ -18,6 +18,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import billService from "../../../services/bill.service";
+import { CropModal } from "../../../components/modals/CropModal";
 
 const { width, height } = Dimensions.get("window");
 
@@ -38,6 +39,7 @@ export default function CameraScreen() {
   >("idle");
   const [imageQuality, setImageQuality] = useState<"boa" | "media" | "baixa" | null>(null);
   const [imageResolution, setImageResolution] = useState<{ width: number; height: number } | null>(null);
+  const [showCropModal, setShowCropModal] = useState(false);
 
   // Solicitar permissões ao montar o componente
   useEffect(() => {
@@ -114,8 +116,7 @@ export default function CameraScreen() {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
+        quality: 1, // full quality — optimizeImage compresses later
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -135,6 +136,7 @@ export default function CameraScreen() {
     setUploadProgress(0);
     setImageQuality(null);
     setImageResolution(null);
+    setShowCropModal(false);
   };
 
   // Retorna cor e label do badge de qualidade
@@ -570,6 +572,14 @@ export default function CameraScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
+              style={styles.cropButton}
+              onPress={() => setShowCropModal(true)}
+            >
+              <Ionicons name="crop-outline" size={20} color="#FFFFFF" />
+              <Text style={styles.cropButtonText}>Recortar</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={styles.confirmButton}
               onPress={confirmPicture}
             >
@@ -578,6 +588,18 @@ export default function CameraScreen() {
             </TouchableOpacity>
           </View>
         )}
+
+        {/* Modal de corte interativo */}
+        <CropModal
+          visible={showCropModal}
+          imageUri={capturedImage}
+          onCrop={(croppedUri) => {
+            setShowCropModal(false);
+            setCapturedImage(croppedUri);
+            checkImageResolution(croppedUri);
+          }}
+          onCancel={() => setShowCropModal(false)}
+        />
       </View>
     );
   }
@@ -809,18 +831,18 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingVertical: 16,
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
     paddingBottom: Platform.OS === "ios" ? 32 : 16,
     backgroundColor: "#1A1A1A",
-    gap: 12,
+    gap: 8,
   },
   retakeButton: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    paddingVertical: 16,
+    gap: 6,
+    paddingVertical: 14,
     borderRadius: 50,
     borderWidth: 1.5,
     borderColor: "rgba(255,255,255,0.4)",
@@ -828,17 +850,34 @@ const styles = StyleSheet.create({
   },
   retakeButtonText: {
     color: "#FFFFFF",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "600",
   },
-  confirmButton: {
-    flex: 2,
+  cropButton: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: 6,
+    paddingVertical: 14,
+    borderRadius: 50,
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.4)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  cropButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  confirmButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
     backgroundColor: "#8B3FD9",
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderRadius: 50,
     shadowColor: "#8B3FD9",
     shadowOffset: { width: 0, height: 4 },
@@ -848,7 +887,7 @@ const styles = StyleSheet.create({
   },
   confirmButtonText: {
     color: "#FFFFFF",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "600",
   },
   permissionText: {
