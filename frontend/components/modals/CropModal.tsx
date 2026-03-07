@@ -15,7 +15,6 @@ import {
 import * as ImageManipulator from "expo-image-manipulator";
 import { Ionicons } from "@expo/vector-icons";
 
-const { width: SCREEN_W } = Dimensions.get("window");
 // Touch target size for corner handles
 const HANDLE_HIT = 48;
 // Visual L-arm length and thickness for corner markers
@@ -57,27 +56,27 @@ export function CropModal({
   const [displayInfo, setDisplayInfo] = useState<DisplayInfo | null>(null);
   const [cropRect, setCropRect] = useState<CropRect | null>(null);
   const [applying, setApplying] = useState(false);
-  // Actual measured height of the image container (set via onLayout)
-  const [areaH, setAreaH] = useState(0);
+  // Actual measured size of the image container (set via onLayout)
+  const [areaSize, setAreaSize] = useState<{ w: number; h: number } | null>(null);
 
   // Refs to avoid stale closures inside PanResponder callbacks
   const cropRef = useRef<CropRect | null>(null);
   const displayRef = useRef<DisplayInfo | null>(null);
-  const areaHRef = useRef(0);
+  const areaSizeRef = useRef<{ w: number; h: number } | null>(null);
 
-  const buildDisplayInfo = (w: number, h: number, containerH: number): DisplayInfo => {
-    const scale = Math.min(SCREEN_W / w, containerH / h);
+  const buildDisplayInfo = (w: number, h: number, containerW: number, containerH: number): DisplayInfo => {
+    const scale = Math.min(containerW / w, containerH / h);
     const displayW = w * scale;
     const displayH = h * scale;
-    const offsetX = (SCREEN_W - displayW) / 2;
+    const offsetX = (containerW - displayW) / 2;
     const offsetY = (containerH - displayH) / 2;
     return { scale, offsetX, offsetY, displayW, displayH };
   };
 
-  // Re-compute display info when measured area height arrives
+  // Re-compute display info when measured area size arrives
   useEffect(() => {
-    if (!areaH || !imageDims) return;
-    const info = buildDisplayInfo(imageDims.w, imageDims.h, areaH);
+    if (!areaSize || !imageDims) return;
+    const info = buildDisplayInfo(imageDims.w, imageDims.h, areaSize.w, areaSize.h);
     const initial: CropRect = {
       left: info.offsetX,
       top: info.offsetY,
@@ -88,7 +87,7 @@ export function CropModal({
     setCropRect(initial);
     cropRef.current = initial;
     displayRef.current = info;
-  }, [areaH, imageDims]);
+  }, [areaSize, imageDims]);
 
   useEffect(() => {
     if (!visible || !imageUri) return;
@@ -99,14 +98,17 @@ export function CropModal({
     Image.getSize(
       imageUri,
       (w, h) => setImageDims({ w, h }),
-      () => setImageDims({ w: SCREEN_W, h: areaHRef.current || 500 }),
+      () => setImageDims({
+        w: areaSizeRef.current?.w ?? 400,
+        h: areaSizeRef.current?.h ?? 600,
+      }),
     );
   }, [visible, imageUri]);
 
   const handleAreaLayout = (e: LayoutChangeEvent) => {
-    const h = e.nativeEvent.layout.height;
-    areaHRef.current = h;
-    setAreaH(h);
+    const { width, height } = e.nativeEvent.layout;
+    areaSizeRef.current = { w: width, h: height };
+    setAreaSize({ w: width, h: height });
   };
 
   // Clamp a proposed rect so it stays within the displayed image bounds
@@ -222,20 +224,27 @@ export function CropModal({
     if (!cropRect || !displayInfo || !imageDims) return;
     setApplying(true);
     try {
-      const { scale, offsetX, offsetY } = displayInfo;
-      const originX = Math.round((cropRect.left - offsetX) / scale);
-      const originY = Math.round((cropRect.top - offsetY) / scale);
-      const cropW = Math.round((cropRect.right - cropRect.left) / scale);
-      const cropH = Math.round((cropRect.bottom - cropRect.top) / scale);
+      const { offsetX, offsetY, displayW, displayH } = displayInfo;
 
-      const safeX = Math.max(0, Math.min(originX, imageDims.w - 1));
-      const safeY = Math.max(0, Math.min(originY, imageDims.h - 1));
-      const safeW = Math.min(cropW, imageDims.w - safeX);
-      const safeH = Math.min(cropH, imageDims.h - safeY);
+      // Compute the crop as a fraction of the displayed image area, then
+      // multiply by the original image dimensions. This avoids any dependency
+      // on the scale factor and is robust against pixel-density differences.
+      const fracLeft   = (cropRect.left   - offsetX) / displayW;
+      const fracTop    = (cropRect.top    - offsetY) / displayH;
+      const fracRight  = (cropRect.right  - offsetX) / displayW;
+      const fracBottom = (cropRect.bottom - offsetY) / displayH;
+
+      const originX = Math.round(Math.max(0, fracLeft)   * imageDims.w);
+      const originY = Math.round(Math.max(0, fracTop)    * imageDims.h);
+      const cropW   = Math.round(Math.min(1, fracRight)  * imageDims.w) - originX;
+      const cropH   = Math.round(Math.min(1, fracBottom) * imageDims.h) - originY;
+
+      // Guard against degenerate crop
+      if (cropW <= 0 || cropH <= 0) return;
 
       const result = await ImageManipulator.manipulateAsync(
         imageUri,
-        [{ crop: { originX: safeX, originY: safeY, width: safeW, height: safeH } }],
+        [{ crop: { originX, originY, width: cropW, height: cropH } }],
         { compress: 1, format: ImageManipulator.SaveFormat.JPEG },
       );
       onCrop(result.uri);
@@ -275,14 +284,21 @@ export function CropModal({
 
         {/* ── Image area ── */}
         <View style={styles.imageArea} onLayout={handleAreaLayout}>
-          {!imageDims || !cropRect ? (
+          {!imageDims || !cropRect || !displayInfo ? (
             <ActivityIndicator size="large" color="#fff" />
           ) : (
             <>
+              {/* Image positioned EXPLICITLY at the computed offset so crop coords match exactly */}
               <Image
                 source={{ uri: imageUri }}
-                style={StyleSheet.absoluteFill}
-                resizeMode="contain"
+                style={{
+                  position: "absolute",
+                  left: displayInfo.offsetX,
+                  top: displayInfo.offsetY,
+                  width: displayInfo.displayW,
+                  height: displayInfo.displayH,
+                }}
+                resizeMode="stretch"
               />
 
               {/* ── Dark overlays outside crop ── */}
