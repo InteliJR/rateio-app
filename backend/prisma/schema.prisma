@@ -50,6 +50,19 @@ model RevokedToken {
   @@map("revoked_tokens")
 }
 
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  email     String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([email])
+  @@map("password_reset_tokens")
+}
+
 // ============================================
 // CONTAS (BILLS)
 // ============================================

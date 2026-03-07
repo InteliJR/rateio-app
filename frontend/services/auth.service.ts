@@ -1,7 +1,16 @@
 // mobile/services/auth.service.ts
 
 import { api } from "./api.service";
-import { LoginRequest, LoginResponse, RegisterRequest, RegisterResponse } from "../types/auth.types";
+import {
+  LoginRequest,
+  LoginResponse,
+  RegisterRequest,
+  RegisterResponse,
+  ForgotPasswordRequest,
+  ForgotPasswordResponse,
+  ResetPasswordRequest,
+  ResetPasswordResponse,
+} from "../types/auth.types";
 
 export const authService = {
   async login(data: LoginRequest): Promise<LoginResponse> {
@@ -33,5 +42,25 @@ export const authService = {
     // Apenas limpa tokens localmente
     // Se tiver endpoint de logout no backend, chame aqui
     return Promise.resolve();
+  },
+
+  async forgotPassword(
+    data: ForgotPasswordRequest
+  ): Promise<ForgotPasswordResponse> {
+    const response = await api.post<ForgotPasswordResponse>(
+      "/auth/forgot-password",
+      data
+    );
+    return response.data;
+  },
+
+  async resetPassword(
+    data: ResetPasswordRequest
+  ): Promise<ResetPasswordResponse> {
+    const response = await api.post<ResetPasswordResponse>(
+      "/auth/reset-password",
+      data
+    );
+    return response.data;
   },
 };
