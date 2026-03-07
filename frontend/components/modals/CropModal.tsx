@@ -77,6 +77,7 @@ export function CropModal({
   useEffect(() => {
     if (!areaSize || !imageDims) return;
     const info = buildDisplayInfo(imageDims.w, imageDims.h, areaSize.w, areaSize.h);
+    console.log('[CropModal] displayInfo computed', { imageDims, areaSize, info });
     const initial: CropRect = {
       left: info.offsetX,
       top: info.offsetY,
@@ -221,31 +222,47 @@ export function CropModal({
 
   // ─── Apply crop ──────────────────────────────────────────────────────────
   const applyCrop = async () => {
-    if (!cropRect || !displayInfo || !imageDims) return;
+    if (!cropRect || !displayInfo) return;
     setApplying(true);
     try {
       const { offsetX, offsetY, displayW, displayH } = displayInfo;
+      if (displayW <= 0 || displayH <= 0) return;
 
-      // Compute the crop as a fraction of the displayed image area, then
-      // multiply by the original image dimensions. This avoids any dependency
-      // on the scale factor and is robust against pixel-density differences.
-      const fracLeft   = (cropRect.left   - offsetX) / displayW;
-      const fracTop    = (cropRect.top    - offsetY) / displayH;
-      const fracRight  = (cropRect.right  - offsetX) / displayW;
-      const fracBottom = (cropRect.bottom - offsetY) / displayH;
+      // Strategy: resize the original image to 3× the display dimensions first,
+      // then crop using display-space coordinates × 3.
+      //
+      // Why: the previous approach (fracLeft * imageDims.w) relied on Image.getSize
+      // returning the exact same coordinate space that ImageManipulator uses.
+      // That assumption can break due to EXIF orientation differences, platform
+      // quirks, or pixelRatio inconsistencies.
+      //
+      // By resizing first with BOTH width & height specified, ImageManipulator
+      // normalises the image to a known pixel space (display orientation, exact
+      // dimensions). The subsequent crop then works purely in that known space.
+      const SCALE = 3; // 3× display = good quality without huge files
+      const targetW = Math.round(displayW * SCALE);
+      const targetH = Math.round(displayH * SCALE);
 
-      const originX = Math.round(Math.max(0, fracLeft)   * imageDims.w);
-      const originY = Math.round(Math.max(0, fracTop)    * imageDims.h);
-      const cropW   = Math.round(Math.min(1, fracRight)  * imageDims.w) - originX;
-      const cropH   = Math.round(Math.min(1, fracBottom) * imageDims.h) - originY;
+      // Crop origin/size in the scaled coordinate space
+      const cropX = Math.max(0, Math.round((cropRect.left  - offsetX) * SCALE));
+      const cropY = Math.max(0, Math.round((cropRect.top   - offsetY) * SCALE));
+      const cropW = Math.min(Math.round((cropRect.right  - cropRect.left) * SCALE), targetW - cropX);
+      const cropH = Math.min(Math.round((cropRect.bottom - cropRect.top)  * SCALE), targetH - cropY);
 
-      // Guard against degenerate crop
       if (cropW <= 0 || cropH <= 0) return;
+
+      console.log('[CropModal] applyCrop', { offsetX, offsetY, displayW, displayH,
+        cropRect, targetW, targetH, cropX, cropY, cropW, cropH });
 
       const result = await ImageManipulator.manipulateAsync(
         imageUri,
-        [{ crop: { originX, originY, width: cropW, height: cropH } }],
-        { compress: 1, format: ImageManipulator.SaveFormat.JPEG },
+        [
+          // Step 1 – normalise orientation & establish known pixel space
+          { resize: { width: targetW, height: targetH } },
+          // Step 2 – crop inside that known space
+          { crop: { originX: cropX, originY: cropY, width: cropW, height: cropH } },
+        ],
+        { compress: 0.92, format: ImageManipulator.SaveFormat.JPEG },
       );
       onCrop(result.uri);
     } catch (err) {
