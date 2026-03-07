@@ -44,6 +44,7 @@ export default function ScannedBillScreen() {
     "PENDING_OCR" | "OCR_FAILED" | "REVIEWING" | "DIVIDING" | "COMPLETED" | null
   >(null);
   const [processingOcr, setProcessingOcr] = useState(false);
+  const [retryingOcr, setRetryingOcr] = useState(false);
   const [savingName, setSavingName] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
   const [savingDivisions, setSavingDivisions] = useState<string | null>(null);
@@ -154,7 +155,7 @@ export default function ScannedBillScreen() {
           );
         }
       }
-    }, 5000); // Poll a cada 5 segundos
+    }, 3000); // Poll a cada 3 segundos
 
     return () => {
       console.log("[Scanned] Stopping polling");
@@ -354,6 +355,23 @@ export default function ScannedBillScreen() {
       Alert.alert("Erro", "Não foi possível salvar o nome da conta");
     } finally {
       setSavingName(false);
+    }
+  };
+
+  const handleRetryOcr = async () => {
+    try {
+      setRetryingOcr(true);
+      await billService.retryOcr(id as string);
+      // Reset state to trigger polling again
+      setBillStatus("PENDING_OCR");
+      setProcessingOcr(true);
+    } catch (error: any) {
+      Alert.alert(
+        "Erro",
+        error.message || "Não foi possível reprocessar o OCR. Tente novamente.",
+      );
+    } finally {
+      setRetryingOcr(false);
     }
   };
 
@@ -1387,9 +1405,41 @@ export default function ScannedBillScreen() {
                     Não foi possível reconhecer os itens
                   </Text>
                   <Text style={styles.errorText}>
-                    Você pode adicionar os itens manualmente usando o botão "+
-                    Item"
+                    Tente reprocessar o OCR ou adicione os itens manualmente
                   </Text>
+                  <View style={styles.retryButtonsRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.retryOcrButton,
+                        retryingOcr && styles.retryButtonDisabled,
+                      ]}
+                      onPress={handleRetryOcr}
+                      disabled={retryingOcr}
+                    >
+                      {retryingOcr ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Ionicons name="refresh-outline" size={16} color="#fff" />
+                      )}
+                      <Text style={styles.retryOcrButtonText}>
+                        {retryingOcr ? "Processando..." : "Tentar novamente"}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.retakePhotoButton}
+                      onPress={() =>
+                        router.replace({
+                          pathname: "/(tabs)/(create)/camera",
+                          params: { id: id as string },
+                        })
+                      }
+                    >
+                      <Ionicons name="camera-outline" size={16} color="#81007F" />
+                      <Text style={styles.retakePhotoButtonText}>
+                        Nova foto
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               )}
 
@@ -2563,6 +2613,43 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: "center",
     lineHeight: 20,
+  },
+  retryButtonsRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 20,
+  },
+  retryOcrButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#81007F",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryButtonDisabled: {
+    opacity: 0.6,
+  },
+  retryOcrButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  retakePhotoButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1.5,
+    borderColor: "#81007F",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retakePhotoButtonText: {
+    color: "#81007F",
+    fontSize: 14,
+    fontWeight: "600",
   },
   // Estilos da Seção de Participantes
   participantsSection: {

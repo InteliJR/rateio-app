@@ -476,6 +476,25 @@ class BillService {
   }
 
   /**
+   * Reprocessa o OCR de uma conta que falhou
+   * @param billId - ID da conta
+   */
+  async retryOcr(billId: string): Promise<UploadBillResponse> {
+    try {
+      const api = apiService.getApi();
+      const response = await api.post<UploadBillResponse>(
+        `/bills/${billId}/retry-ocr`,
+      );
+      return response.data;
+    } catch (error: any) {
+      throw {
+        message: error.response?.data?.message || "Erro ao reprocessar OCR",
+        statusCode: error.response?.status,
+      } as UploadBillError;
+    }
+  }
+
+  /**
    * Duplica uma conta existente (reutilizar)
    * Cria uma nova conta com os mesmos itens, participantes e taxas
    * @param billId - ID da conta original

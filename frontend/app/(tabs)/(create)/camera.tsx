@@ -242,23 +242,11 @@ export default function CameraScreen() {
       setUploadProgress(60);
 
       // Etapa 3: Processamento OCR (60-100%)
+      // O OCR roda assincronamente no backend; navegamos imediatamente para a
+      // tela de edição que fará polling do status.
       setUploadStage("processing");
-      setUploadProgress(70);
-      
-      // Simular progresso do OCR
-      const processingInterval = setInterval(() => {
-        setUploadProgress((prev) => Math.min(prev + 5, 95));
-      }, 400);
-
-      // Aguardar um pouco para dar tempo do OCR processar
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      
-      clearInterval(processingInterval);
       setUploadProgress(100);
 
-      // Sucesso - navegar para tela de itens escaneados
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      
       // Resetar estados
       setUploadStage("idle");
       setUploadProgress(0);
