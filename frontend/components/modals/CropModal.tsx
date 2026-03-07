@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Image,
@@ -10,15 +10,18 @@ import {
   Modal,
   ActivityIndicator,
   SafeAreaView,
+  LayoutChangeEvent,
 } from "react-native";
 import * as ImageManipulator from "expo-image-manipulator";
 import { Ionicons } from "@expo/vector-icons";
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
-const HANDLE_SIZE = 28;
-const MIN_CROP_PX = 60; // minimum crop dimension in display pixels
-const BOTTOM_BAR_H = 120;
-const IMAGE_AREA_H = SCREEN_H - BOTTOM_BAR_H;
+const { width: SCREEN_W } = Dimensions.get("window");
+// Touch target size for corner handles
+const HANDLE_HIT = 48;
+// Visual L-arm length and thickness for corner markers
+const L_ARM = 22;
+const L_THICK = 3;
+const MIN_CROP_PX = 80;
 
 interface CropModalProps {
   visible: boolean;
@@ -42,22 +45,50 @@ interface CropRect {
   bottom: number;
 }
 
+type HandleType = "topLeft" | "topRight" | "bottomLeft" | "bottomRight" | "move";
+
 export function CropModal({
   visible,
   imageUri,
   onCrop,
   onCancel,
 }: CropModalProps) {
-  const [imageDims, setImageDims] = useState<{ w: number; h: number } | null>(
-    null,
-  );
+  const [imageDims, setImageDims] = useState<{ w: number; h: number } | null>(null);
   const [displayInfo, setDisplayInfo] = useState<DisplayInfo | null>(null);
   const [cropRect, setCropRect] = useState<CropRect | null>(null);
   const [applying, setApplying] = useState(false);
+  // Actual measured height of the image container (set via onLayout)
+  const [areaH, setAreaH] = useState(0);
 
-  // Refs avoid stale closures inside PanResponder callbacks
+  // Refs to avoid stale closures inside PanResponder callbacks
   const cropRef = useRef<CropRect | null>(null);
   const displayRef = useRef<DisplayInfo | null>(null);
+  const areaHRef = useRef(0);
+
+  const buildDisplayInfo = (w: number, h: number, containerH: number): DisplayInfo => {
+    const scale = Math.min(SCREEN_W / w, containerH / h);
+    const displayW = w * scale;
+    const displayH = h * scale;
+    const offsetX = (SCREEN_W - displayW) / 2;
+    const offsetY = (containerH - displayH) / 2;
+    return { scale, offsetX, offsetY, displayW, displayH };
+  };
+
+  // Re-compute display info when measured area height arrives
+  useEffect(() => {
+    if (!areaH || !imageDims) return;
+    const info = buildDisplayInfo(imageDims.w, imageDims.h, areaH);
+    const initial: CropRect = {
+      left: info.offsetX,
+      top: info.offsetY,
+      right: info.offsetX + info.displayW,
+      bottom: info.offsetY + info.displayH,
+    };
+    setDisplayInfo(info);
+    setCropRect(initial);
+    cropRef.current = initial;
+    displayRef.current = info;
+  }, [areaH, imageDims]);
 
   useEffect(() => {
     if (!visible || !imageUri) return;
@@ -67,52 +98,21 @@ export function CropModal({
 
     Image.getSize(
       imageUri,
-      (w, h) => {
-        const scale = Math.min(SCREEN_W / w, IMAGE_AREA_H / h);
-        const displayW = w * scale;
-        const displayH = h * scale;
-        const offsetX = (SCREEN_W - displayW) / 2;
-        const offsetY = (IMAGE_AREA_H - displayH) / 2;
-
-        const info: DisplayInfo = { scale, offsetX, offsetY, displayW, displayH };
-        const initial: CropRect = {
-          left: offsetX,
-          top: offsetY,
-          right: offsetX + displayW,
-          bottom: offsetY + displayH,
-        };
-
-        setImageDims({ w, h });
-        setDisplayInfo(info);
-        setCropRect(initial);
-        cropRef.current = initial;
-        displayRef.current = info;
-      },
-      () => {
-        // Fallback when getSize fails
-        const info: DisplayInfo = {
-          scale: 1,
-          offsetX: 0,
-          offsetY: 0,
-          displayW: SCREEN_W,
-          displayH: IMAGE_AREA_H,
-        };
-        const initial: CropRect = {
-          left: 0,
-          top: 0,
-          right: SCREEN_W,
-          bottom: IMAGE_AREA_H,
-        };
-        setImageDims({ w: SCREEN_W, h: IMAGE_AREA_H });
-        setDisplayInfo(info);
-        setCropRect(initial);
-        cropRef.current = initial;
-        displayRef.current = info;
-      },
+      (w, h) => setImageDims({ w, h }),
+      () => setImageDims({ w: SCREEN_W, h: areaHRef.current || 500 }),
     );
   }, [visible, imageUri]);
 
-  const clamp = (rect: CropRect, info: DisplayInfo): CropRect => {
+  const handleAreaLayout = (e: LayoutChangeEvent) => {
+    const h = e.nativeEvent.layout.height;
+    areaHRef.current = h;
+    setAreaH(h);
+  };
+
+  // Clamp a proposed rect so it stays within the displayed image bounds
+  // and doesn't shrink below MIN_CROP_PX. For corner drags, only the moved
+  // edges are clamped so the opposite edges remain stable.
+  const clampRect = (rect: CropRect, info: DisplayInfo): CropRect => {
     const { offsetX, offsetY, displayW, displayH } = info;
     const minL = offsetX;
     const minT = offsetY;
@@ -120,75 +120,104 @@ export function CropModal({
     const maxB = offsetY + displayH;
 
     let { left, top, right, bottom } = rect;
-    if (right - left < MIN_CROP_PX) right = left + MIN_CROP_PX;
-    if (bottom - top < MIN_CROP_PX) bottom = top + MIN_CROP_PX;
 
+    // Enforce minimum size before boundary clamping
+    if (right - left < MIN_CROP_PX) {
+      // Decide which edge to push: prefer expanding right, fallback to left
+      if (right < minL + MIN_CROP_PX) right = left + MIN_CROP_PX;
+      else left = right - MIN_CROP_PX;
+    }
+    if (bottom - top < MIN_CROP_PX) {
+      if (bottom < minT + MIN_CROP_PX) bottom = top + MIN_CROP_PX;
+      else top = bottom - MIN_CROP_PX;
+    }
+
+    // Clamp all edges to the image bounds
     left = Math.max(minL, Math.min(left, maxR - MIN_CROP_PX));
     top = Math.max(minT, Math.min(top, maxB - MIN_CROP_PX));
     right = Math.min(maxR, Math.max(right, minL + MIN_CROP_PX));
     bottom = Math.min(maxB, Math.max(bottom, minT + MIN_CROP_PX));
 
+    // For "move" gesture: keep width/height intact by clamping as a unit
+    const w = right - left;
+    const h = bottom - top;
+    if (left < minL) { left = minL; right = left + w; }
+    if (top < minT) { top = minT; bottom = top + h; }
+    if (right > maxR) { right = maxR; left = right - w; }
+    if (bottom > maxB) { bottom = maxB; top = bottom - h; }
+
     return { left, top, right, bottom };
   };
 
-  const createPanResponder = useCallback(
-    (
-      type:
-        | "topLeft"
-        | "topRight"
-        | "bottomLeft"
-        | "bottomRight"
-        | "center",
-    ) =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderMove: (_, { dx, dy }) => {
-          if (!cropRef.current || !displayRef.current) return;
-          const prev = cropRef.current;
-          const info = displayRef.current;
-          let next: CropRect;
+  // ─── PanResponder factory ────────────────────────────────────────────────
+  // The KEY fix: capture the crop rect on gesture start (onPanResponderGrant),
+  // then derive every frame as startRect + cumulativeDelta (dx/dy).
+  // Previously the code used currentRef + dx/dy which accumulated deltas
+  // on top of already-moved values, causing exponential drift / snapping.
+  const makePanResponder = (type: HandleType) => {
+    // Each responder has its own startRect snapshot
+    const startRect: CropRect = { left: 0, top: 0, right: 0, bottom: 0 };
 
-          switch (type) {
-            case "topLeft":
-              next = { ...prev, left: prev.left + dx, top: prev.top + dy };
-              break;
-            case "topRight":
-              next = { ...prev, right: prev.right + dx, top: prev.top + dy };
-              break;
-            case "bottomLeft":
-              next = { ...prev, left: prev.left + dx, bottom: prev.bottom + dy };
-              break;
-            case "bottomRight":
-              next = { ...prev, right: prev.right + dx, bottom: prev.bottom + dy };
-              break;
-            case "center": {
-              const w = prev.right - prev.left;
-              const h = prev.bottom - prev.top;
-              next = {
-                left: prev.left + dx,
-                top: prev.top + dy,
-                right: prev.left + dx + w,
-                bottom: prev.top + dy + h,
-              };
-              break;
-            }
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        // Snapshot the rect at gesture start — all move events compute from this
+        if (cropRef.current) Object.assign(startRect, cropRef.current);
+      },
+      onPanResponderMove: (_, { dx, dy }) => {
+        if (!displayRef.current) return;
+        const info = displayRef.current;
+        let next: CropRect;
+
+        switch (type) {
+          case "topLeft":
+            next = { ...startRect, left: startRect.left + dx, top: startRect.top + dy };
+            break;
+          case "topRight":
+            next = { ...startRect, right: startRect.right + dx, top: startRect.top + dy };
+            break;
+          case "bottomLeft":
+            next = { ...startRect, left: startRect.left + dx, bottom: startRect.bottom + dy };
+            break;
+          case "bottomRight":
+            next = { ...startRect, right: startRect.right + dx, bottom: startRect.bottom + dy };
+            break;
+          case "move": {
+            const w = startRect.right - startRect.left;
+            const h = startRect.bottom - startRect.top;
+            next = {
+              left: startRect.left + dx,
+              top: startRect.top + dy,
+              right: startRect.left + dx + w,
+              bottom: startRect.top + dy + h,
+            };
+            break;
           }
+          default:
+            return;
+        }
 
-          const clamped = clamp(next, info);
-          cropRef.current = clamped;
-          setCropRect({ ...clamped });
-        },
-      }),
-    [],
-  );
+        const clamped = clampRect(next, info);
+        cropRef.current = clamped;
+        setCropRect({ ...clamped });
+      },
+      onPanResponderRelease: () => {
+        // Sync startRect for next gesture (not strictly needed since grant does it,
+        // but keeps things tidy)
+        if (cropRef.current) Object.assign(startRect, cropRef.current);
+      },
+    });
+  };
 
-  const panTL = useRef(createPanResponder("topLeft")).current;
-  const panTR = useRef(createPanResponder("topRight")).current;
-  const panBL = useRef(createPanResponder("bottomLeft")).current;
-  const panBR = useRef(createPanResponder("bottomRight")).current;
-  const panCenter = useRef(createPanResponder("center")).current;
+  // Create pan responders once (they capture startRect in their own closure)
+  const panTL = useRef(makePanResponder("topLeft")).current;
+  const panTR = useRef(makePanResponder("topRight")).current;
+  const panBL = useRef(makePanResponder("bottomLeft")).current;
+  const panBR = useRef(makePanResponder("bottomRight")).current;
+  const panMove = useRef(makePanResponder("move")).current;
 
+  // ─── Apply crop ──────────────────────────────────────────────────────────
   const applyCrop = async () => {
     if (!cropRect || !displayInfo || !imageDims) return;
     setApplying(true);
@@ -199,7 +228,6 @@ export function CropModal({
       const cropW = Math.round((cropRect.right - cropRect.left) / scale);
       const cropH = Math.round((cropRect.bottom - cropRect.top) / scale);
 
-      // Clamp to natural image size
       const safeX = Math.max(0, Math.min(originX, imageDims.w - 1));
       const safeY = Math.max(0, Math.min(originY, imageDims.h - 1));
       const safeW = Math.min(cropW, imageDims.w - safeX);
@@ -210,7 +238,6 @@ export function CropModal({
         [{ crop: { originX: safeX, originY: safeY, width: safeW, height: safeH } }],
         { compress: 1, format: ImageManipulator.SaveFormat.JPEG },
       );
-
       onCrop(result.uri);
     } catch (err) {
       console.error("[CropModal] Crop failed:", err);
@@ -227,7 +254,7 @@ export function CropModal({
   return (
     <Modal visible animationType="slide" statusBarTranslucent>
       <View style={styles.container}>
-        {/* Header */}
+        {/* ── Header ── */}
         <SafeAreaView style={styles.header}>
           <TouchableOpacity style={styles.headerBtn} onPress={onCancel}>
             <Ionicons name="close" size={24} color="#fff" />
@@ -246,84 +273,70 @@ export function CropModal({
           </TouchableOpacity>
         </SafeAreaView>
 
-        {/* Image + crop overlay */}
-        <View style={styles.imageArea}>
-          {!imageDims ? (
+        {/* ── Image area ── */}
+        <View style={styles.imageArea} onLayout={handleAreaLayout}>
+          {!imageDims || !cropRect ? (
             <ActivityIndicator size="large" color="#fff" />
           ) : (
             <>
               <Image
                 source={{ uri: imageUri }}
-                style={styles.image}
+                style={StyleSheet.absoluteFill}
                 resizeMode="contain"
               />
 
-              {cropRect && (
-                <>
-                  {/* Semi-transparent overlays outside crop rect */}
-                  <View
-                    pointerEvents="none"
-                    style={[styles.overlay, { top: 0, left: 0, right: 0, height: cropRect.top }]}
-                  />
-                  <View
-                    pointerEvents="none"
-                    style={[styles.overlay, { top: cropRect.bottom, left: 0, right: 0, bottom: 0 }]}
-                  />
-                  <View
-                    pointerEvents="none"
-                    style={[styles.overlay, { top: cropRect.top, left: 0, width: cropRect.left, height: cH }]}
-                  />
-                  <View
-                    pointerEvents="none"
-                    style={[styles.overlay, { top: cropRect.top, left: cropRect.right, right: 0, height: cH }]}
-                  />
+              {/* ── Dark overlays outside crop ── */}
+              <View pointerEvents="none" style={[styles.overlay, { top: 0, left: 0, right: 0, height: cropRect.top }]} />
+              <View pointerEvents="none" style={[styles.overlay, { top: cropRect.bottom, left: 0, right: 0, bottom: 0 }]} />
+              <View pointerEvents="none" style={[styles.overlay, { top: cropRect.top, left: 0, width: cropRect.left, height: cH }]} />
+              <View pointerEvents="none" style={[styles.overlay, { top: cropRect.top, left: cropRect.right, right: 0, height: cH }]} />
 
-                  {/* Crop border */}
-                  <View
-                    pointerEvents="none"
-                    style={[styles.cropBorder, { left: cropRect.left, top: cropRect.top, width: cW, height: cH }]}
-                  />
+              {/* ── Crop border ── */}
+              <View pointerEvents="none" style={[styles.cropBorder, { left: cropRect.left, top: cropRect.top, width: cW, height: cH }]} />
 
-                  {/* Rule-of-thirds grid */}
-                  <View
-                    pointerEvents="none"
-                    style={[styles.gridV, { left: cropRect.left + cW / 3, top: cropRect.top, height: cH }]}
-                  />
-                  <View
-                    pointerEvents="none"
-                    style={[styles.gridV, { left: cropRect.left + (cW * 2) / 3, top: cropRect.top, height: cH }]}
-                  />
-                  <View
-                    pointerEvents="none"
-                    style={[styles.gridH, { top: cropRect.top + cH / 3, left: cropRect.left, width: cW }]}
-                  />
-                  <View
-                    pointerEvents="none"
-                    style={[styles.gridH, { top: cropRect.top + (cH * 2) / 3, left: cropRect.left, width: cW }]}
-                  />
+              {/* ── Rule-of-thirds grid ── */}
+              <View pointerEvents="none" style={[styles.gridV, { left: cropRect.left + cW / 3, top: cropRect.top, height: cH }]} />
+              <View pointerEvents="none" style={[styles.gridV, { left: cropRect.left + (cW * 2) / 3, top: cropRect.top, height: cH }]} />
+              <View pointerEvents="none" style={[styles.gridH, { top: cropRect.top + cH / 3, left: cropRect.left, width: cW }]} />
+              <View pointerEvents="none" style={[styles.gridH, { top: cropRect.top + (cH * 2) / 3, left: cropRect.left, width: cW }]} />
 
-                  {/* Centre drag handle (move entire crop) */}
-                  <View
-                    {...panCenter.panHandlers}
-                    style={[styles.centerHandle, { left: cropRect.left + cW / 2 - 36, top: cropRect.top + cH / 2 - 36 }]}
-                  />
+              {/* ── Move handle: fills interior (behind corners) ── */}
+              <View
+                {...panMove.panHandlers}
+                style={[styles.moveArea, {
+                  left: cropRect.left + HANDLE_HIT / 2,
+                  top: cropRect.top + HANDLE_HIT / 2,
+                  width: cW - HANDLE_HIT,
+                  height: cH - HANDLE_HIT,
+                }]}
+              />
 
-                  {/* Corner handles */}
-                  <View {...panTL.panHandlers} style={[styles.handle, { left: cropRect.left - HANDLE_SIZE / 2, top: cropRect.top - HANDLE_SIZE / 2, borderTopLeftRadius: 4 }]} />
-                  <View {...panTR.panHandlers} style={[styles.handle, { left: cropRect.right - HANDLE_SIZE / 2, top: cropRect.top - HANDLE_SIZE / 2, borderTopRightRadius: 4 }]} />
-                  <View {...panBL.panHandlers} style={[styles.handle, { left: cropRect.left - HANDLE_SIZE / 2, top: cropRect.bottom - HANDLE_SIZE / 2, borderBottomLeftRadius: 4 }]} />
-                  <View {...panBR.panHandlers} style={[styles.handle, { left: cropRect.right - HANDLE_SIZE / 2, top: cropRect.bottom - HANDLE_SIZE / 2, borderBottomRightRadius: 4 }]} />
-                </>
-              )}
+              {/* ── Corner handles (touch targets + L-shaped visuals) ── */}
+              {/* Top-left */}
+              <View {...panTL.panHandlers} style={[styles.cornerHit, { left: cropRect.left - HANDLE_HIT / 2, top: cropRect.top - HANDLE_HIT / 2 }]}>
+                <View style={styles.cornerTL} />
+              </View>
+              {/* Top-right */}
+              <View {...panTR.panHandlers} style={[styles.cornerHit, { left: cropRect.right - HANDLE_HIT / 2, top: cropRect.top - HANDLE_HIT / 2 }]}>
+                <View style={styles.cornerTR} />
+              </View>
+              {/* Bottom-left */}
+              <View {...panBL.panHandlers} style={[styles.cornerHit, { left: cropRect.left - HANDLE_HIT / 2, top: cropRect.bottom - HANDLE_HIT / 2 }]}>
+                <View style={styles.cornerBL} />
+              </View>
+              {/* Bottom-right */}
+              <View {...panBR.panHandlers} style={[styles.cornerHit, { left: cropRect.right - HANDLE_HIT / 2, top: cropRect.bottom - HANDLE_HIT / 2 }]}>
+                <View style={styles.cornerBR} />
+              </View>
             </>
           )}
         </View>
 
-        {/* Bottom hint */}
+        {/* ── Bottom hint ── */}
         <View style={styles.hintBar}>
-          <Ionicons name="crop-outline" size={16} color="rgba(255,255,255,0.7)" />
+          <Ionicons name="crop-outline" size={16} color="rgba(255,255,255,0.6)" />
           <Text style={styles.hintText}>
-            Arraste os cantos para ajustar • Arraste o centro para mover
+            Arraste os cantos para redimensionar • Interior para mover
           </Text>
         </View>
       </View>
@@ -371,53 +384,91 @@ const styles = StyleSheet.create({
     backgroundColor: "#111",
     overflow: "hidden",
   },
-  image: {
-    width: SCREEN_W,
-    height: IMAGE_AREA_H,
-    position: "absolute",
-  },
   overlay: {
     position: "absolute",
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: "rgba(0,0,0,0.6)",
   },
   cropBorder: {
     position: "absolute",
-    borderWidth: 1.5,
-    borderColor: "#fff",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.9)",
   },
   gridV: {
     position: "absolute",
     width: 1,
-    backgroundColor: "rgba(255,255,255,0.3)",
+    backgroundColor: "rgba(255,255,255,0.25)",
   },
   gridH: {
     position: "absolute",
     height: 1,
-    backgroundColor: "rgba(255,255,255,0.3)",
+    backgroundColor: "rgba(255,255,255,0.25)",
   },
-  centerHandle: {
+  // Invisible hit area that fills the crop interior for move gesture
+  moveArea: {
     position: "absolute",
-    width: 72,
-    height: 72,
   },
-  handle: {
+  // 48×48 invisible touch target centred on each corner
+  cornerHit: {
     position: "absolute",
-    width: HANDLE_SIZE,
-    height: HANDLE_SIZE,
-    backgroundColor: "#fff",
+    width: HANDLE_HIT,
+    height: HANDLE_HIT,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  // L-shaped corner markers — each is a pair of absolute rectangles
+  // We use a container View and two child Views for the two arms
+  cornerTL: {
+    width: L_ARM,
+    height: L_ARM,
+    borderTopWidth: L_THICK,
+    borderLeftWidth: L_THICK,
+    borderColor: "#fff",
+    position: "absolute",
+    top: HANDLE_HIT / 2 - L_ARM / 2,
+    left: HANDLE_HIT / 2 - L_ARM / 2,
+  },
+  cornerTR: {
+    width: L_ARM,
+    height: L_ARM,
+    borderTopWidth: L_THICK,
+    borderRightWidth: L_THICK,
+    borderColor: "#fff",
+    position: "absolute",
+    top: HANDLE_HIT / 2 - L_ARM / 2,
+    left: HANDLE_HIT / 2 - L_ARM / 2,
+  },
+  cornerBL: {
+    width: L_ARM,
+    height: L_ARM,
+    borderBottomWidth: L_THICK,
+    borderLeftWidth: L_THICK,
+    borderColor: "#fff",
+    position: "absolute",
+    top: HANDLE_HIT / 2 - L_ARM / 2,
+    left: HANDLE_HIT / 2 - L_ARM / 2,
+  },
+  cornerBR: {
+    width: L_ARM,
+    height: L_ARM,
+    borderBottomWidth: L_THICK,
+    borderRightWidth: L_THICK,
+    borderColor: "#fff",
+    position: "absolute",
+    top: HANDLE_HIT / 2 - L_ARM / 2,
+    left: HANDLE_HIT / 2 - L_ARM / 2,
   },
   hintBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    paddingVertical: 16,
+    paddingVertical: 14,
     paddingHorizontal: 24,
     backgroundColor: "#1A1A1A",
   },
   hintText: {
-    color: "rgba(255,255,255,0.7)",
-    fontSize: 13,
+    color: "rgba(255,255,255,0.6)",
+    fontSize: 12,
     textAlign: "center",
   },
 });
