@@ -19,10 +19,12 @@ import { API_URL } from "../../services/api.service";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import * as ImagePicker from "expo-image-picker";
+import { useTheme } from "../../contexts/ThemeContext";
 
 type EditField = "name" | "email" | null;
 
 export default function EditProfileScreen() {
+  const { colors, getFontSize } = useTheme();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -33,7 +35,7 @@ export default function EditProfileScreen() {
   const [tempValue, setTempValue] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  
+
   useEffect(() => {
     loadUserData();
   }, []);
@@ -44,7 +46,7 @@ export default function EditProfileScreen() {
     // Se o backend já devolve uma URL absoluta (ex: S3), usamos como está
     if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
       // Adicionar timestamp para evitar cache
-      const separator = rawUrl.includes('?') ? '&' : '?';
+      const separator = rawUrl.includes("?") ? "&" : "?";
       return `${rawUrl}${separator}t=${Date.now()}`;
     }
 
@@ -60,7 +62,7 @@ export default function EditProfileScreen() {
       setName(profile.name);
       setEmail(profile.email);
       setCreatedAt(profile.createdAt);
-      
+
       // Construir URL completa do avatar (S3 ou local)
       setAvatarUrl(buildAvatarUrl(profile.avatarUrl));
     } catch (error) {
@@ -73,8 +75,11 @@ export default function EditProfileScreen() {
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permissão necessária', 'Precisamos de permissão para acessar suas fotos.');
+    if (status !== "granted") {
+      Alert.alert(
+        "Permissão necessária",
+        "Precisamos de permissão para acessar suas fotos.",
+      );
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -83,7 +88,7 @@ export default function EditProfileScreen() {
       aspect: [1, 1],
       quality: 0.7,
     });
-  
+
     if (!result.canceled) {
       await uploadImage(result.assets[0].uri);
     }
@@ -91,21 +96,20 @@ export default function EditProfileScreen() {
 
   const uploadImage = async (uri: string) => {
     setUploadingAvatar(true);
-    try { 
+    try {
       const updatedProfile = await userService.uploadAvatar(uri);
-      console.log('[EDIT] Upload response:', updatedProfile);
-      console.log('[EDIT] Avatar URL from backend:', updatedProfile.avatarUrl);
-      
+      console.log("[EDIT] Upload response:", updatedProfile);
+      console.log("[EDIT] Avatar URL from backend:", updatedProfile.avatarUrl);
+
       // Construir URL completa do avatar (S3 ou local)
       const fullAvatarUrl = buildAvatarUrl(updatedProfile.avatarUrl);
-      console.log('[EDIT] Full avatar URL:', fullAvatarUrl);
+      console.log("[EDIT] Full avatar URL:", fullAvatarUrl);
       setAvatarUrl(fullAvatarUrl);
-      
-      Alert.alert('Sucesso', 'Foto de perfil atualizada com sucesso!');
-    }
-    catch (error) {
-      console.error('Erro ao fazer upload da imagem:', error);
-      Alert.alert('Erro', 'Não foi possível atualizar a foto de perfil.');
+
+      Alert.alert("Sucesso", "Foto de perfil atualizada com sucesso!");
+    } catch (error) {
+      console.error("Erro ao fazer upload da imagem:", error);
+      Alert.alert("Erro", "Não foi possível atualizar a foto de perfil.");
     } finally {
       setUploadingAvatar(false);
     }
@@ -164,15 +168,27 @@ export default function EditProfileScreen() {
 
   if (initialLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#7B2CBF" />
-        <Text style={styles.loadingText}>Carregando seus dados...</Text>
+      <View
+        style={[
+          styles.loadingContainer,
+          { backgroundColor: colors.background },
+        ]}
+      >
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text
+          style={[
+            styles.loadingText,
+            { color: colors.text, fontSize: getFontSize(16) },
+          ]}
+        >
+          Carregando seus dados...
+        </Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
@@ -180,9 +196,12 @@ export default function EditProfileScreen() {
         {/* Back Button */}
         <TouchableOpacity
           onPress={() => router.push("/(tabs)/profile")}
-          style={styles.backButton}
+          style={[
+            styles.backButton,
+            { backgroundColor: colors.cardBackground },
+          ]}
         >
-          <Ionicons name="chevron-back" size={28} color="#333" />
+          <Ionicons name="chevron-back" size={28} color={colors.text} />
         </TouchableOpacity>
 
         {/* Avatar */}
@@ -193,8 +212,15 @@ export default function EditProfileScreen() {
                 <Image
                   source={{ uri: avatarUrl }}
                   style={styles.avatarImage}
-                  onError={(e) => console.error('[EDIT] Image load error:', e.nativeEvent.error)}
-                  onLoad={() => console.log('[EDIT] Image loaded successfully:', avatarUrl)}
+                  onError={(e) =>
+                    console.error(
+                      "[EDIT] Image load error:",
+                      e.nativeEvent.error,
+                    )
+                  }
+                  onLoad={() =>
+                    console.log("[EDIT] Image loaded successfully:", avatarUrl)
+                  }
                 />
               </>
             ) : (
@@ -202,48 +228,138 @@ export default function EditProfileScreen() {
                 <Ionicons name="person" size={60} color="#FFF" />
               </View>
             )}
-            <TouchableOpacity style={styles.cameraButton} onPress={pickImage} disabled={uploadingAvatar}>
+            <TouchableOpacity
+              style={[
+                styles.cameraButton,
+                {
+                  backgroundColor: colors.background,
+                  borderColor: colors.background,
+                },
+              ]}
+              onPress={pickImage}
+              disabled={uploadingAvatar}
+            >
               {uploadingAvatar ? (
-                <ActivityIndicator size="small" color="#FFF" />
+                <ActivityIndicator size="small" color={colors.primary} />
               ) : (
-                <Ionicons name="camera" size={20} color="#FFF" />
+                <Ionicons name="camera" size={20} color={colors.primary} />
               )}
             </TouchableOpacity>
           </View>
-          <Text style={styles.changePhotoText}>Alterar Foto</Text>
+          <Text
+            style={[
+              styles.changePhotoText,
+              { color: colors.text, fontSize: getFontSize(14) },
+            ]}
+          >
+            Alterar Foto
+          </Text>
         </View>
 
         {/* Clickable Fields */}
-        <View style={styles.fieldsList}>
+        <View
+          style={[
+            styles.fieldsList,
+            { backgroundColor: colors.backgroundSecondary },
+          ]}
+        >
           {/* Nome */}
           <TouchableOpacity
-            style={styles.fieldRow}
+            style={[
+              styles.fieldRow,
+              {
+                backgroundColor: colors.cardBackground,
+                borderColor: colors.divider,
+              },
+            ]}
             onPress={() => openEditModal("name", name)}
           >
             <View style={styles.fieldContent}>
-              <Text style={styles.fieldLabel}>Nome</Text>
-              <Text style={styles.fieldValue}>{name || "Não informado"}</Text>
+              <Text
+                style={[
+                  styles.fieldLabel,
+                  { color: colors.secondaryText, fontSize: getFontSize(14) },
+                ]}
+              >
+                Nome
+              </Text>
+              <Text
+                style={[
+                  styles.fieldValue,
+                  { color: colors.text, fontSize: getFontSize(16) },
+                ]}
+              >
+                {name || "Não informado"}
+              </Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#999" />
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color={colors.secondaryText}
+            />
           </TouchableOpacity>
 
           {/* Email (Somente Leitura) */}
-          <View style={styles.fieldRow}>
+          <View
+            style={[
+              styles.fieldRow,
+              {
+                backgroundColor: colors.cardBackground,
+                borderColor: colors.divider,
+              },
+            ]}
+          >
             <View style={styles.fieldContent}>
-              <Text style={styles.fieldLabel}>Email</Text>
-              <Text style={styles.fieldValue}>{email || "Não informado"}</Text>
+              <Text
+                style={[
+                  styles.fieldLabel,
+                  { color: colors.secondaryText, fontSize: getFontSize(14) },
+                ]}
+              >
+                Email
+              </Text>
+              <Text
+                style={[
+                  styles.fieldValue,
+                  { color: colors.text, fontSize: getFontSize(16) },
+                ]}
+              >
+                {email || "Não informado"}
+              </Text>
             </View>
-            <Ionicons name="lock-closed" size={18} color="#999" />
+            <Ionicons
+              name="lock-closed"
+              size={18}
+              color={colors.secondaryText}
+            />
           </View>
 
           {/* Data de Cadastro (Opcional) */}
           {createdAt && (
-            <View style={styles.fieldRow}>
+            <View
+              style={[
+                styles.fieldRow,
+                {
+                  backgroundColor: colors.cardBackground,
+                  borderColor: colors.divider,
+                },
+              ]}
+            >
               <View style={styles.fieldContent}>
-                <Text style={styles.fieldLabel}>Membro desde</Text>
-                <Text style={styles.fieldValue}>{formatDate(createdAt)}</Text>
+                <Text
+                  style={[styles.fieldLabel, { color: colors.secondaryText }]}
+                >
+                  Membro desde
+                </Text>
+                <Text style={[styles.fieldValue, { color: colors.text }]}>
+                  {formatDate(createdAt)}
+                </Text>
               </View>
-              <Ionicons name="calendar-outline" size={18} color="#999" />
+              <Ionicons
+                name="calendar-outline"
+                size={18}
+                color={colors.secondaryText}
+              />
             </View>
           )}
         </View>
@@ -256,19 +372,39 @@ export default function EditProfileScreen() {
         transparent={true}
         onRequestClose={closeEditModal}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View
+          style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}
+        >
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: colors.cardBackground },
+            ]}
+          >
             <View style={styles.modalHeader}>
               <TouchableOpacity onPress={closeEditModal}>
-                <Text style={styles.modalCancel}>Cancelar</Text>
+                <Text
+                  style={[
+                    styles.modalCancel,
+                    { color: colors.error, fontSize: getFontSize(16) },
+                  ]}
+                >
+                  Cancelar
+                </Text>
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>
+              <Text
+                style={[
+                  styles.modalTitle,
+                  { color: colors.text, fontSize: getFontSize(18) },
+                ]}
+              >
                 {editingField === "name" ? "Editar Nome" : "Editar Email"}
               </Text>
               <TouchableOpacity onPress={saveField} disabled={loading}>
                 <Text
                   style={[
                     styles.modalSave,
+                    { color: colors.primary, fontSize: getFontSize(16) },
                     loading && styles.modalSaveDisabled,
                   ]}
                 >
@@ -278,17 +414,29 @@ export default function EditProfileScreen() {
             </View>
 
             <View style={styles.modalBody}>
-              <Text style={styles.modalLabel}>
+              <Text
+                style={[
+                  styles.modalLabel,
+                  { color: colors.text, fontSize: getFontSize(14) },
+                ]}
+              >
                 {editingField === "name" ? "Nome" : "Email"}
               </Text>
               <TextInput
-                style={styles.modalInput}
+                style={[
+                  styles.modalInput,
+                  {
+                    backgroundColor: colors.inputBackground,
+                    borderColor: colors.inputBorder,
+                    color: colors.text,
+                  },
+                ]}
                 value={tempValue}
                 onChangeText={setTempValue}
                 placeholder={`Digite seu ${
                   editingField === "name" ? "nome" : "email"
                 }`}
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.placeholderText}
                 keyboardType={
                   editingField === "email" ? "email-address" : "default"
                 }

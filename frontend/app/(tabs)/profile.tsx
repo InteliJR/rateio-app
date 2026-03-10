@@ -15,9 +15,11 @@ import { authService } from "../../services/auth.service";
 import { userService } from "../../services/user.service";
 import { API_URL } from "../../services/api.service";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useTheme } from "../../contexts/ThemeContext";
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { colors, getFontSize } = useTheme();
   const [userName, setUserName] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
@@ -35,7 +37,7 @@ export default function ProfileScreen() {
         lastLoadTime.current = now;
         loadUserData();
       }
-    }, [])
+    }, []),
   );
 
   const buildAvatarUrl = (rawUrl: string | null | undefined): string | null => {
@@ -43,7 +45,7 @@ export default function ProfileScreen() {
 
     if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
       // Adicionar timestamp para evitar cache
-      const separator = rawUrl.includes('?') ? '&' : '?';
+      const separator = rawUrl.includes("?") ? "&" : "?";
       return `${rawUrl}${separator}t=${Date.now()}`;
     }
 
@@ -57,10 +59,10 @@ export default function ProfileScreen() {
       const profile = await userService.getProfile();
       setUserName(profile.name);
       setUserEmail(profile.email);
-      
+
       // Construir URL completa do avatar (S3 ou local)
       setUserAvatarUrl(buildAvatarUrl(profile.avatarUrl));
-      
+
       // Atualizar AsyncStorage para compatibilidade
       await AsyncStorage.setItem("userName", profile.name);
       await AsyncStorage.setItem("userEmail", profile.email);
@@ -114,66 +116,160 @@ export default function ProfileScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#7B2CBF" />
-        <Text style={styles.loadingText}>Carregando perfil...</Text>
+      <View
+        style={[
+          styles.loadingContainer,
+          { backgroundColor: colors.background },
+        ]}
+      >
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text
+          style={[
+            styles.loadingText,
+            { color: colors.textSecondary, fontSize: getFontSize(16) },
+          ]}
+        >
+          Carregando perfil...
+        </Text>
       </View>
     );
   }
 
   return (
     <ScrollView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.contentContainer}
     >
       {/* Profile Section */}
       <View style={styles.profileSection}>
         <View style={styles.avatarContainer}>
           {userAvatarUrl ? (
-            <Image
-              source={{ uri: userAvatarUrl }}
-              style={styles.avatarImage}
-            />
+            <Image source={{ uri: userAvatarUrl }} style={styles.avatarImage} />
           ) : (
             <View style={styles.avatar}>
               <Ionicons name="person" size={60} color="#FFF" />
             </View>
           )}
         </View>
-        <Text style={styles.userName}>{userName || "Usuário"}</Text>
-        {userEmail && <Text style={styles.userEmail}>{userEmail}</Text>}
+        <Text
+          style={[
+            styles.userName,
+            { color: colors.text, fontSize: getFontSize(24) },
+          ]}
+        >
+          {userName || "Usuário"}
+        </Text>
+        {userEmail && (
+          <Text
+            style={[
+              styles.userEmail,
+              { color: colors.textTertiary, fontSize: getFontSize(14) },
+            ]}
+          >
+            {userEmail}
+          </Text>
+        )}
       </View>
 
       {/* Menu Options */}
       <View style={styles.menuContainer}>
-        <TouchableOpacity style={styles.menuItem} onPress={handleEditProfile}>
+        <TouchableOpacity
+          style={[
+            styles.menuItem,
+            { backgroundColor: colors.menuItem, shadowColor: colors.shadow },
+          ]}
+          onPress={handleEditProfile}
+        >
           <View style={styles.menuItemLeft}>
-            <Ionicons name="pencil-outline" size={24} color="#333" />
-            <Text style={styles.menuItemText}>Editar Perfil</Text>
+            <Ionicons name="pencil-outline" size={24} color={colors.text} />
+            <Text
+              style={[
+                styles.menuItemText,
+                { color: colors.text, fontSize: getFontSize(16) },
+              ]}
+            >
+              Editar Perfil
+            </Text>
           </View>
-          <Ionicons name="chevron-forward" size={24} color="#999" />
+          <Ionicons
+            name="chevron-forward"
+            size={24}
+            color={colors.textTertiary}
+          />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.menuItem} onPress={handleSecurity}>
+        <TouchableOpacity
+          style={[
+            styles.menuItem,
+            { backgroundColor: colors.menuItem, shadowColor: colors.shadow },
+          ]}
+          onPress={handleSecurity}
+        >
           <View style={styles.menuItemLeft}>
-            <Ionicons name="lock-closed-outline" size={24} color="#333" />
-            <Text style={styles.menuItemText}>Segurança</Text>
+            <Ionicons
+              name="lock-closed-outline"
+              size={24}
+              color={colors.text}
+            />
+            <Text
+              style={[
+                styles.menuItemText,
+                { color: colors.text, fontSize: getFontSize(16) },
+              ]}
+            >
+              Segurança
+            </Text>
           </View>
-          <Ionicons name="chevron-forward" size={24} color="#999" />
+          <Ionicons
+            name="chevron-forward"
+            size={24}
+            color={colors.textTertiary}
+          />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.menuItem} onPress={handleSettings}>
+        <TouchableOpacity
+          style={[
+            styles.menuItem,
+            { backgroundColor: colors.menuItem, shadowColor: colors.shadow },
+          ]}
+          onPress={handleSettings}
+        >
           <View style={styles.menuItemLeft}>
-            <Ionicons name="settings-outline" size={24} color="#333" />
-            <Text style={styles.menuItemText}>Configuração</Text>
+            <Ionicons name="settings-outline" size={24} color={colors.text} />
+            <Text
+              style={[
+                styles.menuItemText,
+                { color: colors.text, fontSize: getFontSize(16) },
+              ]}
+            >
+              Configuração
+            </Text>
           </View>
-          <Ionicons name="chevron-forward" size={24} color="#999" />
+          <Ionicons
+            name="chevron-forward"
+            size={24}
+            color={colors.textTertiary}
+          />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
+        <TouchableOpacity
+          style={[
+            styles.menuItem,
+            { backgroundColor: colors.menuItem, shadowColor: colors.shadow },
+          ]}
+          onPress={handleLogout}
+        >
           <View style={styles.menuItemLeft}>
             <Ionicons name="log-out-outline" size={24} color="#E53935" />
-            <Text style={[styles.menuItemText, styles.logoutText]}>Logout</Text>
+            <Text
+              style={[
+                styles.menuItemText,
+                styles.logoutText,
+                { fontSize: getFontSize(16) },
+              ]}
+            >
+              Logout
+            </Text>
           </View>
         </TouchableOpacity>
       </View>
@@ -225,7 +321,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: '#e0e0e0',
+    backgroundColor: "#e0e0e0",
   },
   userName: {
     fontSize: 24,

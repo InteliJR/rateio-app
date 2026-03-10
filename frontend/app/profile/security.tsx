@@ -16,8 +16,10 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { userService } from "../../services/user.service";
 import { API_URL } from "../../services/api.service";
+import { useTheme } from "../../contexts/ThemeContext";
 
 export default function SecurityScreen() {
+  const { colors, getFontSize } = useTheme();
   const router = useRouter();
   const [userName, setUserName] = React.useState("");
   const [avatarUrl, setAvatarUrl] = React.useState<string | null>(null);
@@ -39,7 +41,7 @@ export default function SecurityScreen() {
 
     if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
       // Adicionar timestamp para evitar cache
-      const separator = rawUrl.includes('?') ? '&' : '?';
+      const separator = rawUrl.includes("?") ? "&" : "?";
       return `${rawUrl}${separator}t=${Date.now()}`;
     }
 
@@ -116,13 +118,13 @@ export default function SecurityScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Back Button */}
       <TouchableOpacity
         onPress={() => router.push("/(tabs)/profile")}
-        style={styles.backButton}
+        style={[styles.backButton, { backgroundColor: colors.cardBackground }]}
       >
-        <Ionicons name="chevron-back" size={28} color="#333" />
+        <Ionicons name="chevron-back" size={28} color={colors.text} />
       </TouchableOpacity>
 
       <ScrollView
@@ -140,17 +142,46 @@ export default function SecurityScreen() {
               </View>
             )}
           </View>
-          <Text style={styles.userName}>{userName || "Usuário"}</Text>
+          <Text
+            style={[
+              styles.userName,
+              { color: colors.text, fontSize: getFontSize(24) },
+            ]}
+          >
+            {userName || "Usuário"}
+          </Text>
         </View>
 
         {/* Security Options */}
-        <View style={styles.optionsContainer}>
+        <View
+          style={[
+            styles.optionsContainer,
+            {
+              backgroundColor: colors.backgroundSecondary,
+              borderColor: colors.divider,
+            },
+          ]}
+        >
           <TouchableOpacity
-            style={styles.optionItem}
+            style={[
+              styles.optionItem,
+              { backgroundColor: colors.cardBackground },
+            ]}
             onPress={openPasswordModal}
           >
-            <Text style={styles.optionText}>Alterar Senha</Text>
-            <Ionicons name="chevron-forward" size={24} color="#999" />
+            <Text
+              style={[
+                styles.optionText,
+                { color: colors.text, fontSize: getFontSize(16) },
+              ]}
+            >
+              Alterar Senha
+            </Text>
+            <Ionicons
+              name="chevron-forward"
+              size={24}
+              color={colors.secondaryText}
+            />
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -162,17 +193,39 @@ export default function SecurityScreen() {
         transparent={true}
         onRequestClose={closePasswordModal}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View
+          style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}
+        >
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: colors.cardBackground },
+            ]}
+          >
             <View style={styles.modalHeader}>
               <TouchableOpacity onPress={closePasswordModal}>
-                <Text style={styles.modalCancel}>Cancelar</Text>
+                <Text
+                  style={[
+                    styles.modalCancel,
+                    { color: colors.error, fontSize: getFontSize(16) },
+                  ]}
+                >
+                  Cancelar
+                </Text>
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>Alterar Senha</Text>
+              <Text
+                style={[
+                  styles.modalTitle,
+                  { color: colors.text, fontSize: getFontSize(18) },
+                ]}
+              >
+                Alterar Senha
+              </Text>
               <TouchableOpacity onPress={handleSavePassword} disabled={loading}>
                 <Text
                   style={[
                     styles.modalSave,
+                    { color: colors.primary, fontSize: getFontSize(16) },
                     loading && styles.modalSaveDisabled,
                   ]}
                 >
@@ -184,14 +237,29 @@ export default function SecurityScreen() {
             <ScrollView style={styles.modalBody}>
               {/* Senha Atual */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Senha Atual</Text>
-                <View style={styles.passwordContainer}>
+                <Text
+                  style={[
+                    styles.inputLabel,
+                    { color: colors.text, fontSize: getFontSize(14) },
+                  ]}
+                >
+                  Senha Atual
+                </Text>
+                <View
+                  style={[
+                    styles.passwordContainer,
+                    {
+                      backgroundColor: colors.inputBackground,
+                      borderColor: colors.inputBorder,
+                    },
+                  ]}
+                >
                   <TextInput
-                    style={styles.passwordInput}
+                    style={[styles.passwordInput, { color: colors.text }]}
                     value={currentPassword}
                     onChangeText={setCurrentPassword}
                     placeholder="Digite sua senha atual"
-                    placeholderTextColor="#999"
+                    placeholderTextColor={colors.placeholderText}
                     secureTextEntry={!showCurrentPassword}
                     autoCapitalize="none"
                   />
@@ -202,7 +270,7 @@ export default function SecurityScreen() {
                     <Ionicons
                       name={showCurrentPassword ? "eye-off" : "eye"}
                       size={20}
-                      color="#999"
+                      color={colors.secondaryText}
                     />
                   </TouchableOpacity>
                 </View>
@@ -210,14 +278,29 @@ export default function SecurityScreen() {
 
               {/* Nova Senha */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Nova Senha</Text>
-                <View style={styles.passwordContainer}>
+                <Text
+                  style={[
+                    styles.inputLabel,
+                    { color: colors.text, fontSize: getFontSize(14) },
+                  ]}
+                >
+                  Nova Senha
+                </Text>
+                <View
+                  style={[
+                    styles.passwordContainer,
+                    {
+                      backgroundColor: colors.inputBackground,
+                      borderColor: colors.inputBorder,
+                    },
+                  ]}
+                >
                   <TextInput
-                    style={styles.passwordInput}
+                    style={[styles.passwordInput, { color: colors.text }]}
                     value={newPassword}
                     onChangeText={setNewPassword}
                     placeholder="Mínimo 8 caracteres"
-                    placeholderTextColor="#999"
+                    placeholderTextColor={colors.placeholderText}
                     secureTextEntry={!showNewPassword}
                     autoCapitalize="none"
                   />
@@ -228,7 +311,7 @@ export default function SecurityScreen() {
                     <Ionicons
                       name={showNewPassword ? "eye-off" : "eye"}
                       size={20}
-                      color="#999"
+                      color={colors.secondaryText}
                     />
                   </TouchableOpacity>
                 </View>
@@ -236,14 +319,29 @@ export default function SecurityScreen() {
 
               {/* Confirmar Senha */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Confirmar Nova Senha</Text>
-                <View style={styles.passwordContainer}>
+                <Text
+                  style={[
+                    styles.inputLabel,
+                    { color: colors.text, fontSize: getFontSize(14) },
+                  ]}
+                >
+                  Confirmar Nova Senha
+                </Text>
+                <View
+                  style={[
+                    styles.passwordContainer,
+                    {
+                      backgroundColor: colors.inputBackground,
+                      borderColor: colors.inputBorder,
+                    },
+                  ]}
+                >
                   <TextInput
-                    style={styles.passwordInput}
+                    style={[styles.passwordInput, { color: colors.text }]}
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
                     placeholder="Digite novamente a nova senha"
-                    placeholderTextColor="#999"
+                    placeholderTextColor={colors.placeholderText}
                     secureTextEntry={!showConfirmPassword}
                     autoCapitalize="none"
                   />
@@ -254,7 +352,7 @@ export default function SecurityScreen() {
                     <Ionicons
                       name={showConfirmPassword ? "eye-off" : "eye"}
                       size={20}
-                      color="#999"
+                      color={colors.secondaryText}
                     />
                   </TouchableOpacity>
                 </View>
