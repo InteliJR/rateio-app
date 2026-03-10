@@ -41,7 +41,7 @@ export default function SecurityScreen() {
 
     if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
       // Adicionar timestamp para evitar cache
-      const separator = rawUrl.includes('?') ? '&' : '?';
+      const separator = rawUrl.includes("?") ? "&" : "?";
       return `${rawUrl}${separator}t=${Date.now()}`;
     }
 
@@ -137,10 +137,8 @@ export default function SecurityScreen() {
             {avatarUrl ? (
               <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
             ) : (
-              <View
-                style={[styles.avatar, { backgroundColor: colors.primary }]}
-              >
-                <Ionicons name="person" size={60} color={colors.accent} />
+              <View style={styles.avatar}>
+                <Ionicons name="person" size={60} color="#FFF" />
               </View>
             )}
           </View>

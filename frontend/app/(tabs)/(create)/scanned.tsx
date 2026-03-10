@@ -24,8 +24,10 @@ import participantsService, {
 } from "../../../services/participants.service";
 import divisionsService from "../../../services/divisions.service";
 import feesService, { Fee, FeeType } from "../../../services/fees.service";
+import { useTheme } from "../../../contexts/ThemeContext";
 
 export default function ScannedBillScreen() {
+  const { colors, getFontSize } = useTheme();
   const {
     id,
     participants: participantsParam,
@@ -1268,15 +1270,22 @@ export default function ScannedBillScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+    >
       <KeyboardAvoidingView
         style={styles.keyboardAvoidingContainer}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
       >
         {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#81007F" />
+          <View
+            style={[
+              styles.loadingContainer,
+              { backgroundColor: colors.background },
+            ]}
+          >
+            <ActivityIndicator size="large" color={colors.primary} />
           </View>
         ) : (
           <ScrollView
@@ -1326,6 +1335,10 @@ export default function ScannedBillScreen() {
                     <TextInput
                       style={[
                         styles.billNameInput,
+                        {
+                          color: colors.text,
+                          borderBottomColor: colors.primary,
+                        },
                         !savingName && billName && styles.billNameInputEditable,
                       ]}
                       value={billName}
@@ -1333,14 +1346,14 @@ export default function ScannedBillScreen() {
                       onBlur={saveBillName}
                       onFocus={() => {}}
                       placeholder="Nome da conta"
-                      placeholderTextColor="#999"
+                      placeholderTextColor={colors.placeholderText}
                       editable={!isCompleted}
                     />
                     {!savingName && billName && !isCompleted && (
                       <Ionicons
                         name="create-outline"
                         size={16}
-                        color="#8B2E8F"
+                        color={colors.primary}
                         style={styles.billNameEditIcon}
                       />
                     )}
@@ -1348,24 +1361,36 @@ export default function ScannedBillScreen() {
                   {savingName && (
                     <ActivityIndicator
                       size="small"
-                      color="#81007F"
+                      color={colors.primary}
                       style={styles.savingIndicator}
                     />
                   )}
                 </View>
                 <TouchableOpacity
-                  style={styles.addItemBtn}
+                  style={[
+                    styles.addItemBtn,
+                    { backgroundColor: colors.primary },
+                  ]}
                   onPress={() => setIsModalVisible(true)}
                   disabled={isCompleted}
                 >
-                  <Text style={styles.addItemBtnText}>+ Item</Text>
+                  <Text
+                    style={[styles.addItemBtnText, { color: colors.accent }]}
+                  >
+                    + Item
+                  </Text>
                 </TouchableOpacity>
               </View>
 
               {/* Mensagem de processamento OCR */}
               {processingOcr && (
-                <View style={styles.processingContainer}>
-                  <ActivityIndicator size="large" color="#81007F" />
+                <View
+                  style={[
+                    styles.processingContainer,
+                    { backgroundColor: colors.backgroundSecondary },
+                  ]}
+                >
+                  <ActivityIndicator size="large" color={colors.primary} />
                   <Text style={styles.processingText}>
                     Processando imagem e reconhecendo itens...
                   </Text>
@@ -1397,14 +1422,26 @@ export default function ScannedBillScreen() {
               {!processingOcr &&
                 items.length === 0 &&
                 billStatus !== "OCR_FAILED" && (
-                  <View style={styles.emptyContainer}>
+                  <View
+                    style={[
+                      styles.emptyContainer,
+                      { backgroundColor: colors.backgroundSecondary },
+                    ]}
+                  >
                     <MaterialCommunityIcons
                       name="receipt"
                       size={48}
-                      color="#ccc"
+                      color={colors.divider}
                     />
-                    <Text style={styles.emptyText}>Nenhum item encontrado</Text>
-                    <Text style={styles.emptySubtext}>
+                    <Text style={[styles.emptyText, { color: colors.text }]}>
+                      Nenhum item encontrado
+                    </Text>
+                    <Text
+                      style={[
+                        styles.emptySubtext,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
                       Adicione itens manualmente usando o botão "+ Item"
                     </Text>
                   </View>
@@ -1412,9 +1449,19 @@ export default function ScannedBillScreen() {
 
               {/* Seção de Participantes - Editável */}
               {!processingOcr && (
-                <View style={styles.participantsSection}>
+                <View
+                  style={[
+                    styles.participantsSection,
+                    { backgroundColor: colors.backgroundSecondary },
+                  ]}
+                >
                   <View style={styles.participantsSectionHeader}>
-                    <Text style={styles.participantsSectionTitle}>
+                    <Text
+                      style={[
+                        styles.participantsSectionTitle,
+                        { color: colors.text },
+                      ]}
+                    >
                       Participantes ({participants.length})
                     </Text>
                     {!isCompleted && (
@@ -1422,8 +1469,13 @@ export default function ScannedBillScreen() {
                         style={styles.addParticipantBtn}
                         onPress={addParticipant}
                       >
-                        <Ionicons name="add" size={18} color="#8B2E8F" />
-                        <Text style={styles.addParticipantBtnText}>
+                        <Ionicons name="add" size={18} color={colors.primary} />
+                        <Text
+                          style={[
+                            styles.addParticipantBtnText,
+                            { color: colors.primary },
+                          ]}
+                        >
                           Adicionar
                         </Text>
                       </TouchableOpacity>

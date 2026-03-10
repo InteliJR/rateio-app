@@ -17,6 +17,7 @@ import { useAuthStore } from "@/store/authStore";
 import { useForm, Controller } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useTheme } from "@/contexts/ThemeContext";
 
 const registerSchema = z
   .object({
@@ -27,7 +28,7 @@ const registerSchema = z
       .email("Formato de email inválido.")
       .refine(
         (val) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val),
-        "Verifique se o email está completo."
+        "Verifique se o email está completo.",
       ),
     password: z
       .string()
@@ -43,6 +44,7 @@ const registerSchema = z
 type RegisterFormData = z.infer<typeof registerSchema>;
 
 export default function RegisterScreen() {
+  const { colors, getFontSize } = useTheme();
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const { register: registerUser, isLoading, logout } = useAuthStore();
@@ -68,11 +70,13 @@ export default function RegisterScreen() {
     setServerError(null);
     try {
       const response = await registerUser(data.name, data.email, data.password);
-      console.log('[RegisterPage] Registration successful, tokens should be saved');
-      
+      console.log(
+        "[RegisterPage] Registration successful, tokens should be saved",
+      );
+
       // Pequeno delay para garantir que os tokens foram salvos na storage
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
       Alert.alert(
         "Cadastro realizado",
         "Conta criada com sucesso! Você já está logado.",
@@ -81,7 +85,7 @@ export default function RegisterScreen() {
             text: "Continuar",
             onPress: () => router.replace("/(tabs)/(create)/new"),
           },
-        ]
+        ],
       );
     } catch (error: any) {
       console.error("[RegisterPage] Registration error:", error);
@@ -129,15 +133,26 @@ export default function RegisterScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
     >
       <View style={styles.content}>
         <View style={styles.stack}>
           <Logo style={styles.logo} />
-          <Text style={styles.title}>Cadastro</Text>
+          <Text
+            style={[
+              styles.title,
+              { color: colors.text, fontSize: getFontSize(28) },
+            ]}
+          >
+            Cadastro
+          </Text>
 
           {serverError && (
-            <Text style={styles.serverErrorText}>{serverError}</Text>
+            <Text
+              style={[styles.serverErrorText, { fontSize: getFontSize(14) }]}
+            >
+              {serverError}
+            </Text>
           )}
 
           <Controller
@@ -145,8 +160,17 @@ export default function RegisterScreen() {
             name="name"
             render={({ field: { onChange, value } }) => (
               <TextInput
-                style={[styles.input, errors.name && styles.inputError]}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.inputBackground,
+                    borderColor: colors.inputBorder,
+                    color: colors.text,
+                  },
+                  errors.name && styles.inputError,
+                ]}
                 placeholder="Nome"
+                placeholderTextColor={colors.placeholderText}
                 value={value}
                 onChangeText={onChange}
                 autoCapitalize="words"
@@ -155,7 +179,9 @@ export default function RegisterScreen() {
             )}
           />
           {errors.name && (
-            <Text style={styles.errorText}>{errors.name.message}</Text>
+            <Text style={[styles.errorText, { fontSize: getFontSize(12) }]}>
+              {errors.name.message}
+            </Text>
           )}
 
           <Controller
@@ -163,8 +189,17 @@ export default function RegisterScreen() {
             name="email"
             render={({ field: { onChange, value } }) => (
               <TextInput
-                style={[styles.input, errors.email && styles.inputError]}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.inputBackground,
+                    borderColor: colors.inputBorder,
+                    color: colors.text,
+                  },
+                  errors.email && styles.inputError,
+                ]}
                 placeholder="Email"
+                placeholderTextColor={colors.placeholderText}
                 value={value}
                 onChangeText={onChange}
                 autoCapitalize="none"
@@ -174,12 +209,18 @@ export default function RegisterScreen() {
             )}
           />
           {errors.email && (
-            <Text style={styles.errorText}>{errors.email.message}</Text>
+            <Text style={[styles.errorText, { fontSize: getFontSize(12) }]}>
+              {errors.email.message}
+            </Text>
           )}
 
           <View
             style={[
               styles.passwordContainer,
+              {
+                backgroundColor: colors.inputBackground,
+                borderColor: colors.inputBorder,
+              },
               errors.password && styles.inputError,
             ]}
           >
@@ -188,8 +229,12 @@ export default function RegisterScreen() {
               name="password"
               render={({ field: { onChange, value } }) => (
                 <TextInput
-                  style={styles.passwordInput}
+                  style={[
+                    styles.passwordInput,
+                    { color: colors.text, fontSize: getFontSize(16) },
+                  ]}
                   placeholder="Senha"
+                  placeholderTextColor={colors.placeholderText}
                   value={value}
                   onChangeText={onChange}
                   secureTextEntry={!showPassword}
@@ -205,12 +250,14 @@ export default function RegisterScreen() {
               <MaterialIcons
                 name={showPassword ? "visibility" : "visibility-off"}
                 size={20}
-                color="#333"
+                color={colors.textSecondary}
               />
             </TouchableOpacity>
           </View>
           {errors.password && (
-            <Text style={styles.errorText}>{errors.password.message}</Text>
+            <Text style={[styles.errorText, { fontSize: getFontSize(12) }]}>
+              {errors.password.message}
+            </Text>
           )}
 
           <Controller
@@ -220,9 +267,15 @@ export default function RegisterScreen() {
               <TextInput
                 style={[
                   styles.input,
+                  {
+                    backgroundColor: colors.inputBackground,
+                    borderColor: colors.inputBorder,
+                    color: colors.text,
+                  },
                   errors.confirmPassword && styles.inputError,
                 ]}
                 placeholder="Confirmar senha"
+                placeholderTextColor={colors.placeholderText}
                 value={value}
                 onChangeText={onChange}
                 secureTextEntry={!showPassword}
@@ -231,7 +284,7 @@ export default function RegisterScreen() {
             )}
           />
           {errors.confirmPassword && (
-            <Text style={styles.errorText}>
+            <Text style={[styles.errorText, { fontSize: getFontSize(12) }]}>
               {errors.confirmPassword.message}
             </Text>
           )}
@@ -239,26 +292,46 @@ export default function RegisterScreen() {
           <TouchableOpacity
             style={[
               styles.button,
+              { backgroundColor: colors.primary },
               (isLoading || !isValid) && styles.buttonDisabled,
             ]}
             onPress={handleSubmit(onSubmit)}
             disabled={isLoading || !isValid}
           >
             {isLoading ? (
-              <ActivityIndicator color="#FFFF00" />
+              <ActivityIndicator color={colors.accent} />
             ) : (
-              <Text style={styles.buttonText}>Criar conta</Text>
+              <Text
+                style={[
+                  styles.buttonText,
+                  { color: colors.accent, fontSize: getFontSize(16) },
+                ]}
+              >
+                Criar conta
+              </Text>
             )}
           </TouchableOpacity>
         </View>
 
         <View style={styles.linkRow}>
-          <Text style={{ color: "#333" }}>Já possui conta? </Text>
+          <Text
+            style={{ color: colors.textSecondary, fontSize: getFontSize(14) }}
+          >
+            Já possui conta?{" "}
+          </Text>
           <TouchableOpacity
             onPress={() => router.push("/(auth)/login")}
             disabled={isLoading}
           >
-            <Text style={{ color: "#81007F", fontWeight: "bold" }}>Entrar</Text>
+            <Text
+              style={{
+                color: colors.primary,
+                fontWeight: "bold",
+                fontSize: getFontSize(14),
+              }}
+            >
+              Entrar
+            </Text>
           </TouchableOpacity>
         </View>
 

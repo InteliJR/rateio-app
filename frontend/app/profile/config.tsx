@@ -79,10 +79,8 @@ export default function ConfigScreen() {
             {avatarUrl ? (
               <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
             ) : (
-              <View
-                style={[styles.avatar, { backgroundColor: colors.primary }]}
-              >
-                <Ionicons name="person" size={60} color={colors.accent} />
+              <View style={styles.avatar}>
+                <Ionicons name="person" size={60} color="#FFF" />
               </View>
             )}
           </View>
@@ -97,56 +95,62 @@ export default function ConfigScreen() {
         </View>
 
         {/* Config Options */}
-        <View
-          style={[
-            styles.optionsContainer,
-            {
-              backgroundColor: colors.backgroundSecondary,
-              borderColor: colors.divider,
-            },
-          ]}
-        >
+        <View style={styles.menuContainer}>
           <TouchableOpacity
             style={[
-              styles.optionItem,
-              { backgroundColor: colors.cardBackground },
+              styles.menuItem,
+              { backgroundColor: colors.menuItem, shadowColor: colors.shadow },
             ]}
             onPress={handleAccessibility}
           >
-            <Text
-              style={[
-                styles.optionText,
-                { color: colors.text, fontSize: getFontSize(16) },
-              ]}
-            >
-              Acessibilidade
-            </Text>
+            <View style={styles.menuItemLeft}>
+              <Ionicons
+                name="accessibility-outline"
+                size={24}
+                color={colors.text}
+              />
+              <Text
+                style={[
+                  styles.menuItemText,
+                  { color: colors.text, fontSize: getFontSize(16) },
+                ]}
+              >
+                Acessibilidade
+              </Text>
+            </View>
             <Ionicons
               name="chevron-forward"
               size={24}
-              color={colors.secondaryText}
+              color={colors.textTertiary}
             />
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[
-              styles.optionItem,
-              { backgroundColor: colors.cardBackground },
+              styles.menuItem,
+              { backgroundColor: colors.menuItem, shadowColor: colors.shadow },
             ]}
             onPress={handleAbout}
           >
-            <Text
-              style={[
-                styles.optionText,
-                { color: colors.text, fontSize: getFontSize(16) },
-              ]}
-            >
-              Sobre
-            </Text>
+            <View style={styles.menuItemLeft}>
+              <Ionicons
+                name="information-circle-outline"
+                size={24}
+                color={colors.text}
+              />
+              <Text
+                style={[
+                  styles.menuItemText,
+                  { color: colors.text, fontSize: getFontSize(16) },
+                ]}
+              >
+                Sobre
+              </Text>
+            </View>
             <Ionicons
               name="chevron-forward"
               size={24}
-              color={colors.secondaryText}
+              color={colors.textTertiary}
             />
           </TouchableOpacity>
         </View>
@@ -215,24 +219,33 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#333",
   },
-  optionsContainer: {
+  menuContainer: {
     paddingHorizontal: 20,
-    gap: 1,
-    backgroundColor: "#F0F0F0",
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: "#E0E0E0",
+    paddingTop: 20,
   },
-  optionItem: {
+  menuItem: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingVertical: 16,
     paddingHorizontal: 16,
     backgroundColor: "#FFF",
+    borderRadius: 12,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  optionText: {
+  menuItemLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+  },
+  menuItemText: {
     fontSize: 16,
+    fontWeight: "500",
     color: "#333",
   },
 });

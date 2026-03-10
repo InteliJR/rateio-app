@@ -176,7 +176,7 @@ export default function ProfileScreen() {
         <TouchableOpacity
           style={[
             styles.menuItem,
-            { backgroundColor: colors.card, shadowColor: colors.shadow },
+            { backgroundColor: colors.menuItem, shadowColor: colors.shadow },
           ]}
           onPress={handleEditProfile}
         >
@@ -201,7 +201,7 @@ export default function ProfileScreen() {
         <TouchableOpacity
           style={[
             styles.menuItem,
-            { backgroundColor: colors.card, shadowColor: colors.shadow },
+            { backgroundColor: colors.menuItem, shadowColor: colors.shadow },
           ]}
           onPress={handleSecurity}
         >
@@ -230,7 +230,7 @@ export default function ProfileScreen() {
         <TouchableOpacity
           style={[
             styles.menuItem,
-            { backgroundColor: colors.card, shadowColor: colors.shadow },
+            { backgroundColor: colors.menuItem, shadowColor: colors.shadow },
           ]}
           onPress={handleSettings}
         >
@@ -255,7 +255,7 @@ export default function ProfileScreen() {
         <TouchableOpacity
           style={[
             styles.menuItem,
-            { backgroundColor: colors.card, shadowColor: colors.shadow },
+            { backgroundColor: colors.menuItem, shadowColor: colors.shadow },
           ]}
           onPress={handleLogout}
         >

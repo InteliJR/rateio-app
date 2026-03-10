@@ -46,7 +46,7 @@ export default function EditProfileScreen() {
     // Se o backend já devolve uma URL absoluta (ex: S3), usamos como está
     if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
       // Adicionar timestamp para evitar cache
-      const separator = rawUrl.includes('?') ? '&' : '?';
+      const separator = rawUrl.includes("?") ? "&" : "?";
       return `${rawUrl}${separator}t=${Date.now()}`;
     }
 
@@ -224,21 +224,25 @@ export default function EditProfileScreen() {
                 />
               </>
             ) : (
-              <View
-                style={[styles.avatar, { backgroundColor: colors.primary }]}
-              >
-                <Ionicons name="person" size={60} color={colors.accent} />
+              <View style={styles.avatar}>
+                <Ionicons name="person" size={60} color="#FFF" />
               </View>
             )}
             <TouchableOpacity
-              style={[styles.cameraButton, { backgroundColor: colors.primary }]}
+              style={[
+                styles.cameraButton,
+                {
+                  backgroundColor: colors.background,
+                  borderColor: colors.background,
+                },
+              ]}
               onPress={pickImage}
               disabled={uploadingAvatar}
             >
               {uploadingAvatar ? (
-                <ActivityIndicator size="small" color={colors.accent} />
+                <ActivityIndicator size="small" color={colors.primary} />
               ) : (
-                <Ionicons name="camera" size={20} color={colors.accent} />
+                <Ionicons name="camera" size={20} color={colors.primary} />
               )}
             </TouchableOpacity>
           </View>
@@ -253,7 +257,12 @@ export default function EditProfileScreen() {
         </View>
 
         {/* Clickable Fields */}
-        <View style={styles.fieldsList}>
+        <View
+          style={[
+            styles.fieldsList,
+            { backgroundColor: colors.backgroundSecondary },
+          ]}
+        >
           {/* Nome */}
           <TouchableOpacity
             style={[

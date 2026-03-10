@@ -36,6 +36,7 @@ export const lightColors = {
   iconColor: "#666666",
   dropdownBackground: "#F8F8F8",
   checkboxActive: "#E8D4E9",
+  menuItem: "#F0F0F0",
 };
 
 export const darkColors = {
@@ -72,6 +73,7 @@ export const darkColors = {
   iconColor: "#B0B0B0",
   dropdownBackground: "#2A2A2A",
   checkboxActive: "#3A2A3A",
+  menuItem: "#2A2A2A",
 };
 
 export type ThemeColors = typeof lightColors;
