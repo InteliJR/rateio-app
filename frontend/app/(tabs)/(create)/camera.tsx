@@ -19,11 +19,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import billService from "../../../services/bill.service";
 import { CropModal } from "../../../components/modals/CropModal";
+import { useTheme } from "../../../contexts/ThemeContext";
 
 const { width, height } = Dimensions.get("window");
 
-
 export default function CameraScreen() {
+  const { colors, getFontSize } = useTheme();
   const router = useRouter();
   const { id, participants } = useLocalSearchParams();
   const cameraRef = useRef<CameraView>(null);
@@ -37,8 +38,13 @@ export default function CameraScreen() {
   const [uploadStage, setUploadStage] = useState<
     "idle" | "optimizing" | "uploading" | "processing"
   >("idle");
-  const [imageQuality, setImageQuality] = useState<"boa" | "media" | "baixa" | null>(null);
-  const [imageResolution, setImageResolution] = useState<{ width: number; height: number } | null>(null);
+  const [imageQuality, setImageQuality] = useState<
+    "boa" | "media" | "baixa" | null
+  >(null);
+  const [imageResolution, setImageResolution] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
   const [showCropModal, setShowCropModal] = useState(false);
 
   // Solicitar permissões ao montar o componente
@@ -108,7 +114,7 @@ export default function CameraScreen() {
       if (!permissionResult.granted) {
         Alert.alert(
           "Permissão necessária",
-          "Precisamos de acesso à galeria para continuar"
+          "Precisamos de acesso à galeria para continuar",
         );
         return;
       }
@@ -187,7 +193,7 @@ export default function CameraScreen() {
         Image.getSize(
           imageUri,
           (width, height) => resolve({ width, height }),
-          (error) => reject(error)
+          (error) => reject(error),
         );
       });
 
@@ -208,12 +214,12 @@ export default function CameraScreen() {
         {
           compress: 0.8, // 80% de qualidade
           format: ImageManipulator.SaveFormat.JPEG,
-        }
+        },
       );
 
       // Verificar tamanho do arquivo final
       const finalImageInfo = await FileSystem.getInfoAsync(
-        manipulatedImage.uri
+        manipulatedImage.uri,
       );
       const fileSizeInMB =
         (finalImageInfo.exists && "size" in finalImageInfo
@@ -225,8 +231,8 @@ export default function CameraScreen() {
       if (fileSizeInMB > MAX_SIZE_MB) {
         throw new Error(
           `Imagem muito grande (${fileSizeInMB.toFixed(
-            2
-          )}MB). Máximo permitido: ${MAX_SIZE_MB}MB`
+            2,
+          )}MB). Máximo permitido: ${MAX_SIZE_MB}MB`,
         );
       }
 
@@ -258,7 +264,11 @@ export default function CameraScreen() {
           "Resolução baixa",
           `A imagem tem resolução ${imageResolution ? `${imageResolution.width}×${imageResolution.height}px` : "baixa"}, o que pode prejudicar o reconhecimento de texto. Recomendamos tirar uma nova foto.`,
           [
-            { text: "Refazer foto", style: "cancel", onPress: () => reject("retake") },
+            {
+              text: "Refazer foto",
+              style: "cancel",
+              onPress: () => reject("retake"),
+            },
             { text: "Usar mesmo assim", onPress: () => resolve() },
           ],
         );
@@ -281,16 +291,16 @@ export default function CameraScreen() {
       // Etapa 2: Upload da imagem (30-60%)
       setUploadStage("uploading");
       setUploadProgress(40);
-      
+
       // Simular progresso durante upload
       const uploadInterval = setInterval(() => {
         setUploadProgress((prev) => Math.min(prev + 5, 60));
       }, 300);
 
       let uploadedBill;
-      
+
       // Se já temos um ID (veio da tela anterior), usar endpoint específico
-      if (id && typeof id === 'string') {
+      if (id && typeof id === "string") {
         console.log("Upload de imagem para conta existente:", id);
         uploadedBill = await billService.uploadBillImage(id, optimizedImageUri);
       } else {
@@ -298,7 +308,7 @@ export default function CameraScreen() {
         console.log("Criando nova conta com imagem");
         uploadedBill = await billService.uploadBill(optimizedImageUri);
       }
-      
+
       clearInterval(uploadInterval);
       setUploadProgress(60);
 
@@ -312,7 +322,7 @@ export default function CameraScreen() {
       setUploadStage("idle");
       setUploadProgress(0);
       setCapturedImage(null);
-      
+
       // Navegar para tela de itens escaneados (scanned.tsx)
       router.replace({
         pathname: "/(tabs)/(create)/scanned",
@@ -338,27 +348,39 @@ export default function CameraScreen() {
       // Tratamento específico por tipo de erro
 
       // Erro de timeout (mais de 60s)
-      if (error.code === 'ECONNABORTED' || error.message?.toLowerCase().includes('timeout')) {
+      if (
+        error.code === "ECONNABORTED" ||
+        error.message?.toLowerCase().includes("timeout")
+      ) {
         errorTitle = "Tempo esgotado";
-        errorMessage = "O processamento está demorando muito. Tente novamente com uma imagem mais clara ou verifique sua conexão.";
+        errorMessage =
+          "O processamento está demorando muito. Tente novamente com uma imagem mais clara ou verifique sua conexão.";
         showRetry = true;
-      } 
+      }
       // Erro de rede (sem internet)
-      else if (error.message?.toLowerCase().includes('network') || error.code === 'NETWORK_ERROR') {
+      else if (
+        error.message?.toLowerCase().includes("network") ||
+        error.code === "NETWORK_ERROR"
+      ) {
         errorTitle = "Sem conexão";
-        errorMessage = "Verifique sua conexão com a internet e tente novamente.";
+        errorMessage =
+          "Verifique sua conexão com a internet e tente novamente.";
         showRetry = true;
       }
       // Erro 413: Arquivo muito grande
       else if (error.response?.status === 413 || error.statusCode === 413) {
         errorTitle = "Imagem muito grande";
-        errorMessage = "A imagem é muito grande (máx 5MB). Tente tirar outra foto ou reduzir a resolução.";
+        errorMessage =
+          "A imagem é muito grande (máx 5MB). Tente tirar outra foto ou reduzir a resolução.";
         showRetry = false; // Não adianta tentar novamente sem mudar a imagem
       }
       // Erro 400: Formato inválido ou validação
       else if (error.response?.status === 400 || error.statusCode === 400) {
         errorTitle = "Formato inválido";
-        errorMessage = error.response?.data?.message || error.message || "Formato de imagem não suportado ou dados inválidos.";
+        errorMessage =
+          error.response?.data?.message ||
+          error.message ||
+          "Formato de imagem não suportado ou dados inválidos.";
         showRetry = false;
       }
       // Erro 401/403: Não autorizado
@@ -370,25 +392,35 @@ export default function CameraScreen() {
       // Erro 500: Erro no servidor
       else if (error.response?.status === 500 || error.statusCode === 500) {
         errorTitle = "Erro no servidor";
-        errorMessage = "Nossos servidores estão com problema. Tente novamente em alguns minutos.";
+        errorMessage =
+          "Nossos servidores estão com problema. Tente novamente em alguns minutos.";
         showRetry = true;
       }
       // Erro 503: Serviço indisponível
       else if (error.response?.status === 503 || error.statusCode === 503) {
         errorTitle = "Serviço indisponível";
-        errorMessage = "O servidor está temporariamente indisponível. Tente novamente em alguns instantes.";
+        errorMessage =
+          "O servidor está temporariamente indisponível. Tente novamente em alguns instantes.";
         showRetry = true;
       }
       // Erro de otimização de imagem (antes do upload)
-      else if (error.message?.includes('otimizar') || error.message?.includes('compress')) {
+      else if (
+        error.message?.includes("otimizar") ||
+        error.message?.includes("compress")
+      ) {
         errorTitle = "Erro ao processar imagem";
-        errorMessage = "Não foi possível otimizar a imagem. Tente tirar outra foto.";
+        errorMessage =
+          "Não foi possível otimizar a imagem. Tente tirar outra foto.";
         showRetry = false;
       }
       // OCR falhou (backend retornou mas OCR não funcionou)
-      else if (error.message?.toLowerCase().includes('ocr') || error.response?.data?.status === 'OCR_FAILED') {
+      else if (
+        error.message?.toLowerCase().includes("ocr") ||
+        error.response?.data?.status === "OCR_FAILED"
+      ) {
         errorTitle = "OCR falhou";
-        errorMessage = "Não foi possível reconhecer o texto da conta. Tente tirar uma foto mais clara e bem iluminada.";
+        errorMessage =
+          "Não foi possível reconhecer o texto da conta. Tente tirar uma foto mais clara e bem iluminada.";
         showRetry = true;
       }
       // Erro genérico do backend
@@ -406,15 +438,15 @@ export default function CameraScreen() {
         style?: "cancel" | "default" | "destructive";
         onPress?: () => void;
       }> = [
-        { 
-          text: "Cancelar", 
+        {
+          text: "Cancelar",
           style: "cancel",
           onPress: () => {
             // Resetar estados
             setUploadStage("idle");
             setUploadProgress(0);
             setIsLoading(false);
-          }
+          },
         },
       ];
 
@@ -445,7 +477,7 @@ export default function CameraScreen() {
       }
 
       Alert.alert(errorTitle, errorMessage, alertButtons);
-      
+
       // Resetar estados em caso de erro (se não for retry)
       if (!showRetry) {
         setUploadStage("idle");
@@ -472,12 +504,18 @@ export default function CameraScreen() {
   if (!permission.granted) {
     return (
       <View style={styles.container}>
-        <Text style={styles.permissionText}>Precisamos de acesso à câmera</Text>
+        <Text style={[styles.permissionText, { fontSize: getFontSize(18) }]}>
+          Precisamos de acesso à câmera
+        </Text>
         <TouchableOpacity
           style={styles.permissionButton}
           onPress={requestPermission}
         >
-          <Text style={styles.permissionButtonText}>Conceder Permissão</Text>
+          <Text
+            style={[styles.permissionButtonText, { fontSize: getFontSize(16) }]}
+          >
+            Conceder Permissão
+          </Text>
         </TouchableOpacity>
       </View>
     );
@@ -509,14 +547,19 @@ export default function CameraScreen() {
 
         {/* Badge de qualidade */}
         {badge && !isLoading && (
-          <View style={[styles.qualityBadge, { backgroundColor: badge.color + "DD" }]}>
+          <View
+            style={[
+              styles.qualityBadge,
+              { backgroundColor: badge.color + "DD" },
+            ]}
+          >
             <Ionicons
               name={
                 imageQuality === "boa"
                   ? "checkmark-circle"
                   : imageQuality === "media"
-                  ? "information-circle"
-                  : "warning"
+                    ? "information-circle"
+                    : "warning"
               }
               size={14}
               color="#fff"
@@ -534,27 +577,56 @@ export default function CameraScreen() {
         {isLoading && (
           <View style={styles.loadingOverlay}>
             <View style={styles.loadingContent}>
-              <ActivityIndicator size="large" color="#FFFFFF" />
-              <Text style={styles.loadingText}>{getProgressMessage()}</Text>
-              
+              <ActivityIndicator size="large" color={colors.accent} />
+              <Text
+                style={[
+                  styles.loadingText,
+                  { color: colors.accent, fontSize: getFontSize(18) },
+                ]}
+              >
+                {getProgressMessage()}
+              </Text>
+
               {/* Barra de Progresso */}
               <View style={styles.progressBarContainer}>
-                <View style={styles.progressBarBackground}>
+                <View
+                  style={[
+                    styles.progressBarBackground,
+                    { backgroundColor: colors.divider },
+                  ]}
+                >
                   <View
                     style={[
                       styles.progressBarFill,
-                      { width: `${uploadProgress}%` },
+                      {
+                        width: `${uploadProgress}%`,
+                        backgroundColor: colors.primary,
+                      },
                     ]}
                   />
                 </View>
-                <Text style={styles.progressText}>{uploadProgress}%</Text>
+                <Text
+                  style={[
+                    styles.progressText,
+                    { color: colors.accent, fontSize: getFontSize(14) },
+                  ]}
+                >
+                  {uploadProgress}%
+                </Text>
               </View>
 
               {/* Dica baseada no estágio */}
-              <Text style={styles.progressHint}>
+              <Text
+                style={[
+                  styles.progressHint,
+                  { color: colors.accent, fontSize: getFontSize(14) },
+                ]}
+              >
                 {uploadStage === "optimizing" && "Preparando sua imagem..."}
-                {uploadStage === "uploading" && "Isso pode levar alguns segundos..."}
-                {uploadStage === "processing" && "Identificando itens da conta..."}
+                {uploadStage === "uploading" &&
+                  "Isso pode levar alguns segundos..."}
+                {uploadStage === "processing" &&
+                  "Identificando itens da conta..."}
               </Text>
             </View>
           </View>

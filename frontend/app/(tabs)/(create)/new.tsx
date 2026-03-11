@@ -20,12 +20,9 @@ import { Ionicons } from "@expo/vector-icons";
 import billService from "../../../services/bill.service";
 import { useBillStore } from "../../../store/billStore";
 import { NumericInput } from "../../../components/common/NumericInput";
+import { useTheme } from "../../../contexts/ThemeContext";
 
-interface INewBillFormData {
-  billName?: string;
-  serviceRate: string;
-  couvertValue?: string;
-}
+type INewBillFormData = z.infer<typeof newBillSchema>;
 
 interface ParticipantInput {
   id: number;
@@ -33,24 +30,34 @@ interface ParticipantInput {
 }
 
 const newBillSchema = z.object({
-  billName: z.string().optional(),
+  billName: z
+    .string()
+    .optional()
+    .refine(
+      (val) => !val || val.trim().length > 0,
+      "O nome da conta não pode ser apenas espaços",
+    ),
   serviceRate: z
     .string()
-    .min(1, "Campo obrigatório")
+    .optional()
     .refine(
-      (val) => !isNaN(Number(val)) && Number(val) >= 0 && Number(val) <= 100,
-      "A taxa deve ser entre 0% e 100%"
+      (val) =>
+        !val ||
+        val === "" ||
+        (!isNaN(Number(val)) && Number(val) >= 0 && Number(val) <= 100),
+      "A taxa deve ser entre 0% e 100%",
     ),
   couvertValue: z
     .string()
     .optional()
     .refine(
       (val) => !val || val === "" || (!isNaN(Number(val)) && Number(val) >= 0),
-      "O valor deve ser um número positivo"
+      "O valor deve ser um número positivo",
     ),
 });
 
 export default function NewBillScreen() {
+  const { colors, getFontSize } = useTheme();
   const router = useRouter();
   const scrollViewRef = useRef<ScrollView>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -78,7 +85,10 @@ export default function NewBillScreen() {
 
   const addParticipant = () => {
     const nextId = participants.length + 1;
-    setParticipants([...participants, { id: nextId, name: `Pessoa ${nextId}` }]);
+    setParticipants([
+      ...participants,
+      { id: nextId, name: `Pessoa ${nextId}` },
+    ]);
   };
 
   const removeParticipant = (id: number) => {
@@ -91,7 +101,7 @@ export default function NewBillScreen() {
 
   const updateParticipantName = (id: number, name: string) => {
     setParticipants(
-      participants.map((p) => (p.id === id ? { ...p, name } : p))
+      participants.map((p) => (p.id === id ? { ...p, name } : p)),
     );
   };
 
@@ -103,18 +113,25 @@ export default function NewBillScreen() {
 
     setIsLoading(true);
     try {
-      const participantNames = participants.map((p) => p.name.trim() || `Pessoa ${p.id}`);
-      
+      const participantNames = participants.map(
+        (p) => p.name.trim() || `Pessoa ${p.id}`,
+      );
+
       const newBill = await billService.createBillSetup({
         participantCount: participants.length,
         billName: data.billName?.trim() || undefined,
-        serviceFeePercentage: Number(data.serviceRate),
-        coverChargeValue: data.couvertValue && data.couvertValue.trim() !== "" 
-          ? Number(data.couvertValue) 
-          : undefined,
-        coverChargeType: data.couvertValue && data.couvertValue.trim() !== "" 
-          ? 'per_person' 
-          : undefined,
+        serviceFeePercentage:
+          data.serviceRate && data.serviceRate.trim() !== ""
+            ? Number(data.serviceRate)
+            : undefined,
+        coverChargeValue:
+          data.couvertValue && data.couvertValue.trim() !== ""
+            ? Number(data.couvertValue)
+            : undefined,
+        coverChargeType:
+          data.couvertValue && data.couvertValue.trim() !== ""
+            ? "per_person"
+            : undefined,
         participantNames,
       });
 
@@ -129,7 +146,7 @@ export default function NewBillScreen() {
     } catch (error: any) {
       Alert.alert(
         "Erro",
-        error.message || "Não foi possível criar a conta. Tente novamente."
+        error.message || "Não foi possível criar a conta. Tente novamente.",
       );
     } finally {
       setIsLoading(false);
@@ -139,7 +156,7 @@ export default function NewBillScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
     >
       <ScrollView
@@ -151,14 +168,29 @@ export default function NewBillScreen() {
         <View style={styles.content}>
           {/* Seção: Nome da Conta */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Nome da conta</Text>
+            <Text
+              style={[
+                styles.sectionTitle,
+                { color: colors.text, fontSize: getFontSize(20) },
+              ]}
+            >
+              Nome da conta
+            </Text>
             <Controller
               control={control}
               name="billName"
               render={({ field: { onChange, value, onBlur } }) => (
                 <TextInput
-                  style={styles.input}
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: colors.inputBackground,
+                      borderColor: colors.inputBorder,
+                      color: colors.text,
+                    },
+                  ]}
                   placeholder="Ex: Jantar de aniversário (opcional)"
+                  placeholderTextColor={colors.placeholderText}
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
@@ -170,7 +202,14 @@ export default function NewBillScreen() {
 
           {/* Seção: Taxa de Serviço */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Taxa de serviço</Text>
+            <Text
+              style={[
+                styles.sectionTitle,
+                { color: colors.text, fontSize: getFontSize(20) },
+              ]}
+            >
+              Taxa de serviço
+            </Text>
 
             <Controller
               control={control}
@@ -179,7 +218,7 @@ export default function NewBillScreen() {
                 <NumericInput
                   label="Porcentagem da taxa de serviço"
                   placeholder="Ex: 10"
-                  value={value}
+                  value={value ?? ""}
                   onChange={onChange}
                   onBlur={onBlur}
                   editable={!isLoading}
@@ -194,7 +233,14 @@ export default function NewBillScreen() {
 
           {/* Seção: Couvert */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Couvert (opcional)</Text>
+            <Text
+              style={[
+                styles.sectionTitle,
+                { color: colors.text, fontSize: getFontSize(20) },
+              ]}
+            >
+              Couvert (opcional)
+            </Text>
 
             <Controller
               control={control}
@@ -219,15 +265,20 @@ export default function NewBillScreen() {
           {/* Seção: Participantes */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>
+              <Text
+                style={[
+                  styles.sectionTitle,
+                  { color: colors.text, fontSize: getFontSize(20) },
+                ]}
+              >
                 Participantes ({participants.length})
               </Text>
               <TouchableOpacity
-                style={styles.addButton}
+                style={[styles.addButton, { backgroundColor: colors.primary }]}
                 onPress={addParticipant}
                 disabled={isLoading}
               >
-                <Ionicons name="add" size={24} color="#fff" />
+                <Ionicons name="add" size={24} color={colors.accent} />
               </TouchableOpacity>
             </View>
 
@@ -236,13 +287,24 @@ export default function NewBillScreen() {
                 <View key={participant.id} style={styles.participantRow}>
                   {editingId === participant.id ? (
                     <TextInput
-                      style={styles.participantInput}
+                      style={[
+                        styles.participantInput,
+                        {
+                          backgroundColor: colors.inputBackground,
+                          borderColor: colors.primary,
+                          color: colors.text,
+                        },
+                      ]}
                       value={participant.name}
-                      onChangeText={(text) => updateParticipantName(participant.id, text)}
+                      onChangeText={(text) =>
+                        updateParticipantName(participant.id, text)
+                      }
                       onBlur={() => setEditingId(null)}
                       onFocus={() => {
                         setTimeout(() => {
-                          scrollViewRef.current?.scrollToEnd({ animated: true });
+                          scrollViewRef.current?.scrollToEnd({
+                            animated: true,
+                          });
                         }, 100);
                       }}
                       autoFocus
@@ -251,26 +313,40 @@ export default function NewBillScreen() {
                     />
                   ) : (
                     <TouchableOpacity
-                      style={styles.participantNameButton}
+                      style={[
+                        styles.participantNameButton,
+                        { backgroundColor: colors.backgroundSecondary },
+                      ]}
                       onPress={() => setEditingId(participant.id)}
                       disabled={isLoading}
                     >
-                      <Text style={styles.participantNameText}>
+                      <Text
+                        style={[
+                          styles.participantNameText,
+                          { color: colors.text },
+                        ]}
+                      >
                         {participant.name}
                       </Text>
-                      <Ionicons name="pencil" size={16} color="#999" />
+                      <Ionicons
+                        name="pencil"
+                        size={16}
+                        color={colors.placeholderText}
+                      />
                     </TouchableOpacity>
                   )}
-                  
+
                   <TouchableOpacity
                     style={styles.removeButton}
                     onPress={() => removeParticipant(participant.id)}
                     disabled={isLoading || participants.length <= 1}
                   >
-                    <Ionicons 
-                      name="close-circle" 
-                      size={24} 
-                      color={participants.length <= 1 ? "#ddd" : "#ff4d4d"} 
+                    <Ionicons
+                      name="close-circle"
+                      size={24}
+                      color={
+                        participants.length <= 1 ? colors.divider : colors.error
+                      }
                     />
                   </TouchableOpacity>
                 </View>
@@ -278,19 +354,35 @@ export default function NewBillScreen() {
             </View>
           </View>
 
+          {/* Erro de participantes */}
+          {participants.length < 1 && (
+            <Text style={[styles.errorText, { color: colors.error }]}>
+              É necessário pelo menos 1 participante
+            </Text>
+          )}
+
           {/* Botão Escanear */}
           <TouchableOpacity
             style={[
               styles.button,
-              (!isValid || isLoading || participants.length === 0) && styles.buttonDisabled,
+              { backgroundColor: colors.primary },
+              (!isValid || isLoading || participants.length < 1) &&
+                styles.buttonDisabled,
             ]}
             onPress={handleSubmit(onSubmit)}
-            disabled={!isValid || isLoading || participants.length === 0}
+            disabled={!isValid || isLoading || participants.length < 1}
           >
             {isLoading ? (
-              <ActivityIndicator color="#FFFF00" />
+              <ActivityIndicator color={colors.accent} />
             ) : (
-              <Text style={styles.buttonText}>Escanear conta</Text>
+              <Text
+                style={[
+                  styles.buttonText,
+                  { color: colors.accent, fontSize: getFontSize(18) },
+                ]}
+              >
+                Escanear conta
+              </Text>
             )}
           </TouchableOpacity>
         </View>
@@ -401,5 +493,12 @@ const styles = StyleSheet.create({
     color: "#FFFF00",
     fontSize: 18,
     fontWeight: "500",
+  },
+  errorText: {
+    color: "#cc0000",
+    fontSize: 13,
+    marginTop: -8,
+    marginBottom: 8,
+    marginLeft: 4,
   },
 });
