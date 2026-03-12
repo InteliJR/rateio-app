@@ -78,9 +78,9 @@ export class FeesService {
     // Validação específica por tipo
     switch (type) {
       case FeeType.SERVICE_PERCENTAGE:
-        if (value <= 0 || value > 100) {
+        if (value < 0 || value > 100) {
           throw new BadRequestException(
-            'Para taxa percentual, o valor deve estar entre 0.01 e 100',
+            'Para taxa percentual, o valor deve estar entre 0 e 100',
           );
         }
         break;
@@ -127,6 +127,7 @@ export class FeesService {
       include: {
         items: true,
         fees: true,
+        participants: { select: { id: true } },
       },
     });
 
@@ -140,11 +141,19 @@ export class FeesService {
       0,
     );
 
-    // Calcular soma das taxas
-    const feesSum = bill.fees.reduce(
-      (acc, fee) => acc + Number(fee.value),
-      0,
-    );
+    const feeParticipantCount = bill.participants.length;
+
+    // Calcular soma real das taxas (por tipo)
+    const feesSum = bill.fees.reduce((acc, fee) => {
+      if (fee.type === FeeType.SERVICE_PERCENTAGE) {
+        return acc + itemsSum * (Number(fee.value) / 100);
+      }
+      if (fee.type === FeeType.COVER_CHARGE) {
+        // fee.value é por pessoa; total = valor × nº participantes
+        return acc + Number(fee.value) * feeParticipantCount;
+      }
+      return acc + Number(fee.value);
+    }, 0);
 
     // Total = itens + taxas
     const newTotal = itemsSum + feesSum;
