@@ -234,6 +234,14 @@ export class BillsController {
   }
 
   /**
+   * Reprocessar OCR de uma conta que falhou
+   */
+  @Post(':id/retry-ocr')
+  retryOcr(@Param('id') id: string, @Request() req: any) {
+    return this.billsService.retryOcr(id, req.user.id);
+  }
+
+  /**
    * Buscar conta específica
    */
   @Get(':id')

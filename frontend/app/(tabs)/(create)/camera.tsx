@@ -9,6 +9,7 @@ import {
   Alert,
   Platform,
   Dimensions,
+  ScrollView,
 } from "react-native";
 import { CameraView, CameraType, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
@@ -17,6 +18,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import billService from "../../../services/bill.service";
+import { CropModal } from "../../../components/modals/CropModal";
 import { useTheme } from "../../../contexts/ThemeContext";
 
 const { width, height } = Dimensions.get("window");
@@ -36,6 +38,14 @@ export default function CameraScreen() {
   const [uploadStage, setUploadStage] = useState<
     "idle" | "optimizing" | "uploading" | "processing"
   >("idle");
+  const [imageQuality, setImageQuality] = useState<
+    "boa" | "media" | "baixa" | null
+  >(null);
+  const [imageResolution, setImageResolution] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
+  const [showCropModal, setShowCropModal] = useState(false);
 
   // Solicitar permissões ao montar o componente
   useEffect(() => {
@@ -45,6 +55,27 @@ export default function CameraScreen() {
       }
     })();
   }, []);
+
+  // Verificar resolução da imagem e classificar qualidade
+  const checkImageResolution = (uri: string) => {
+    Image.getSize(
+      uri,
+      (w, h) => {
+        setImageResolution({ width: w, height: h });
+        if (w >= 1280 && h >= 960) {
+          setImageQuality("boa");
+        } else if (w >= 640 && h >= 480) {
+          setImageQuality("media");
+        } else {
+          setImageQuality("baixa");
+        }
+      },
+      () => {
+        setImageResolution(null);
+        setImageQuality("media");
+      },
+    );
+  };
 
   // Função para capturar foto
   const takePicture = async () => {
@@ -58,6 +89,7 @@ export default function CameraScreen() {
 
         if (photo?.uri) {
           setCapturedImage(photo.uri);
+          checkImageResolution(photo.uri);
         }
       } catch (error) {
         console.error("Erro ao capturar foto:", error);
@@ -90,12 +122,12 @@ export default function CameraScreen() {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
+        quality: 1, // full quality — optimizeImage compresses later
       });
 
       if (!result.canceled && result.assets[0]) {
         setCapturedImage(result.assets[0].uri);
+        checkImageResolution(result.assets[0].uri);
       }
     } catch (error) {
       console.error("Erro ao escolher imagem:", error);
@@ -108,6 +140,23 @@ export default function CameraScreen() {
     setCapturedImage(null);
     setUploadStage("idle");
     setUploadProgress(0);
+    setImageQuality(null);
+    setImageResolution(null);
+    setShowCropModal(false);
+  };
+
+  // Retorna cor e label do badge de qualidade
+  const getQualityBadge = () => {
+    switch (imageQuality) {
+      case "boa":
+        return { color: "#22C55E", label: "Qualidade boa" };
+      case "media":
+        return { color: "#F59E0B", label: "Qualidade média" };
+      case "baixa":
+        return { color: "#EF4444", label: "Qualidade baixa" };
+      default:
+        return null;
+    }
   };
 
   // Função para obter mensagem de progresso
@@ -208,6 +257,27 @@ export default function CameraScreen() {
   const confirmPicture = async () => {
     if (!capturedImage) return;
 
+    // Avisar sobre resolução baixa, mas permitir continuar
+    if (imageQuality === "baixa") {
+      await new Promise<void>((resolve, reject) => {
+        Alert.alert(
+          "Resolução baixa",
+          `A imagem tem resolução ${imageResolution ? `${imageResolution.width}×${imageResolution.height}px` : "baixa"}, o que pode prejudicar o reconhecimento de texto. Recomendamos tirar uma nova foto.`,
+          [
+            {
+              text: "Refazer foto",
+              style: "cancel",
+              onPress: () => reject("retake"),
+            },
+            { text: "Usar mesmo assim", onPress: () => resolve() },
+          ],
+        );
+      }).catch((reason) => {
+        if (reason === "retake") retakePicture();
+        throw new Error("__cancelled__");
+      });
+    }
+
     try {
       setIsLoading(true);
       setUploadProgress(0);
@@ -243,22 +313,10 @@ export default function CameraScreen() {
       setUploadProgress(60);
 
       // Etapa 3: Processamento OCR (60-100%)
+      // O OCR roda assincronamente no backend; navegamos imediatamente para a
+      // tela de edição que fará polling do status.
       setUploadStage("processing");
-      setUploadProgress(70);
-
-      // Simular progresso do OCR
-      const processingInterval = setInterval(() => {
-        setUploadProgress((prev) => Math.min(prev + 5, 95));
-      }, 400);
-
-      // Aguardar um pouco para dar tempo do OCR processar
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      clearInterval(processingInterval);
       setUploadProgress(100);
-
-      // Sucesso - navegar para tela de itens escaneados
-      await new Promise((resolve) => setTimeout(resolve, 500));
 
       // Resetar estados
       setUploadStage("idle");
@@ -279,6 +337,9 @@ export default function CameraScreen() {
         code: error.code,
         stack: error.stack,
       });
+
+      // Cancelamento pelo usuário (escolheu refazer foto) — não mostrar alerta
+      if (error.message === "__cancelled__") return;
 
       let errorTitle = "Erro ao processar conta";
       let errorMessage = "Não foi possível processar a conta. Tente novamente.";
@@ -462,120 +523,155 @@ export default function CameraScreen() {
 
   // Se uma imagem foi capturada, mostrar preview
   if (capturedImage) {
+    const badge = getQualityBadge();
     return (
       <View style={styles.container}>
-        {/* Preview da Imagem com bordas amarelas */}
-        <View style={styles.previewContainer}>
-          <View style={styles.imageWrapper}>
-            <Image
-              source={{ uri: capturedImage }}
-              style={styles.previewImage}
+        {/* Preview full-screen com suporte a zoom/pan via ScrollView */}
+        <ScrollView
+          style={styles.previewScroll}
+          contentContainerStyle={styles.previewScrollContent}
+          maximumZoomScale={4}
+          minimumZoomScale={1}
+          centerContent
+          showsHorizontalScrollIndicator={false}
+          showsVerticalScrollIndicator={false}
+          pinchGestureEnabled
+          bouncesZoom
+        >
+          <Image
+            source={{ uri: capturedImage }}
+            style={styles.previewImage}
+            resizeMode="contain"
+          />
+        </ScrollView>
+
+        {/* Badge de qualidade */}
+        {badge && !isLoading && (
+          <View
+            style={[
+              styles.qualityBadge,
+              { backgroundColor: badge.color + "DD" },
+            ]}
+          >
+            <Ionicons
+              name={
+                imageQuality === "boa"
+                  ? "checkmark-circle"
+                  : imageQuality === "media"
+                    ? "information-circle"
+                    : "warning"
+              }
+              size={14}
+              color="#fff"
             />
-
-            {/* Bordas amarelas de enquadramento */}
-            <View style={[styles.cornerBorder, styles.topLeft]} />
-            <View style={[styles.cornerBorder, styles.topRight]} />
-            <View style={[styles.cornerBorder, styles.bottomLeft]} />
-            <View style={[styles.cornerBorder, styles.bottomRight]} />
+            <Text style={styles.qualityBadgeText}>{badge.label}</Text>
+            {imageResolution && (
+              <Text style={styles.qualityResolutionText}>
+                {imageResolution.width}×{imageResolution.height}
+              </Text>
+            )}
           </View>
+        )}
 
-          {/* Overlay de Loading com Progresso */}
-          {isLoading && (
-            <View style={styles.loadingOverlay}>
-              <View style={styles.loadingContent}>
-                <ActivityIndicator size="large" color={colors.accent} />
-                <Text
+        {/* Overlay de Loading com Progresso */}
+        {isLoading && (
+          <View style={styles.loadingOverlay}>
+            <View style={styles.loadingContent}>
+              <ActivityIndicator size="large" color={colors.accent} />
+              <Text
+                style={[
+                  styles.loadingText,
+                  { color: colors.accent, fontSize: getFontSize(18) },
+                ]}
+              >
+                {getProgressMessage()}
+              </Text>
+
+              {/* Barra de Progresso */}
+              <View style={styles.progressBarContainer}>
+                <View
                   style={[
-                    styles.loadingText,
-                    { color: colors.accent, fontSize: getFontSize(18) },
+                    styles.progressBarBackground,
+                    { backgroundColor: colors.divider },
                   ]}
                 >
-                  {getProgressMessage()}
-                </Text>
-
-                {/* Barra de Progresso */}
-                <View style={styles.progressBarContainer}>
                   <View
                     style={[
-                      styles.progressBarBackground,
-                      { backgroundColor: colors.divider },
+                      styles.progressBarFill,
+                      {
+                        width: `${uploadProgress}%`,
+                        backgroundColor: colors.primary,
+                      },
                     ]}
-                  >
-                    <View
-                      style={[
-                        styles.progressBarFill,
-                        {
-                          width: `${uploadProgress}%`,
-                          backgroundColor: colors.primary,
-                        },
-                      ]}
-                    />
-                  </View>
-                  <Text
-                    style={[
-                      styles.progressText,
-                      { color: colors.accent, fontSize: getFontSize(14) },
-                    ]}
-                  >
-                    {uploadProgress}%
-                  </Text>
+                  />
                 </View>
-
-                {/* Dica baseada no estágio */}
                 <Text
                   style={[
-                    styles.progressHint,
+                    styles.progressText,
                     { color: colors.accent, fontSize: getFontSize(14) },
                   ]}
                 >
-                  {uploadStage === "optimizing" && "Preparando sua imagem..."}
-                  {uploadStage === "uploading" &&
-                    "Isso pode levar alguns segundos..."}
-                  {uploadStage === "processing" &&
-                    "Identificando itens da conta..."}
+                  {uploadProgress}%
                 </Text>
               </View>
+
+              {/* Dica baseada no estágio */}
+              <Text
+                style={[
+                  styles.progressHint,
+                  { color: colors.accent, fontSize: getFontSize(14) },
+                ]}
+              >
+                {uploadStage === "optimizing" && "Preparando sua imagem..."}
+                {uploadStage === "uploading" &&
+                  "Isso pode levar alguns segundos..."}
+                {uploadStage === "processing" &&
+                  "Identificando itens da conta..."}
+              </Text>
             </View>
-          )}
-        </View>
+          </View>
+        )}
 
-        {/* Botão de Confirmar no estilo roxo */}
-        <View style={styles.previewActions}>
-          <TouchableOpacity
-            style={[
-              styles.retakeIconButton,
-              isLoading && styles.buttonDisabled,
-            ]}
-            onPress={retakePicture}
-            disabled={isLoading}
-          >
-            <Ionicons
-              name="close"
-              size={28}
-              color={isLoading ? colors.secondaryText : "#FFFFFF"}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.confirmButton,
-              { backgroundColor: colors.primary },
-              isLoading && styles.buttonDisabled,
-            ]}
-            onPress={confirmPicture}
-            disabled={isLoading}
-          >
-            <Text
-              style={[
-                styles.confirmButtonText,
-                { color: colors.accent, fontSize: getFontSize(18) },
-                isLoading && styles.buttonTextDisabled,
-              ]}
+        {/* Botões de ação */}
+        {!isLoading && (
+          <View style={styles.previewActions}>
+            <TouchableOpacity
+              style={styles.retakeButton}
+              onPress={retakePicture}
             >
-              {isLoading ? "Processando..." : "Confirmar"}
-            </Text>
-          </TouchableOpacity>
-        </View>
+              <Ionicons name="camera-outline" size={20} color="#FFFFFF" />
+              <Text style={styles.retakeButtonText}>Refazer</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cropButton}
+              onPress={() => setShowCropModal(true)}
+            >
+              <Ionicons name="crop-outline" size={20} color="#FFFFFF" />
+              <Text style={styles.cropButtonText}>Recortar</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.confirmButton}
+              onPress={confirmPicture}
+            >
+              <Ionicons name="checkmark" size={20} color="#FFFFFF" />
+              <Text style={styles.confirmButtonText}>Usar foto</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Modal de corte interativo */}
+        <CropModal
+          visible={showCropModal}
+          imageUri={capturedImage}
+          onCrop={(croppedUri) => {
+            setShowCropModal(false);
+            setCapturedImage(croppedUri);
+            checkImageResolution(croppedUri);
+          }}
+          onCancel={() => setShowCropModal(false)}
+        />
       </View>
     );
   }
@@ -669,45 +765,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.3)",
   },
-  captureButton: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    backgroundColor: "#FFFFFF",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 5,
-    borderColor: "rgba(255, 255, 255, 0.3)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  captureButtonInner: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: "#8B3FD9",
-  },
-  previewContainer: {
-    flex: 1,
-    backgroundColor: "#1A1A1A",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  imageWrapper: {
-    width: width * 0.9,
-    height: height * 0.7,
-    position: "relative",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  previewImage: {
-    width: "100%",
-    height: "100%",
-    resizeMode: "contain",
-  },
+  // Corner borders used in the live camera viewfinder
   cornerBorder: {
     position: "absolute",
     width: 60,
@@ -738,6 +796,60 @@ const styles = StyleSheet.create({
     right: 0,
     borderLeftWidth: 0,
     borderTopWidth: 0,
+  },
+  captureButton: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 5,
+    borderColor: "rgba(255, 255, 255, 0.3)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  captureButtonInner: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "#8B3FD9",
+  },
+  previewScroll: {
+    flex: 1,
+    backgroundColor: "#1A1A1A",
+  },
+  previewScrollContent: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  previewImage: {
+    width,
+    height: height - 100, // leave room for action buttons
+  },
+  qualityBadge: {
+    position: "absolute",
+    top: 16,
+    right: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  qualityBadgeText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  qualityResolutionText: {
+    color: "rgba(255,255,255,0.8)",
+    fontSize: 11,
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -790,28 +902,55 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 30,
-    paddingHorizontal: 30,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    paddingBottom: Platform.OS === "ios" ? 32 : 16,
     backgroundColor: "#1A1A1A",
+    gap: 8,
   },
-  retakeIconButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
-    justifyContent: "center",
+  retakeButton: {
+    flex: 1,
+    flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 14,
+    borderRadius: 50,
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.4)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  retakeButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  cropButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 14,
+    borderRadius: 50,
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.4)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  cropButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "600",
   },
   confirmButton: {
     flex: 1,
-    backgroundColor: "#8B3FD9",
-    paddingVertical: 18,
-    borderRadius: 50,
-    marginLeft: 16,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#8B3FD9",
+    paddingVertical: 14,
+    borderRadius: 50,
     shadowColor: "#8B3FD9",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
@@ -820,14 +959,8 @@ const styles = StyleSheet.create({
   },
   confirmButtonText: {
     color: "#FFFFFF",
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: "600",
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  buttonTextDisabled: {
-    color: "#CCCCCC",
   },
   permissionText: {
     color: "#FFFFFF",

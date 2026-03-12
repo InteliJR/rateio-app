@@ -165,14 +165,19 @@ class BillService {
         '/bills',
         formData,
         {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-          timeout: 60000, // 60 segundos - aumentado para dar tempo para OCR
-          transformRequest: (data, headers) => {
-            // Não transformar FormData - deixar o Axios gerenciar
+          // Para uploads multipart no React Native + Axios 1.x:
+          // É preciso deletar o Content-Type via transformRequest para que o XHR
+          // nativo injete automaticamente o boundary correto (multipart/form-data; boundary=...)
+          // Definir como undefined no headers não é suficiente pois o default do
+          // Axios instance ('application/json') tem precedência em certos merge paths.
+          transformRequest: (data: any, headers: any) => {
+            if (headers) {
+              delete headers['Content-Type'];
+              delete headers['content-type'];
+            }
             return data;
           },
+          timeout: 60000, // 60 segundos - aumentado para dar tempo para OCR
         },
         3 // máximo de 3 retentativas
       );
@@ -253,11 +258,14 @@ class BillService {
         `/bills/${billId}/image`,
         formData,
         {
-          headers: {
-            'Content-Type': 'multipart/form-data',
+          transformRequest: (data: any, headers: any) => {
+            if (headers) {
+              delete headers['Content-Type'];
+              delete headers['content-type'];
+            }
+            return data;
           },
           timeout: 60000,
-          transformRequest: (data) => data,
         },
         3 // máximo de 3 retentativas
       );
@@ -470,6 +478,25 @@ class BillService {
 
       throw {
         message: errorMessage,
+        statusCode: error.response?.status,
+      } as UploadBillError;
+    }
+  }
+
+  /**
+   * Reprocessa o OCR de uma conta que falhou
+   * @param billId - ID da conta
+   */
+  async retryOcr(billId: string): Promise<UploadBillResponse> {
+    try {
+      const api = apiService.getApi();
+      const response = await api.post<UploadBillResponse>(
+        `/bills/${billId}/retry-ocr`,
+      );
+      return response.data;
+    } catch (error: any) {
+      throw {
+        message: error.response?.data?.message || "Erro ao reprocessar OCR",
         statusCode: error.response?.status,
       } as UploadBillError;
     }

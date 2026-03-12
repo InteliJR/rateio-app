@@ -253,6 +253,50 @@ export class BillsService {
   }
 
   /**
+   * Reprocessar OCR de uma conta que falhou anteriormente
+   */
+  async retryOcr(billId: string, userId: string) {
+    const bill = await this.prisma.bill.findFirst({
+      where: { id: billId, userId },
+    });
+
+    if (!bill) {
+      throw new NotFoundException('Conta não encontrada');
+    }
+
+    if (bill.status !== BillStatus.OCR_FAILED) {
+      throw new BadRequestException(
+        'Reprocessamento OCR só é permitido para contas com status OCR_FAILED',
+      );
+    }
+
+    if (!bill.imageUrl) {
+      throw new BadRequestException(
+        'Conta não possui imagem para reprocessar',
+      );
+    }
+
+    // Remover itens existentes (pode haver itens parciais de tentativa anterior)
+    await this.prisma.billItem.deleteMany({ where: { billId } });
+
+    // Resetar status para PENDING_OCR
+    const updatedBill = await this.prisma.bill.update({
+      where: { id: billId },
+      data: { status: BillStatus.PENDING_OCR },
+    });
+
+    // Re-disparar OCR de forma assíncrona
+    this.processOcr(billId, bill.imageUrl).catch((error) => {
+      console.error(`❌ Erro no retry OCR da conta ${billId}:`, error);
+    });
+
+    return {
+      ...updatedBill,
+      message: 'Reprocessando OCR...',
+    };
+  }
+
+  /**
    * Processar OCR da imagem (chamado assincronamente)
    */
   private async processOcr(billId: string, imageUrl: string) {

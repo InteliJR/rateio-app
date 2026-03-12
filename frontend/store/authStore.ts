@@ -120,6 +120,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         accessToken: null,
         refreshToken: null,
         isAuthenticated: false,
+        isLoading: false,
       });
     } catch (error) {
       console.error("Erro ao fazer logout:", error);
@@ -140,6 +141,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         accessToken: null,
         refreshToken: null,
         isAuthenticated: false,
+        isLoading: false,
       });
     }
   },
