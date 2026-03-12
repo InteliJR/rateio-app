@@ -12,8 +12,10 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { userService } from "../../services/user.service";
 import { API_URL } from "../../services/api.service";
+import { useTheme } from "../../contexts/ThemeContext";
 
 export default function ConfigScreen() {
+  const { colors, getFontSize } = useTheme();
   const router = useRouter();
   const [userName, setUserName] = React.useState("");
   const [avatarUrl, setAvatarUrl] = React.useState<string | null>(null);
@@ -58,13 +60,13 @@ export default function ConfigScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Back Button */}
       <TouchableOpacity
         onPress={() => router.push("/(tabs)/profile")}
-        style={styles.backButton}
+        style={[styles.backButton, { backgroundColor: colors.cardBackground }]}
       >
-        <Ionicons name="chevron-back" size={28} color="#333" />
+        <Ionicons name="chevron-back" size={28} color={colors.text} />
       </TouchableOpacity>
 
       <ScrollView
@@ -82,22 +84,74 @@ export default function ConfigScreen() {
               </View>
             )}
           </View>
-          <Text style={styles.userName}>{userName || "Usuário"}</Text>
+          <Text
+            style={[
+              styles.userName,
+              { color: colors.text, fontSize: getFontSize(24) },
+            ]}
+          >
+            {userName || "Usuário"}
+          </Text>
         </View>
 
         {/* Config Options */}
-        <View style={styles.optionsContainer}>
+        <View style={styles.menuContainer}>
           <TouchableOpacity
-            style={styles.optionItem}
+            style={[
+              styles.menuItem,
+              { backgroundColor: colors.menuItem, shadowColor: colors.shadow },
+            ]}
             onPress={handleAccessibility}
           >
-            <Text style={styles.optionText}>Acessibilidade</Text>
-            <Ionicons name="chevron-forward" size={24} color="#999" />
+            <View style={styles.menuItemLeft}>
+              <Ionicons
+                name="accessibility-outline"
+                size={24}
+                color={colors.text}
+              />
+              <Text
+                style={[
+                  styles.menuItemText,
+                  { color: colors.text, fontSize: getFontSize(16) },
+                ]}
+              >
+                Acessibilidade
+              </Text>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={24}
+              color={colors.textTertiary}
+            />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.optionItem} onPress={handleAbout}>
-            <Text style={styles.optionText}>Sobre</Text>
-            <Ionicons name="chevron-forward" size={24} color="#999" />
+          <TouchableOpacity
+            style={[
+              styles.menuItem,
+              { backgroundColor: colors.menuItem, shadowColor: colors.shadow },
+            ]}
+            onPress={handleAbout}
+          >
+            <View style={styles.menuItemLeft}>
+              <Ionicons
+                name="information-circle-outline"
+                size={24}
+                color={colors.text}
+              />
+              <Text
+                style={[
+                  styles.menuItemText,
+                  { color: colors.text, fontSize: getFontSize(16) },
+                ]}
+              >
+                Sobre
+              </Text>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={24}
+              color={colors.textTertiary}
+            />
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -165,24 +219,33 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#333",
   },
-  optionsContainer: {
+  menuContainer: {
     paddingHorizontal: 20,
-    gap: 1,
-    backgroundColor: "#F0F0F0",
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: "#E0E0E0",
+    paddingTop: 20,
   },
-  optionItem: {
+  menuItem: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingVertical: 16,
     paddingHorizontal: 16,
     backgroundColor: "#FFF",
+    borderRadius: 12,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  optionText: {
+  menuItemLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+  },
+  menuItemText: {
     fontSize: 16,
+    fontWeight: "500",
     color: "#333",
   },
 });

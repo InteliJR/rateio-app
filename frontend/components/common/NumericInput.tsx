@@ -1,7 +1,19 @@
-import React from 'react';
-import { View, Text, TextInput, StyleSheet, TextInputProps, StyleProp, TextStyle } from 'react-native';
+import React from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  TextInputProps,
+  StyleProp,
+  TextStyle,
+} from "react-native";
+import { useTheme } from "../../contexts/ThemeContext";
 
-interface NumericInputProps extends Omit<TextInputProps, 'onChange' | 'onChangeText' | 'style'> {
+interface NumericInputProps extends Omit<
+  TextInputProps,
+  "onChange" | "onChangeText" | "style"
+> {
   label: string;
   value: string;
   onChange: (text: string) => void;
@@ -27,28 +39,29 @@ export const NumericInput: React.FC<NumericInputProps> = ({
   allowDecimal = false,
   ...props
 }) => {
+  const { colors, getFontSize } = useTheme();
   const handleChangeText = (text: string) => {
-    if (text === '') {
+    if (text === "") {
       onChange(text);
       return;
     }
 
     let numericValue: string;
-    
+
     if (allowDecimal) {
       // Permite números e um ponto decimal
-      numericValue = text.replace(/[^0-9.]/g, '');
+      numericValue = text.replace(/[^0-9.]/g, "");
       // Garante apenas um ponto decimal
-      const parts = numericValue.split('.');
+      const parts = numericValue.split(".");
       if (parts.length > 2) {
-        numericValue = parts[0] + '.' + parts.slice(1).join('');
+        numericValue = parts[0] + "." + parts.slice(1).join("");
       }
       // Limita casas decimais a 2
       if (parts.length === 2 && parts[1].length > 2) {
-        numericValue = parts[0] + '.' + parts[1].slice(0, 2);
+        numericValue = parts[0] + "." + parts[1].slice(0, 2);
       }
     } else {
-      numericValue = text.replace(/[^0-9]/g, '');
+      numericValue = text.replace(/[^0-9]/g, "");
     }
 
     if (max !== undefined && Number(numericValue) > max) {
@@ -59,7 +72,7 @@ export const NumericInput: React.FC<NumericInputProps> = ({
   };
 
   const handleBlur = (e: any) => {
-    if (value !== '' && min !== undefined && Number(value) < min) {
+    if (value !== "" && min !== undefined && Number(value) < min) {
       onChange(min.toString());
     }
     if (props.onBlur) {
@@ -69,17 +82,30 @@ export const NumericInput: React.FC<NumericInputProps> = ({
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>{label}</Text>
+      <Text
+        style={[
+          styles.label,
+          { color: colors.text, fontSize: getFontSize(14) },
+        ]}
+      >
+        {label}
+      </Text>
       <View style={styles.inputWrapper}>
         {prefix && <Text style={styles.prefix}>{prefix}</Text>}
         <TextInput
           style={[
             styles.input,
+            {
+              backgroundColor: colors.inputBackground,
+              borderBottomColor: colors.primary,
+              color: colors.text,
+            },
             prefix && styles.inputWithPrefix,
             suffix && styles.inputWithSuffix,
-            error ? styles.inputError : null,
-            style
+            error ? [styles.inputError, { borderColor: colors.error }] : null,
+            style,
           ]}
+          placeholderTextColor={colors.placeholderText}
           value={value}
           onChangeText={handleChangeText}
           onBlur={handleBlur}
@@ -88,7 +114,16 @@ export const NumericInput: React.FC<NumericInputProps> = ({
         />
         {suffix && <Text style={styles.suffix}>{suffix}</Text>}
       </View>
-      {error && <Text style={styles.errorText}>{error}</Text>}
+      {error && (
+        <Text
+          style={[
+            styles.errorText,
+            { color: colors.error, fontSize: getFontSize(12) },
+          ]}
+        >
+          {error}
+        </Text>
+      )}
     </View>
   );
 };
@@ -99,22 +134,22 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    color: '#333',
+    color: "#333",
     marginBottom: 8,
     marginTop: 8,
   },
   inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   input: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#81007F',
+    borderBottomColor: "#81007F",
   },
   inputWithPrefix: {
     paddingLeft: 8,
@@ -123,20 +158,20 @@ const styles = StyleSheet.create({
     paddingRight: 8,
   },
   inputError: {
-    borderColor: '#ff4d4d',
+    borderColor: "#ff4d4d",
   },
   prefix: {
     fontSize: 16,
-    color: '#666',
+    color: "#666",
     marginRight: 4,
   },
   suffix: {
     fontSize: 16,
-    color: '#666',
+    color: "#666",
     marginLeft: 4,
   },
   errorText: {
-    color: '#ff4d4d',
+    color: "#ff4d4d",
     fontSize: 12,
     marginTop: 4,
     marginLeft: 8,

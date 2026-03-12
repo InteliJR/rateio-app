@@ -17,8 +17,10 @@ import { useAuthStore } from "@/store/authStore";
 import Logo from "@/assets/images/logo.svg";
 import { z } from "zod";
 import { storageService } from "@/services/storage.service";
+import { useTheme } from "@/contexts/ThemeContext";
 
 export default function LoginScreen() {
+  const { colors, getFontSize } = useTheme();
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -106,15 +108,26 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
     >
       <View style={styles.content}>
         <View style={styles.stack}>
           <Logo style={styles.logo} />
-          <Text style={styles.title}>Login</Text>
+          <Text
+            style={[
+              styles.title,
+              { color: colors.text, fontSize: getFontSize(28) },
+            ]}
+          >
+            Login
+          </Text>
 
           {serverError && (
-            <Text style={styles.serverErrorText}>{serverError}</Text>
+            <Text
+              style={[styles.serverErrorText, { fontSize: getFontSize(14) }]}
+            >
+              {serverError}
+            </Text>
           )}
 
           <Controller
@@ -122,8 +135,17 @@ export default function LoginScreen() {
             name="email"
             render={({ field: { onChange, value } }) => (
               <TextInput
-                style={[styles.input, errors.email && styles.inputError]}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.inputBackground,
+                    borderColor: colors.inputBorder,
+                    color: colors.text,
+                  },
+                  errors.email && styles.inputError,
+                ]}
                 placeholder="Email"
+                placeholderTextColor={colors.placeholderText}
                 value={value}
                 onChangeText={onChange}
                 autoCapitalize="none"
@@ -133,12 +155,18 @@ export default function LoginScreen() {
             )}
           />
           {errors.email && (
-            <Text style={styles.errorText}>{errors.email.message}</Text>
+            <Text style={[styles.errorText, { fontSize: getFontSize(12) }]}>
+              {errors.email.message}
+            </Text>
           )}
 
           <View
             style={[
               styles.passwordContainer,
+              {
+                backgroundColor: colors.inputBackground,
+                borderColor: colors.inputBorder,
+              },
               errors.password && styles.inputError,
             ]}
           >
@@ -147,8 +175,12 @@ export default function LoginScreen() {
               name="password"
               render={({ field: { onChange, value } }) => (
                 <TextInput
-                  style={[styles.passwordInput]}
+                  style={[
+                    styles.passwordInput,
+                    { color: colors.text, fontSize: getFontSize(16) },
+                  ]}
                   placeholder="Senha"
+                  placeholderTextColor={colors.placeholderText}
                   value={value}
                   onChangeText={onChange}
                   secureTextEntry={!showPassword}
@@ -164,37 +196,57 @@ export default function LoginScreen() {
               <MaterialIcons
                 name={showPassword ? "visibility" : "visibility-off"}
                 size={20}
-                color="#333"
+                color={colors.textSecondary}
               />
             </TouchableOpacity>
           </View>
           {errors.password && (
-            <Text style={styles.errorText}>{errors.password.message}</Text>
+            <Text style={[styles.errorText, { fontSize: getFontSize(12) }]}>
+              {errors.password.message}
+            </Text>
           )}
 
           <TouchableOpacity
             style={[
               styles.button,
+              { backgroundColor: colors.primary },
               (isSubmitting || !isValid) && styles.buttonDisabled,
             ]}
             onPress={handleSubmit(onSubmit)}
             disabled={isSubmitting || !isValid}
           >
             {isSubmitting ? (
-              <ActivityIndicator color="#FFFF00" />
+              <ActivityIndicator color={colors.accent} />
             ) : (
-              <Text style={styles.buttonText}>Entrar</Text>
+              <Text
+                style={[
+                  styles.buttonText,
+                  { color: colors.accent, fontSize: getFontSize(16) },
+                ]}
+              >
+                Entrar
+              </Text>
             )}
           </TouchableOpacity>
         </View>
 
         <View style={styles.linkRow}>
-          <Text style={{ color: "#333" }}>Não possui uma conta? </Text>
+          <Text
+            style={{ color: colors.textSecondary, fontSize: getFontSize(14) }}
+          >
+            Não possui uma conta?{" "}
+          </Text>
           <TouchableOpacity
             onPress={() => router.push("/(auth)/register")}
             disabled={isSubmitting}
           >
-            <Text style={{ color: "#81007F", fontWeight: "bold" }}>
+            <Text
+              style={{
+                color: colors.primary,
+                fontWeight: "bold",
+                fontSize: getFontSize(14),
+              }}
+            >
               Cadastre-se
             </Text>
           </TouchableOpacity>
