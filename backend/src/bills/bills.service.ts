@@ -34,12 +34,25 @@ export interface BillFilters {
 
 @Injectable()
 export class BillsService {
+  private readonly isServerlessEnv = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
+
   constructor(
     private prisma: PrismaService,
     private storage: StorageService,
     private ocr: OcrService,
     private feesService: FeesService,
   ) { }
+
+  private async runOcrFlow(billId: string, imageUrl: string): Promise<void> {
+    if (this.isServerlessEnv) {
+      await this.processOcr(billId, imageUrl);
+      return;
+    }
+
+    this.processOcr(billId, imageUrl).catch((error) => {
+      console.error(`❌ Erro no OCR da conta ${billId}:`, error);
+    });
+  }
 
   /**
    * Criar conta com upload de imagem e OCR
@@ -76,10 +89,8 @@ export class BillsService {
         },
       });
 
-      // 4. Processar OCR (assíncrono - não bloquear resposta)
-      this.processOcr(bill.id, url).catch((error) => {
-        console.error(`❌ Erro no OCR da conta ${bill.id}:`, error);
-      });
+      // 4. Em serverless, executa OCR no request para evitar perda do processamento.
+      await this.runOcrFlow(bill.id, url);
 
       return {
         ...bill,
@@ -241,10 +252,8 @@ export class BillsService {
       },
     });
 
-    // 4. Iniciar processamento OCR assíncrono
-    this.processOcr(updatedBill.id, url).catch((error) => {
-      console.error(`❌ Erro no OCR da conta ${updatedBill.id}:`, error);
-    });
+    // 4. Em serverless, executa OCR no request para evitar perda do processamento.
+    await this.runOcrFlow(updatedBill.id, url);
 
     return {
       ...updatedBill,
@@ -285,10 +294,7 @@ export class BillsService {
       data: { status: BillStatus.PENDING_OCR },
     });
 
-    // Re-disparar OCR de forma assíncrona
-    this.processOcr(billId, bill.imageUrl).catch((error) => {
-      console.error(`❌ Erro no retry OCR da conta ${billId}:`, error);
-    });
+    await this.runOcrFlow(billId, bill.imageUrl);
 
     return {
       ...updatedBill,

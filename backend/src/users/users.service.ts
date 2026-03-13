@@ -231,7 +231,7 @@ export class UsersService {
     return this.create(email, name, password, UserRole.ADMIN, true);
   }
 
-  async updateAvatarUrl(userId: string, fileName: string | null) {
+  async updateAvatarUrl(userId: string, avatarUrl: string | null) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { avatarUrl: true },
@@ -240,8 +240,6 @@ export class UsersService {
     if (!user) {
       throw new NotFoundException('Usuário não encontrado');
     }
-
-    const avatarUrl = `/uploads/avatars/${fileName}`;
 
     return this.prisma.user.update({
       where: { id: userId },

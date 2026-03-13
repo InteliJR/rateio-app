@@ -7,7 +7,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { v4 as uuidv4 } from 'uuid';
-import { diskStorage } from 'multer';
+import { diskStorage, memoryStorage } from 'multer';
 import { extname } from 'path';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -16,12 +16,25 @@ import * as path from 'path';
 export class StorageService {
   private s3Client: S3Client;
   private bucketName: string;
-  private readonly uploadPath = './uploads/avatars';
+  private readonly uploadRoot = './uploads';
+  private readonly avatarUploadPath = './uploads/avatars';
   private useS3: boolean;
+  private readonly isServerlessEnv: boolean;
+  private readonly publicBaseUrl: string;
+  private readonly s3PublicBaseUrl: string;
 
   constructor() {
     this.bucketName = process.env.AWS_S3_BUCKET || '';
+    this.publicBaseUrl = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
+    this.s3PublicBaseUrl = (process.env.AWS_S3_PUBLIC_BASE_URL || '').replace(/\/$/, '');
+    this.isServerlessEnv = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
     this.useS3 = !!this.bucketName; // Usa S3 se bucket estiver configurado
+
+    if (this.isServerlessEnv && !this.useS3) {
+      throw new Error(
+        'Storage local nao e suportado neste ambiente. Configure AWS_S3_BUCKET e credenciais S3 para deploy.',
+      );
+    }
 
     if (this.useS3) {
       this.s3Client = new S3Client({
@@ -33,10 +46,18 @@ export class StorageService {
       });
     } else {
       // Garante que pasta local existe
-      if (!fs.existsSync(this.uploadPath)) {
-        fs.mkdirSync(this.uploadPath, { recursive: true });
+      if (!fs.existsSync(this.avatarUploadPath)) {
+        fs.mkdirSync(this.avatarUploadPath, { recursive: true });
       }
     }
+  }
+
+  isUsingS3(): boolean {
+    return this.useS3;
+  }
+
+  shouldServeLocalUploads(): boolean {
+    return !this.useS3 && !this.isServerlessEnv;
   }
 
   /**
@@ -44,17 +65,19 @@ export class StorageService {
    */
   getMulterOptions() {
     return {
-      storage: diskStorage({
-        destination: this.uploadPath,
-        filename: (req, file, callback) => {
-          const randomName = Array(32)
-            .fill(null)
-            .map(() => Math.round(Math.random() * 16).toString(16))
-            .join('');
-          const ext = extname(file.originalname);
-          callback(null, `${randomName}${ext}`);
-        },
-      }),
+      storage: this.useS3
+        ? memoryStorage()
+        : diskStorage({
+            destination: this.avatarUploadPath,
+            filename: (req, file, callback) => {
+              const randomName = Array(32)
+                .fill(null)
+                .map(() => Math.round(Math.random() * 16).toString(16))
+                .join('');
+              const ext = extname(file.originalname);
+              callback(null, `${randomName}${ext}`);
+            },
+          }),
       fileFilter: (req, file, callback) => {
         if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/)) {
           return callback(
@@ -80,13 +103,22 @@ export class StorageService {
     if (this.useS3) {
       return this.uploadToS3(file, folder);
     } else {
-      // Para upload local, o arquivo já foi salvo pelo Multer
-      // Retorna apenas a URL relativa
-      const filename =
-        file.filename || `${uuidv4()}.${file.originalname.split('.').pop()}`;
+      const folderPath = path.join(this.uploadRoot, folder);
+      if (!fs.existsSync(folderPath)) {
+        fs.mkdirSync(folderPath, { recursive: true });
+      }
+
+      const filename = file.filename || `${uuidv4()}.${file.originalname.split('.').pop()}`;
+      const filePath = path.join(folderPath, filename);
+
+      if (file.buffer && !file.filename) {
+        fs.writeFileSync(filePath, file.buffer);
+      }
+
+      const relativeUrl = `/uploads/${folder}/${filename}`;
       return {
         key: `${folder}/${filename}`,
-        url: `/uploads/${folder}/${filename}`,
+        url: this.publicBaseUrl ? `${this.publicBaseUrl}${relativeUrl}` : relativeUrl,
       };
     }
   }
@@ -111,8 +143,7 @@ export class StorageService {
 
       await this.s3Client.send(command);
 
-      // Gerar URL pré-assinada (válida por 1 hora)
-      const url = await this.getSignedUrl(key);
+      const url = await this.resolveS3Url(key);
 
       return { key, url };
     } catch (error) {
@@ -126,8 +157,8 @@ export class StorageService {
    */
   async getSignedUrl(key: string, expiresIn: number = 3600): Promise<string> {
     if (!this.useS3) {
-      // Para arquivos locais, retorna URL relativa
-      return `/${key}`;
+      const relativeUrl = `/uploads/${key}`;
+      return this.publicBaseUrl ? `${this.publicBaseUrl}${relativeUrl}` : relativeUrl;
     }
 
     try {
@@ -141,6 +172,14 @@ export class StorageService {
       console.error('❌ Erro ao gerar URL:', error);
       throw new InternalServerErrorException('Falha ao gerar URL da imagem');
     }
+  }
+
+  private async resolveS3Url(key: string): Promise<string> {
+    if (this.s3PublicBaseUrl) {
+      return `${this.s3PublicBaseUrl}/${key}`;
+    }
+
+    return this.getSignedUrl(key);
   }
 
   /**
@@ -175,12 +214,44 @@ export class StorageService {
    */
   async deleteLocalFile(filename: string): Promise<void> {
     try {
-      const filePath = path.join(this.uploadPath, filename);
+      const filePath = filename.includes('/')
+        ? path.join(this.uploadRoot, filename)
+        : path.join(this.avatarUploadPath, filename);
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
       }
     } catch (error) {
       console.error('⚠️ Erro ao deletar arquivo local:', error);
+    }
+  }
+
+  extractStorageKeyFromUrl(url: string | null | undefined): string | null {
+    if (!url) {
+      return null;
+    }
+
+    const localPrefix = '/uploads/';
+    if (url.startsWith(localPrefix)) {
+      return url.slice(localPrefix.length);
+    }
+
+    if (this.publicBaseUrl && url.startsWith(`${this.publicBaseUrl}${localPrefix}`)) {
+      return url.slice(`${this.publicBaseUrl}${localPrefix}`.length);
+    }
+
+    if (this.s3PublicBaseUrl && url.startsWith(`${this.s3PublicBaseUrl}/`)) {
+      return url.slice(`${this.s3PublicBaseUrl}/`.length);
+    }
+
+    try {
+      const parsed = new URL(url);
+      const pathname = parsed.pathname.replace(/^\//, '');
+      if (pathname.includes('/')) {
+        return pathname;
+      }
+      return null;
+    } catch {
+      return null;
     }
   }
 

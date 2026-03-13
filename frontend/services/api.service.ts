@@ -5,6 +5,7 @@ import Constants from 'expo-constants';
 import { storageService } from './storage.service';
 
 export const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+const IS_DEV = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
 
 // Configurações de retry
 const RETRY_CONFIG = {
@@ -49,10 +50,12 @@ class ApiService {
       urls.add(`http://${expoHost}:3000`);
     }
 
-    // Hosts comuns em emuladores/simuladores
-    urls.add('http://10.0.2.2:3000');
-    urls.add('http://127.0.0.1:3000');
-    urls.add('http://localhost:3000');
+    if (IS_DEV) {
+      // Hosts comuns em emuladores/simuladores
+      urls.add('http://10.0.2.2:3000');
+      urls.add('http://127.0.0.1:3000');
+      urls.add('http://localhost:3000');
+    }
 
     return Array.from(urls).map((url) => url.replace(/\/$/, ''));
   }
@@ -101,6 +104,10 @@ class ApiService {
   constructor() {
     this.activeBaseURL = API_URL;
     console.log('[API] Using API_URL:', this.activeBaseURL);
+
+    if (!IS_DEV && (!this.activeBaseURL || this.activeBaseURL.includes('localhost'))) {
+      console.warn('[API] EXPO_PUBLIC_API_URL de producao nao configurada corretamente. Use uma URL HTTPS publica no build do APK.');
+    }
 
     this.api = axios.create({
       baseURL: this.activeBaseURL,
@@ -257,46 +264,21 @@ class ApiService {
           (this as any)._isRefreshing = true;
 
           try {
-            const refreshToken = await storageService.getItem("refreshToken");
+            const accessToken = await this.refreshAccessToken();
 
-            if (!refreshToken) {
-              console.log("[API] No refresh token found, logging out");
-              await this.handleLogout();
-              (this as any)._isRefreshing = false;
+            if (!accessToken) {
               return Promise.reject(error);
             }
 
-            console.log("[API] Attempting to refresh token...");
-
-            // Fazer chamada de refresh diretamente com axios (para evitar loop do interceptor)
-            const response = await axios.post(`${API_URL}/auth/refresh`, {
-              refreshToken,
-            });
-
-            const { accessToken, refreshToken: newRefreshToken } =
-              response.data;
-
-            // Salvar novos tokens
-            await storageService.setItem("accessToken", accessToken);
-            if (newRefreshToken) {
-              await storageService.setItem("refreshToken", newRefreshToken);
-            }
-
             console.log("[API] Token refreshed successfully");
-
-            // Marcar refresh como completo
-            (this as any)._isRefreshing = false;
-
-            // Atualizar header da requisição original
             originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-
-            // Retentar requisição original
             return this.api(originalRequest);
           } catch (refreshError) {
             console.error("[API] Token refresh failed:", refreshError);
-            (this as any)._isRefreshing = false;
             await this.handleLogout();
             return Promise.reject(refreshError);
+          } finally {
+            (this as any)._isRefreshing = false;
           }
         }
 

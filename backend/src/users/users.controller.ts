@@ -139,29 +139,7 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard)
   @Post('me/avatar')
-  @UseInterceptors(
-    FileInterceptor('avatar', {
-      storage: require('multer').diskStorage({
-        destination: './uploads/avatars',
-        filename: (req, file, callback) => {
-          const userId = (req as any).user.id;
-          const ext = file.originalname.split('.').pop();
-          const filename = `${userId}-${Date.now()}.${ext}`;
-          callback(null, filename);
-        },
-      }),
-      fileFilter: (req, file, callback) => {
-        if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/)) {
-          return callback(
-            new BadRequestException('Apenas imagens são permitidas'),
-            false,
-          );
-        }
-        callback(null, true);
-      },
-      limits: { fileSize: 5 * 1024 * 1024 },
-    }),
-  )
+  @UseInterceptors(FileInterceptor('avatar'))
   async uploadAvatar(
     @Request() req: any,
     @UploadedFile() file: Express.Multer.File,
@@ -170,7 +148,17 @@ export class UsersController {
       throw new BadRequestException('Nenhum arquivo foi enviado');
     }
 
-    return this.usersService.updateAvatarUrl(req.user.id, file.filename);
+    if (!this.storageService.validateFileType(file.mimetype)) {
+      throw new BadRequestException('Apenas imagens sao permitidas (JPEG, PNG, WebP, GIF)');
+    }
+
+    if (!this.storageService.validateFileSize(file.size)) {
+      throw new BadRequestException('Tamanho maximo: 10MB');
+    }
+
+    const uploaded = await this.storageService.uploadFile(file, 'avatars');
+
+    return this.usersService.updateAvatarUrl(req.user.id, uploaded.url);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -179,9 +167,9 @@ export class UsersController {
     const user = await this.usersService.findById(req.user.id) as any;
     
     if (user?.avatarUrl) {
-      const fileName = user.avatarUrl.split('/').pop();
-      if (fileName) {
-        await this.storageService.deleteLocalFile(fileName);
+      const key = this.storageService.extractStorageKeyFromUrl(user.avatarUrl);
+      if (key) {
+        await this.storageService.deleteFile(key);
       }
     }
 
