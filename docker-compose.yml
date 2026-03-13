@@ -50,7 +50,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    command: sh -c "npx prisma generate && npx prisma migrate deploy && npm run start:dev"
+    command: sh -c "npm install --legacy-peer-deps && npx prisma generate && npx prisma migrate deploy && npm run start:dev"
 
 volumes:
   postgres_data:

@@ -1,6 +1,7 @@
 // mobile/services/api.service.ts
 
 import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
+import Constants from 'expo-constants';
 import { storageService } from './storage.service';
 
 export const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
@@ -19,20 +20,110 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 class ApiService {
   private api: AxiosInstance;
   private onUnauthorized: () => void = () => { };
+  private activeBaseURL: string;
+  private refreshPromise: Promise<string | null> | null = null;
+
+  private parseExpoHost(): string | null {
+    const hostUri =
+      (Constants as any)?.expoConfig?.hostUri ||
+      (Constants as any)?.manifest2?.extra?.expoClient?.hostUri ||
+      (Constants as any)?.manifest?.debuggerHost;
+
+    if (!hostUri || typeof hostUri !== 'string') {
+      return null;
+    }
+
+    const host = hostUri.split(':')[0]?.trim();
+    return host || null;
+  }
+
+  private getCandidateBaseUrls(): string[] {
+    const urls = new Set<string>();
+
+    if (API_URL) {
+      urls.add(API_URL);
+    }
+
+    const expoHost = this.parseExpoHost();
+    if (expoHost) {
+      urls.add(`http://${expoHost}:3000`);
+    }
+
+    // Hosts comuns em emuladores/simuladores
+    urls.add('http://10.0.2.2:3000');
+    urls.add('http://127.0.0.1:3000');
+    urls.add('http://localhost:3000');
+
+    return Array.from(urls).map((url) => url.replace(/\/$/, ''));
+  }
+
+  private async probeBaseUrl(baseUrl: string, timeoutMs: number = 2000): Promise<boolean> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(`${baseUrl}/health`, {
+        method: 'GET',
+        signal: controller.signal,
+      });
+      return response.ok;
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private async tryRecoverBaseUrl(originalRequestUrl?: string): Promise<boolean> {
+    const candidates = this
+      .getCandidateBaseUrls()
+      .filter((url) => url !== this.activeBaseURL);
+
+    for (const candidate of candidates) {
+      const isReachable = await this.probeBaseUrl(candidate);
+      if (!isReachable) {
+        continue;
+      }
+
+      this.activeBaseURL = candidate;
+      this.api.defaults.baseURL = candidate;
+      console.warn('[API] Base URL atualizada automaticamente após erro de rede:', {
+        previous: API_URL,
+        current: candidate,
+        request: originalRequestUrl,
+      });
+      return true;
+    }
+
+    return false;
+  }
 
   constructor() {
-    console.log('[API] Using API_URL:', API_URL);
+    this.activeBaseURL = API_URL;
+    console.log('[API] Using API_URL:', this.activeBaseURL);
+
     this.api = axios.create({
-      baseURL: API_URL,
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      baseURL: this.activeBaseURL,
       timeout: 10000,
     });
 
     // Interceptor para adicionar token
     this.api.interceptors.request.use(
       async (config) => {
+        // Evita Content-Type incorreto em multipart/form-data no React Native.
+        // O runtime deve definir automaticamente o boundary.
+        if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+          const headers = config.headers as any;
+
+          if (headers?.set) {
+            headers.set('Content-Type', undefined);
+            headers.set('content-type', undefined);
+          } else if (headers) {
+            delete headers['Content-Type'];
+            delete headers['content-type'];
+          }
+        }
+
         // Verificar se é endpoint público
         const isPublicEndpoint =
           config.url?.includes("/auth/login") ||
@@ -81,6 +172,17 @@ class ApiService {
 
         // Retry para Network Errors (sem resposta do servidor)
         if (!error.response && error.message === 'Network Error') {
+          if (!originalRequest?._hostRecoveryAttempted) {
+            originalRequest._hostRecoveryAttempted = true;
+            const switched = await this.tryRecoverBaseUrl(originalRequest?.url);
+
+            if (switched) {
+              originalRequest.baseURL = this.activeBaseURL;
+              console.log('[API] Retrying request with recovered baseURL...');
+              return this.api(originalRequest);
+            }
+          }
+
           const retryCount = originalRequest._networkRetryCount || 0;
           
           if (retryCount < RETRY_CONFIG.maxRetries) {
@@ -209,12 +311,66 @@ class ApiService {
     this.onUnauthorized();
   }
 
+  async refreshAccessToken(): Promise<string | null> {
+    if (this.refreshPromise) {
+      return this.refreshPromise;
+    }
+
+    this.refreshPromise = (async () => {
+      try {
+        const refreshToken = await storageService.getItem('refreshToken');
+
+        if (!refreshToken) {
+          await this.handleLogout();
+          return null;
+        }
+
+        const candidates = [this.activeBaseURL, ...this.getCandidateBaseUrls()]
+          .filter((url, index, arr) => !!url && arr.indexOf(url) === index);
+
+        for (const candidate of candidates) {
+          try {
+            const response = await axios.post(`${candidate}/auth/refresh`, { refreshToken });
+            const { accessToken, refreshToken: newRefreshToken } = response.data;
+
+            await storageService.setItem('accessToken', accessToken);
+            if (newRefreshToken) {
+              await storageService.setItem('refreshToken', newRefreshToken);
+            }
+
+            this.activeBaseURL = candidate;
+            this.api.defaults.baseURL = candidate;
+
+            return accessToken;
+          } catch {
+            continue;
+          }
+        }
+
+        await this.handleLogout();
+        return null;
+      } finally {
+        this.refreshPromise = null;
+      }
+    })();
+
+    return this.refreshPromise;
+  }
+
+  async recoverBaseUrlOnNetworkError(originalRequestUrl?: string): Promise<boolean> {
+    return this.tryRecoverBaseUrl(originalRequestUrl);
+  }
+
   setUnauthorizedCallback(callback: () => void) {
     this.onUnauthorized = callback;
   }
 
   getApi() {
     return this.api;
+  }
+
+  getCurrentBaseUrl() {
+    return this.activeBaseURL;
   }
 
   /**

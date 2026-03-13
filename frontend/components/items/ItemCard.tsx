@@ -83,13 +83,18 @@ export const ItemCard: React.FC<ItemCardProps> = ({
   };
 
   return (
-    <View style={styles.container}>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder },
+      ]}
+    >
       <TouchableOpacity
         style={styles.deleteButton}
         onPress={() => onDelete(item.id)}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
-        <Ionicons name="trash-outline" size={20} color="#666" />
+        <Ionicons name="trash-outline" size={20} color={colors.iconColor} />
       </TouchableOpacity>
 
       <View style={styles.contentContainer}>
@@ -101,12 +106,16 @@ export const ItemCard: React.FC<ItemCardProps> = ({
         >
           {/* Nome */}
           <TextInput
-            style={[styles.input, styles.nameInput]}
+            style={[
+              styles.input,
+              styles.nameInput,
+              { color: colors.text, borderBottomColor: colors.divider },
+            ]}
             value={name}
             onChangeText={setName}
             onBlur={() => handleBlur("name")}
             placeholder="Nome do item"
-            placeholderTextColor="#999"
+            placeholderTextColor={colors.placeholderText}
           />
         </TouchableOpacity>
 
@@ -114,25 +123,43 @@ export const ItemCard: React.FC<ItemCardProps> = ({
           {/* Quantidade */}
           <View style={styles.inputWrapper}>
             <TextInput
-              style={[styles.input, styles.quantityInput]}
+              style={[
+                styles.input,
+                styles.quantityInput,
+                { color: colors.text, borderBottomColor: colors.divider },
+              ]}
               value={quantity}
               onChangeText={(text) => setQuantity(text.replace(/[^0-9]/g, ""))}
               onBlur={() => handleBlur("quantity")}
               keyboardType="number-pad"
               maxLength={3}
             />
-            <Text style={[styles.suffix, { fontSize: getFontSize(16) }]}>
+            <Text
+              style={[
+                styles.suffix,
+                { fontSize: getFontSize(16), color: colors.textSecondary },
+              ]}
+            >
               x
             </Text>
           </View>
 
           {/* Preço */}
           <View style={styles.inputWrapper}>
-            <Text style={[styles.prefix, { fontSize: getFontSize(14) }]}>
+            <Text
+              style={[
+                styles.prefix,
+                { fontSize: getFontSize(14), color: colors.textSecondary },
+              ]}
+            >
               R$
             </Text>
             <TextInput
-              style={[styles.input, styles.priceInput]}
+              style={[
+                styles.input,
+                styles.priceInput,
+                { color: colors.text, borderBottomColor: colors.divider },
+              ]}
               value={price}
               onChangeText={(text) => setPrice(text.replace(/[^0-9,.]/g, ""))}
               onBlur={() => handleBlur("price")}
@@ -149,7 +176,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({
             <Ionicons
               name={isActive ? "caret-down" : "caret-forward"}
               size={20}
-              color="#666"
+              color={colors.iconColor}
             />
           </TouchableOpacity>
         </View>

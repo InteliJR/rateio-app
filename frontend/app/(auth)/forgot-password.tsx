@@ -16,6 +16,7 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { z } from "zod";
 import { authService } from "@/services/auth.service";
 import Logo from "@/assets/images/logo.svg";
+import { useTheme } from "@/contexts/ThemeContext";
 
 const forgotSchema = z.object({
   email: z
@@ -28,6 +29,7 @@ type ForgotFormData = z.infer<typeof forgotSchema>;
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
+  const { colors, getFontSize } = useTheme();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [sentEmail, setSentEmail] = useState<string | null>(null);
@@ -61,24 +63,24 @@ export default function ForgotPasswordScreen() {
     return (
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.container}
+        style={[styles.container, { backgroundColor: colors.background }]}
       >
         <View style={styles.content}>
           <View style={styles.stack}>
             <Logo style={styles.logo} />
             <View style={styles.successIcon}>
-              <MaterialIcons name="mark-email-read" size={48} color="#81007F" />
+              <MaterialIcons name="mark-email-read" size={48} color={colors.primary} />
             </View>
-            <Text style={styles.title}>Email enviado!</Text>
-            <Text style={styles.successText}>
-              Se <Text style={styles.emailHighlight}>{sentEmail}</Text> estiver
+            <Text style={[styles.title, { color: colors.text, fontSize: getFontSize(24) }]}>Email enviado!</Text>
+            <Text style={[styles.successText, { color: colors.textSecondary, fontSize: getFontSize(14) }]}>
+              Se <Text style={[styles.emailHighlight, { color: colors.primary }]}>{sentEmail}</Text> estiver
               cadastrado, você receberá um código de 6 dígitos em breve.
             </Text>
-            <Text style={styles.hintText}>
+            <Text style={[styles.hintText, { color: colors.textTertiary, fontSize: getFontSize(12) }]}>
               Verifique também sua caixa de spam.
             </Text>
             <TouchableOpacity
-              style={styles.button}
+              style={[styles.button, { backgroundColor: colors.primary }]}
               onPress={() =>
                 router.push({
                   pathname: "/(auth)/reset-password",
@@ -86,19 +88,19 @@ export default function ForgotPasswordScreen() {
                 })
               }
             >
-              <Text style={styles.buttonText}>Inserir código</Text>
+              <Text style={[styles.buttonText, { color: colors.accent, fontSize: getFontSize(16) }]}>Inserir código</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.linkButton}
               onPress={() => setSentEmail(null)}
             >
-              <Text style={styles.linkText}>Usar outro email</Text>
+              <Text style={[styles.linkText, { color: colors.primary, fontSize: getFontSize(14) }]}>Usar outro email</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.linkRow}>
-            <Text style={{ color: "#333" }}>Lembrou a senha? </Text>
+            <Text style={{ color: colors.text }}>Lembrou a senha? </Text>
             <TouchableOpacity onPress={() => router.replace("/(auth)/login")}>
-              <Text style={styles.linkBold}>Fazer login</Text>
+              <Text style={[styles.linkBold, { color: colors.primary, fontSize: getFontSize(14) }]}>Fazer login</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -109,19 +111,19 @@ export default function ForgotPasswordScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
     >
       <View style={styles.content}>
         <View style={styles.stack}>
           <Logo style={styles.logo} />
-          <Text style={styles.title}>Esqueci minha senha</Text>
-          <Text style={styles.subtitle}>
+          <Text style={[styles.title, { color: colors.text, fontSize: getFontSize(24) }]}>Esqueci minha senha</Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary, fontSize: getFontSize(14) }]}>
             Informe seu email e enviaremos um código de 6 dígitos para
             redefinir sua senha.
           </Text>
 
           {serverError && (
-            <Text style={styles.serverErrorText}>{serverError}</Text>
+            <Text style={[styles.serverErrorText, { color: colors.error, fontSize: getFontSize(13) }]}>{serverError}</Text>
           )}
 
           <Controller
@@ -129,8 +131,17 @@ export default function ForgotPasswordScreen() {
             name="email"
             render={({ field: { onChange, value } }) => (
               <TextInput
-                style={[styles.input, errors.email && styles.inputError]}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.inputBackground,
+                    borderColor: colors.inputBorder,
+                    color: colors.text,
+                  },
+                  errors.email && [styles.inputError, { borderColor: colors.error }],
+                ]}
                 placeholder="Email"
+                placeholderTextColor={colors.placeholderText}
                 value={value}
                 onChangeText={onChange}
                 autoCapitalize="none"
@@ -141,32 +152,33 @@ export default function ForgotPasswordScreen() {
             )}
           />
           {errors.email && (
-            <Text style={styles.errorText}>{errors.email.message}</Text>
+            <Text style={[styles.errorText, { color: colors.error, fontSize: getFontSize(12) }]}>{errors.email.message}</Text>
           )}
 
           <TouchableOpacity
             style={[
               styles.button,
+              { backgroundColor: colors.primary },
               (isSubmitting || !isValid) && styles.buttonDisabled,
             ]}
             onPress={handleSubmit(onSubmit)}
             disabled={isSubmitting || !isValid}
           >
             {isSubmitting ? (
-              <ActivityIndicator color="#FFFF00" />
+              <ActivityIndicator color={colors.accent} />
             ) : (
-              <Text style={styles.buttonText}>Enviar código</Text>
+              <Text style={[styles.buttonText, { color: colors.accent, fontSize: getFontSize(16) }]}>Enviar código</Text>
             )}
           </TouchableOpacity>
         </View>
 
         <View style={styles.linkRow}>
-          <Text style={{ color: "#333" }}>Lembrou a senha? </Text>
+          <Text style={{ color: colors.text }}>Lembrou a senha? </Text>
           <TouchableOpacity
             onPress={() => router.replace("/(auth)/login")}
             disabled={isSubmitting}
           >
-            <Text style={styles.linkBold}>Fazer login</Text>
+            <Text style={[styles.linkBold, { color: colors.primary, fontSize: getFontSize(14) }]}>Fazer login</Text>
           </TouchableOpacity>
         </View>
 
