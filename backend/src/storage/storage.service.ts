@@ -6,7 +6,7 @@ import {
   GetObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { diskStorage, memoryStorage } from 'multer';
 import { extname } from 'path';
 import * as fs from 'fs';
@@ -108,7 +108,7 @@ export class StorageService {
         fs.mkdirSync(folderPath, { recursive: true });
       }
 
-      const filename = file.filename || `${uuidv4()}.${file.originalname.split('.').pop()}`;
+      const filename = file.filename || `${randomUUID()}.${file.originalname.split('.').pop()}`;
       const filePath = path.join(folderPath, filename);
 
       if (file.buffer && !file.filename) {
@@ -132,7 +132,7 @@ export class StorageService {
   ): Promise<{ key: string; url: string }> {
     try {
       const fileExtension = file.originalname.split('.').pop();
-      const key = `${folder}/${uuidv4()}.${fileExtension}`;
+      const key = `${folder}/${randomUUID()}.${fileExtension}`;
 
       const command = new PutObjectCommand({
         Bucket: this.bucketName,
