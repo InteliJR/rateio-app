@@ -15,6 +15,7 @@ export class OcrService {
   private readonly model: string;
   private readonly maxRetries = 3;
   private readonly baseDelayMs = 1000;
+  private readonly maxDelayMs = 10000;
 
   constructor() {
     // Validar variáveis de ambiente obrigatórias
@@ -521,7 +522,7 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
       }
 
       // Calcula delay exponencial: após tentativa 1 falhar = 1s, após tentativa 2 falhar = 2s
-      const delayMs = this.baseDelayMs * Math.pow(2, attempt - 1);
+      const delayMs = this.getRetryDelayMs(error, attempt);
       this.logRetryAttempt(attempt, imageUrl, 'falhou_tentando_novamente', error, delayMs);
 
       // Aguarda antes de tentar novamente
@@ -564,6 +565,44 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
     }
 
     return false;
+  }
+
+  private getRetryDelayMs(error: any, attempt: number): number {
+    const retryAfterMs = this.getRetryAfterMs(error);
+
+    if (retryAfterMs !== null) {
+      return retryAfterMs;
+    }
+
+    const exponentialDelayMs = this.baseDelayMs * Math.pow(2, attempt - 1);
+    const jitterMs = Math.floor(Math.random() * 500);
+
+    return Math.min(exponentialDelayMs + jitterMs, this.maxDelayMs);
+  }
+
+  private getRetryAfterMs(error: any): number | null {
+    const retryAfterHeader =
+      error?.headers?.['retry-after'] ??
+      error?.headers?.get?.('retry-after');
+
+    if (!retryAfterHeader) {
+      return null;
+    }
+
+    const retryAfterSeconds = Number(retryAfterHeader);
+    if (!Number.isNaN(retryAfterSeconds) && retryAfterSeconds > 0) {
+      return Math.min(retryAfterSeconds * 1000, this.maxDelayMs);
+    }
+
+    const retryAt = new Date(retryAfterHeader).getTime();
+    if (Number.isNaN(retryAt)) {
+      return null;
+    }
+
+    return Math.min(
+      Math.max(retryAt - Date.now(), this.baseDelayMs),
+      this.maxDelayMs,
+    );
   }
 
   /**

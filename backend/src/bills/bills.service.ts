@@ -6,8 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
-import { OcrService } from '../ocr/ocr.service';
-import { OcrResultDto } from '../ocr/dto/ocr-result.dto';
+import { OcrQueueService } from '../ocr/ocr-queue.service';
 import { CreateBillDto } from './dto/create-bill.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
 import { FinalizeBillDto } from './dto/finalize-bill.dto';
@@ -34,25 +33,12 @@ export interface BillFilters {
 
 @Injectable()
 export class BillsService {
-  private readonly isServerlessEnv = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
-
   constructor(
     private prisma: PrismaService,
     private storage: StorageService,
-    private ocr: OcrService,
+    private ocrQueue: OcrQueueService,
     private feesService: FeesService,
   ) { }
-
-  private async runOcrFlow(billId: string, imageUrl: string): Promise<void> {
-    if (this.isServerlessEnv) {
-      await this.processOcr(billId, imageUrl);
-      return;
-    }
-
-    this.processOcr(billId, imageUrl).catch((error) => {
-      console.error(`❌ Erro no OCR da conta ${billId}:`, error);
-    });
-  }
 
   /**
    * Criar conta com upload de imagem e OCR
@@ -89,12 +75,11 @@ export class BillsService {
         },
       });
 
-      // 4. Em serverless, executa OCR no request para evitar perda do processamento.
-      await this.runOcrFlow(bill.id, url);
+      await this.ocrQueue.enqueue(bill.id, userId);
 
       return {
         ...bill,
-        message: 'Conta criada. Processando imagem...',
+        message: 'Conta criada. OCR enfileirado para processamento.',
       };
     }
 
@@ -252,12 +237,11 @@ export class BillsService {
       },
     });
 
-    // 4. Em serverless, executa OCR no request para evitar perda do processamento.
-    await this.runOcrFlow(updatedBill.id, url);
+    await this.ocrQueue.enqueue(updatedBill.id, userId);
 
     return {
       ...updatedBill,
-      message: 'Imagem enviada. Processando OCR...',
+      message: 'Imagem enviada. OCR enfileirado para processamento.',
     };
   }
 
@@ -294,65 +278,12 @@ export class BillsService {
       data: { status: BillStatus.PENDING_OCR },
     });
 
-    await this.runOcrFlow(billId, bill.imageUrl);
+    await this.ocrQueue.enqueue(billId, userId);
 
     return {
       ...updatedBill,
-      message: 'Reprocessando OCR...',
+      message: 'OCR reenfileirado para processamento.',
     };
-  }
-
-  /**
-   * Processar OCR da imagem (chamado assincronamente)
-   */
-  private async processOcr(billId: string, imageUrl: string) {
-    try {
-      // 1. Fazer OCR
-      const ocrResult = await this.ocr.processImage(imageUrl);
-
-      // 2. Validar resultado
-      if (!OcrResultDto.validateOcrResult(ocrResult)) {
-        await this.prisma.bill.update({
-          where: { id: billId },
-          data: {
-            status: BillStatus.OCR_FAILED,
-            ocrRawText: ocrResult.rawText,
-          },
-        });
-        return;
-      }
-
-      // 3. Criar itens reconhecidos
-      const items = ocrResult.items.map((item) => ({
-        billId,
-        name: item.name,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        totalPrice: item.totalPrice,
-      }));
-
-      await this.prisma.billItem.createMany({ data: items });
-
-      // 4. Atualizar conta
-      await this.prisma.bill.update({
-        where: { id: billId },
-        data: {
-          status: BillStatus.REVIEWING,
-          ocrRawText: ocrResult.rawText,
-          totalAmount: ocrResult.totalAmount,
-          establishmentName: ocrResult.establishmentName,
-        },
-      });
-
-      console.log(`✅ OCR processado com sucesso para conta ${billId}`);
-    } catch (error) {
-      console.error(`❌ Erro no OCR da conta ${billId}:`, error);
-
-      await this.prisma.bill.update({
-        where: { id: billId },
-        data: { status: BillStatus.OCR_FAILED },
-      });
-    }
   }
 
   /**

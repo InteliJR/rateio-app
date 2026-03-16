@@ -58,6 +58,14 @@ export class PrismaService
         if (!parsedUrl.searchParams.has('connection_limit')) {
           parsedUrl.searchParams.set('connection_limit', '1');
         }
+
+        if (!parsedUrl.searchParams.has('pool_timeout')) {
+          parsedUrl.searchParams.set('pool_timeout', '20');
+        }
+
+        if (!parsedUrl.searchParams.has('connect_timeout')) {
+          parsedUrl.searchParams.set('connect_timeout', '15');
+        }
       }
 
       return parsedUrl.toString();

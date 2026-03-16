@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -15,16 +16,27 @@ import { BillItemsModule } from './bill-items/bill-items.module';
 import { ParticipantsModule } from './participants/participants.module';
 import { DivisionsModule } from './divisions/divisions.module';
 import { FeesModule } from './fees/fees.module';
+import { ObservabilityModule } from './observability/observability.module';
+import { MetricsInterceptor } from './observability/metrics.interceptor';
+
+function getRateLimitConfig() {
+  const ttl = Number(process.env.THROTTLE_TTL_MS ?? 60000);
+  const limit = Number(process.env.THROTTLE_LIMIT ?? 120);
+
+  return {
+    ttl: Number.isFinite(ttl) && ttl > 0 ? ttl : 60000,
+    limit: Number.isFinite(limit) && limit > 0 ? limit : 120,
+  };
+}
 
 @Module({
   imports: [
-    // Rate Limiting
+    ScheduleModule.forRoot(),
+    // Global rate limiting should be lenient enough for normal app usage.
     ThrottlerModule.forRoot([
-      {
-        ttl: 60000,
-        limit: 10,
-      },
+      getRateLimitConfig(),
     ]),
+    ObservabilityModule,
     PrismaModule,
     AuthModule,
     UsersModule,
@@ -44,6 +56,10 @@ import { FeesModule } from './fees/fees.module';
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: MetricsInterceptor,
     },
   ],
 })

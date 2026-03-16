@@ -30,6 +30,7 @@ model User {
   updatedAt DateTime @updatedAt
 
   bills         Bill[]
+  ocrJobs       OcrJob[]
   revokedTokens RevokedToken[]
 
   @@map("users")
@@ -92,6 +93,7 @@ model Bill {
   items        BillItem[]
   participants Participant[]
   fees         Fee[]
+  ocrJob       OcrJob?
 
   @@index([userId])
   @@index([status])
@@ -170,6 +172,36 @@ enum FeeType {
   SERVICE_PERCENTAGE // Taxa de serviço (% sobre total)
   SERVICE_FIXED // Taxa fixa de serviço
   COVER_CHARGE // Couvert fixo
+}
+
+enum OcrJobStatus {
+  PENDING
+  RUNNING
+  FAILED
+  COMPLETED
+}
+
+model OcrJob {
+  id         String       @id @default(uuid())
+  billId      String       @unique
+  userId      String
+  status      OcrJobStatus @default(PENDING)
+  attempts    Int          @default(0)
+  lockedAt    DateTime?
+  availableAt DateTime     @default(now())
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  lastError   String?      @db.Text
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  bill Bill @relation(fields: [billId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, availableAt])
+  @@index([userId])
+  @@index([lockedAt])
+  @@map("ocr_jobs")
 }
 
 model Fee {

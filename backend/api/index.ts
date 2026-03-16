@@ -10,6 +10,7 @@ let cachedServer: ReturnType<typeof express> | null = null;
 
 async function createServer() {
   const server = express();
+  server.set('trust proxy', 1);
   const adapter = new ExpressAdapter(server);
 
   const app = await NestFactory.create(AppModule, adapter, {
