@@ -146,7 +146,7 @@ export class BillsService {
               billId: bill.id,
               type: 'COVER_CHARGE',
               value: valuePerPerson,
-              description: 'Couvert por pessoa',
+              description: 'Couvert artístico por pessoa',
             },
           });
         } catch (feeError) {

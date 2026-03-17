@@ -613,7 +613,7 @@ export default function SummaryScreen() {
                 fees.push({
                   type: "COVER_CHARGE",
                   value: couvertPerPerson * participantsPayingCouvert.length,
-                  description: `Couvert (${participantsPayingCouvert.length} pessoa${participantsPayingCouvert.length > 1 ? "s" : ""})`,
+                  description: `Couvert artístico (${participantsPayingCouvert.length} pessoa${participantsPayingCouvert.length > 1 ? "s" : ""})`,
                 });
               }
 
@@ -904,7 +904,7 @@ export default function SummaryScreen() {
                       </Text>
                     </TouchableOpacity>
 
-                    {/* Couvert com Checkbox */}
+                    {/* Couvert artístico com Checkbox */}
                     <TouchableOpacity
                       style={[styles.dropdownItem, styles.dropdownCouvertItem]}
                       onPress={() => toggleParticipantCouvert(index)}
@@ -931,7 +931,7 @@ export default function SummaryScreen() {
                             { color: colors.couvert },
                           ]}
                         >
-                          Couvert
+                          Couvert artístico
                         </Text>
                       </View>
                       <Text
@@ -1004,7 +1004,7 @@ export default function SummaryScreen() {
                   </Text>
                 </View>
                 <View style={styles.calculationRow}>
-                  <Text style={styles.calculationLabel}>Couvert</Text>
+                  <Text style={styles.calculationLabel}>Couvert artístico</Text>
                   <Text style={styles.calculationValue}>
                     {formatCurrency(
                       summary.participants.reduce(

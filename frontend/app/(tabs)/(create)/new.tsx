@@ -231,7 +231,7 @@ export default function NewBillScreen() {
             />
           </View>
 
-          {/* Seção: Couvert */}
+          {/* Seção: Couvert artístico */}
           <View style={styles.section}>
             <Text
               style={[
@@ -239,7 +239,7 @@ export default function NewBillScreen() {
                 { color: colors.text, fontSize: getFontSize(20) },
               ]}
             >
-              Couvert (opcional)
+              Couvert artístico (opcional)
             </Text>
 
             <Controller

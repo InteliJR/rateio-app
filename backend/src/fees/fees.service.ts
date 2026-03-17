@@ -13,7 +13,7 @@ import { FeeType } from '@prisma/client';
 const FEE_DEFAULT_DESCRIPTIONS: Record<FeeType, string> = {
   [FeeType.SERVICE_PERCENTAGE]: 'Taxa de serviço',
   [FeeType.SERVICE_FIXED]: 'Taxa de serviço fixa',
-  [FeeType.COVER_CHARGE]: 'Couvert',
+  [FeeType.COVER_CHARGE]: 'Couvert artístico',
 };
 
 // Mapeamento de descrições amigáveis por tipo de taxa

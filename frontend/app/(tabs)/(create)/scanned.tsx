@@ -1252,13 +1252,13 @@ export default function ScannedBillScreen() {
           billId: id as string,
           type: FeeType.COVER_CHARGE,
           value: newValue,
-          description: "Couvert por pessoa",
+          description: "Couvert artístico por pessoa",
         });
         setFees((prev) => [...prev, newFee]);
       }
 
       setEditingCouvert(false);
-      console.log("[Scanned] Couvert saved:", newValue);
+      console.log("[Scanned] Couvert artístico saved:", newValue);
     } catch (error: any) {
       console.error("Error saving couvert:", error);
       Alert.alert("Erro", error.message || "Não foi possível salvar o couvert");
@@ -1806,14 +1806,14 @@ export default function ScannedBillScreen() {
                     )}
                   </View>
 
-                  {/* Couvert */}
+                  {/* Couvert artístico */}
                   <View
                     style={[styles.feeRow, { borderBottomColor: colors.cardBorder }]}
                   >
                     <Text
                       style={[styles.feeLabel, { color: colors.textSecondary }]}
                     >
-                      Couvert (por pessoa)
+                      Couvert artístico (por pessoa)
                     </Text>
                     {editingCouvert && !isCompleted ? (
                       <View style={styles.feeEditContainer}>

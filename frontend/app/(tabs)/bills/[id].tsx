@@ -489,7 +489,7 @@ export default function BillDetail() {
                               {fee.type === "SERVICE_PERCENTAGE"
                                 ? "Taxa de Serviço"
                                 : fee.type === "COVER_CHARGE"
-                                  ? "Couvert"
+                                  ? "Couvert artístico"
                                   : "Taxa"}
                             </Text>
                             <Text

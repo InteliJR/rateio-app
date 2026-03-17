@@ -505,7 +505,7 @@ Usuário atribui itens às pessoas
 Usuário adiciona taxas opcionais
          │
          ├─→ Garçom (% ou fixo)
-         ├─→ Couvert (fixo)
+         ├─→ Couvert artístico (fixo)
          │
          ▼
 App calcula divisão (preview local)

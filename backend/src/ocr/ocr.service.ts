@@ -227,7 +227,7 @@ JSON esperado:
 
 Exemplo 2 - Conta com couvert e desconto:
 BAR DO ZÉ
-Couvert 2x 3,50 7,00
+Couvert artístico 2x 3,50 7,00
 Cerveja Brahma 3x 8,00 24,00
 Porção de Amendoim 1x 15,00 15,00
 Subtotal: 46,00
@@ -245,7 +245,7 @@ JSON esperado:
   "subtotal": 46.00,
   "totalAmount": 45.10,
   "taxes": [
-    {"type": "COVER_CHARGE", "description": "Couvert", "value": 7.00, "percentage": null},
+    {"type": "COVER_CHARGE", "description": "Couvert artístico", "value": 7.00, "percentage": null},
     {"type": "SERVICE", "description": "Taxa de Serviço", "value": 4.10, "percentage": 10}
   ],
   "discounts": [
