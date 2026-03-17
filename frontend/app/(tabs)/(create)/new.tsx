@@ -293,6 +293,7 @@ export default function NewBillScreen() {
                           backgroundColor: colors.inputBackground,
                           borderColor: colors.primary,
                           color: colors.text,
+                          fontSize: getFontSize(16),
                         },
                       ]}
                       value={participant.name}
@@ -315,7 +316,10 @@ export default function NewBillScreen() {
                     <TouchableOpacity
                       style={[
                         styles.participantNameButton,
-                        { backgroundColor: colors.backgroundSecondary },
+                        {
+                          backgroundColor: colors.backgroundSecondary,
+                          borderColor: colors.cardBorder,
+                        },
                       ]}
                       onPress={() => setEditingId(participant.id)}
                       disabled={isLoading}
@@ -323,7 +327,7 @@ export default function NewBillScreen() {
                       <Text
                         style={[
                           styles.participantNameText,
-                          { color: colors.text },
+                          { color: colors.text, fontSize: getFontSize(16) },
                         ]}
                       >
                         {participant.name}
@@ -440,7 +444,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#f5f5f5",
+    borderWidth: 1,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,

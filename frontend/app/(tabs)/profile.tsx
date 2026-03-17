@@ -144,10 +144,24 @@ export default function ProfileScreen() {
       <View style={styles.profileSection}>
         <View style={styles.avatarContainer}>
           {userAvatarUrl ? (
-            <Image source={{ uri: userAvatarUrl }} style={styles.avatarImage} />
+            <Image
+              source={{ uri: userAvatarUrl }}
+              style={[
+                styles.avatarImage,
+                { backgroundColor: colors.backgroundTertiary },
+              ]}
+            />
           ) : (
-            <View style={styles.avatar}>
-              <Ionicons name="person" size={60} color="#FFF" />
+            <View
+              style={[
+                styles.avatar,
+                {
+                  backgroundColor: colors.primary,
+                  shadowColor: colors.shadow,
+                },
+              ]}
+            >
+              <Ionicons name="person" size={60} color={colors.accent} />
             </View>
           )}
         </View>
@@ -176,7 +190,11 @@ export default function ProfileScreen() {
         <TouchableOpacity
           style={[
             styles.menuItem,
-            { backgroundColor: colors.menuItem, shadowColor: colors.shadow },
+            {
+              backgroundColor: colors.menuItem,
+              borderColor: colors.cardBorder,
+              shadowColor: colors.shadow,
+            },
           ]}
           onPress={handleEditProfile}
         >
@@ -201,7 +219,11 @@ export default function ProfileScreen() {
         <TouchableOpacity
           style={[
             styles.menuItem,
-            { backgroundColor: colors.menuItem, shadowColor: colors.shadow },
+            {
+              backgroundColor: colors.menuItem,
+              borderColor: colors.cardBorder,
+              shadowColor: colors.shadow,
+            },
           ]}
           onPress={handleSecurity}
         >
@@ -230,7 +252,11 @@ export default function ProfileScreen() {
         <TouchableOpacity
           style={[
             styles.menuItem,
-            { backgroundColor: colors.menuItem, shadowColor: colors.shadow },
+            {
+              backgroundColor: colors.menuItem,
+              borderColor: colors.cardBorder,
+              shadowColor: colors.shadow,
+            },
           ]}
           onPress={handleSettings}
         >
@@ -255,12 +281,20 @@ export default function ProfileScreen() {
         <TouchableOpacity
           style={[
             styles.menuItem,
-            { backgroundColor: colors.menuItem, shadowColor: colors.shadow },
+            {
+              backgroundColor: colors.menuItem,
+              borderColor: colors.cardBorder,
+              shadowColor: colors.shadow,
+            },
           ]}
           onPress={handleLogout}
         >
           <View style={styles.menuItemLeft}>
-            <Ionicons name="log-out-outline" size={24} color="#E53935" />
+            <Ionicons
+              name="log-out-outline"
+              size={24}
+              color={colors.error}
+            />
             <Text
               style={[
                 styles.menuItemText,
@@ -344,6 +378,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 16,
     backgroundColor: "#FFF",
+    borderWidth: 1,
     borderRadius: 12,
     marginBottom: 12,
     shadowColor: "#000",

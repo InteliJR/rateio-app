@@ -167,6 +167,7 @@ const styles = StyleSheet.create({
   },
   inputError: {
     borderColor: "#ff4d4d",
+    borderBottomWidth: 1,
   },
   prefix: {
     fontSize: 16,

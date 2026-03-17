@@ -29,7 +29,14 @@ export default function AccessibilityScreen() {
       {/* Back Button */}
       <TouchableOpacity
         onPress={() => router.push("/profile/config")}
-        style={[styles.backButton, { backgroundColor: colors.cardBackground }]}
+        style={[
+          styles.backButton,
+          {
+            backgroundColor: colors.cardBackground,
+            borderColor: colors.cardBorder,
+            shadowColor: colors.shadow,
+          },
+        ]}
       >
         <Ionicons name="chevron-back" size={28} color={colors.text} />
       </TouchableOpacity>
@@ -51,7 +58,10 @@ export default function AccessibilityScreen() {
           <View
             style={[
               styles.optionItem,
-              { backgroundColor: colors.cardBackground },
+              {
+                backgroundColor: colors.cardBackground,
+                borderColor: colors.cardBorder,
+              },
             ]}
           >
             <Text
@@ -74,7 +84,10 @@ export default function AccessibilityScreen() {
           <View
             style={[
               styles.sliderContainer,
-              { backgroundColor: colors.cardBackground },
+              {
+                backgroundColor: colors.cardBackground,
+                borderColor: colors.cardBorder,
+              },
             ]}
           >
             <View style={styles.sliderHeader}>
@@ -144,6 +157,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
+    borderWidth: 1,
     backgroundColor: "#FFF",
     justifyContent: "center",
     alignItems: "center",
@@ -174,6 +188,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: 16,
     paddingHorizontal: 16,
+    borderWidth: 1,
     backgroundColor: "#FFF",
   },
   optionText: {
@@ -183,6 +198,7 @@ const styles = StyleSheet.create({
   sliderContainer: {
     paddingVertical: 16,
     paddingHorizontal: 16,
+    borderWidth: 1,
     backgroundColor: "#FFF",
   },
   sliderHeader: {

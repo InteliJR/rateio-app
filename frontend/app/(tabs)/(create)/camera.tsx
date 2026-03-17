@@ -496,7 +496,7 @@ export default function CameraScreen() {
   if (!permission) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -508,11 +508,14 @@ export default function CameraScreen() {
           Precisamos de acesso à câmera
         </Text>
         <TouchableOpacity
-          style={styles.permissionButton}
+          style={[styles.permissionButton, { backgroundColor: colors.primary }]}
           onPress={requestPermission}
         >
           <Text
-            style={[styles.permissionButtonText, { fontSize: getFontSize(16) }]}
+            style={[
+              styles.permissionButtonText,
+              { color: colors.accent, fontSize: getFontSize(16) },
+            ]}
           >
             Conceder Permissão
           </Text>
@@ -562,11 +565,18 @@ export default function CameraScreen() {
                     : "warning"
               }
               size={14}
-              color="#fff"
+              color={colors.text}
             />
-            <Text style={styles.qualityBadgeText}>{badge.label}</Text>
+            <Text style={[styles.qualityBadgeText, { color: colors.text }]}>
+              {badge.label}
+            </Text>
             {imageResolution && (
-              <Text style={styles.qualityResolutionText}>
+              <Text
+                style={[
+                  styles.qualityResolutionText,
+                  { color: colors.textSecondary },
+                ]}
+              >
                 {imageResolution.width}×{imageResolution.height}
               </Text>
             )}
@@ -636,27 +646,53 @@ export default function CameraScreen() {
         {!isLoading && (
           <View style={styles.previewActions}>
             <TouchableOpacity
-              style={styles.retakeButton}
+              style={[
+                styles.retakeButton,
+                {
+                  borderColor: colors.cardBorder,
+                  backgroundColor: colors.backgroundTertiary,
+                },
+              ]}
               onPress={retakePicture}
             >
-              <Ionicons name="camera-outline" size={20} color="#FFFFFF" />
-              <Text style={styles.retakeButtonText}>Refazer</Text>
+              <Ionicons name="camera-outline" size={20} color={colors.text} />
+              <Text style={[styles.retakeButtonText, { color: colors.text }]}>
+                Refazer
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.cropButton}
+              style={[
+                styles.cropButton,
+                {
+                  borderColor: colors.cardBorder,
+                  backgroundColor: colors.backgroundTertiary,
+                },
+              ]}
               onPress={() => setShowCropModal(true)}
             >
-              <Ionicons name="crop-outline" size={20} color="#FFFFFF" />
-              <Text style={styles.cropButtonText}>Recortar</Text>
+              <Ionicons name="crop-outline" size={20} color={colors.text} />
+              <Text style={[styles.cropButtonText, { color: colors.text }]}>
+                Recortar
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.confirmButton}
+              style={[
+                styles.confirmButton,
+                {
+                  backgroundColor: colors.primary,
+                  shadowColor: colors.primary,
+                },
+              ]}
               onPress={confirmPicture}
             >
-              <Ionicons name="checkmark" size={20} color="#FFFFFF" />
-              <Text style={styles.confirmButtonText}>Usar foto</Text>
+              <Ionicons name="checkmark" size={20} color={colors.accent} />
+              <Text
+                style={[styles.confirmButtonText, { color: colors.accent }]}
+              >
+                Usar foto
+              </Text>
             </TouchableOpacity>
           </View>
         )}
@@ -696,7 +732,7 @@ export default function CameraScreen() {
         <View style={styles.controls}>
           {/* Botão Galeria */}
           <TouchableOpacity style={styles.iconButton} onPress={pickFromGallery}>
-            <Ionicons name="images-outline" size={28} color="#FFFFFF" />
+            <Ionicons name="images-outline" size={28} color={colors.text} />
           </TouchableOpacity>
 
           {/* Botão Capturar */}
@@ -706,9 +742,14 @@ export default function CameraScreen() {
             disabled={isLoading}
           >
             {isLoading ? (
-              <ActivityIndicator size="large" color="#8B3FD9" />
+              <ActivityIndicator size="large" color={colors.primary} />
             ) : (
-              <View style={styles.captureButtonInner} />
+              <View
+                style={[
+                  styles.captureButtonInner,
+                  { backgroundColor: colors.primary },
+                ]}
+              />
             )}
           </TouchableOpacity>
 
@@ -717,7 +758,11 @@ export default function CameraScreen() {
             style={styles.iconButton}
             onPress={toggleCameraFacing}
           >
-            <Ionicons name="camera-reverse-outline" size={28} color="#FFFFFF" />
+            <Ionicons
+              name="camera-reverse-outline"
+              size={28}
+              color={colors.text}
+            />
           </TouchableOpacity>
         </View>
       </CameraView>

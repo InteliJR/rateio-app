@@ -199,7 +199,10 @@ export default function BillsScreen() {
             }}
           >
             <View
-              style={[styles.filterCheckbox, { borderColor: colors.divider }]}
+              style={[
+                styles.filterCheckbox,
+                { borderColor: colors.primary, backgroundColor: colors.cardBackground },
+              ]}
             >
               {selectedDateFilter === filter.id && (
                 <MaterialCommunityIcons
@@ -434,9 +437,7 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   filtersContainer: {
-    backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
-    borderBottomColor: "#D0D0D0",
     paddingBottom: 16,
   },
   filterHeader: {
@@ -487,9 +488,7 @@ const styles = StyleSheet.create({
   card: {
     paddingHorizontal: 20,
     paddingVertical: 14,
-    backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
-    borderBottomColor: "#E8E8E8",
   },
   cardContent: {
     flexDirection: "row",

@@ -21,6 +21,7 @@ import participantsService, {
   Participant,
 } from "../../../services/participants.service";
 import feesService, { FeeType } from "../../../services/fees.service";
+import { useTheme } from "../../../contexts/ThemeContext";
 
 interface ParticipantSummary {
   id: string;
@@ -62,6 +63,7 @@ const EMPTY_SUMMARY: BillSummaryData = {
 };
 
 export default function SummaryScreen() {
+  const { colors, getFontSize } = useTheme();
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const { addBill } = useBillStore();
@@ -697,18 +699,32 @@ export default function SummaryScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+    >
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#8B2E8F" />
-          <Text style={styles.loadingText}>Carregando resumo...</Text>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text
+            style={[
+              styles.loadingText,
+              { color: colors.textSecondary, fontSize: getFontSize(16) },
+            ]}
+          >
+            Carregando resumo...
+          </Text>
         </View>
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          <View style={styles.contentContainer}>
+          <View
+            style={[
+              styles.contentContainer,
+              { backgroundColor: colors.background },
+            ]}
+          >
             {/* Título com Seta de Voltar */}
             <View style={styles.titleSection}>
               <TouchableOpacity
@@ -726,7 +742,13 @@ export default function SummaryScreen() {
             {summary.participants.map((participant, index) => (
               <View
                 key={`participant-${index}`}
-                style={styles.participantCardWrapper}
+                style={[
+                  styles.participantCardWrapper,
+                  {
+                    backgroundColor: colors.cardBackground,
+                    borderColor: colors.cardBorder,
+                  },
+                ]}
               >
                 <TouchableOpacity
                   style={styles.participantCardMain}
@@ -736,12 +758,14 @@ export default function SummaryScreen() {
                   activeOpacity={0.7}
                 >
                   <View style={styles.participantCardLeft}>
-                    <Text style={styles.participantName}>
+                    <Text style={[styles.participantName, { color: colors.text }]}>
                       {participant.name}
                     </Text>
                   </View>
                   <View style={styles.participantCardRight}>
-                    <Text style={styles.participantAmount}>
+                    <Text
+                      style={[styles.participantAmount, { color: colors.text }]}
+                    >
                       {formatCurrency(participant.totalAmount)}
                     </Text>
                     <MaterialCommunityIcons
@@ -751,24 +775,56 @@ export default function SummaryScreen() {
                           : "chevron-right"
                       }
                       size={20}
-                      color="#666"
+                      color={colors.textSecondary}
                     />
                   </View>
                 </TouchableOpacity>
 
                 {/* Dropdown com itens, taxas e totais */}
                 {expandedIndex === index && (
-                  <View style={styles.dropdownWrapper}>
+                  <View
+                    style={[
+                      styles.dropdownWrapper,
+                      {
+                        backgroundColor: colors.dropdownBackground,
+                        borderTopColor: colors.divider,
+                      },
+                    ]}
+                  >
                     {/* Título Itens */}
-                    <View style={styles.sectionHeader}>
-                      <Text style={styles.sectionHeaderText}>Itens</Text>
+                    <View
+                      style={[
+                        styles.sectionHeader,
+                        { backgroundColor: colors.backgroundTertiary },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.sectionHeaderText,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        Itens
+                      </Text>
                     </View>
 
                     {/* Lista de Itens */}
                     {participant.items.map((item, itemIdx) => (
                       <View key={`item-${itemIdx}`} style={styles.dropdownItem}>
-                        <Text style={styles.dropdownItemText}>{item.name}</Text>
-                        <Text style={styles.dropdownItemAmount}>
+                        <Text
+                          style={[
+                            styles.dropdownItemText,
+                            { color: colors.textSecondary },
+                          ]}
+                        >
+                          {item.name}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.dropdownItemAmount,
+                            { color: colors.textSecondary },
+                          ]}
+                        >
                           {formatCurrency(item.amount)}
                         </Text>
                       </View>
@@ -776,18 +832,34 @@ export default function SummaryScreen() {
 
                     {/* Subtotal */}
                     <View style={[styles.dropdownItem, styles.subtotalItem]}>
-                      <Text style={styles.subtotalText}>Subtotal</Text>
-                      <Text style={styles.subtotalAmount}>
+                      <Text style={[styles.subtotalText, { color: colors.text }]}>
+                        Subtotal
+                      </Text>
+                      <Text
+                        style={[styles.subtotalAmount, { color: colors.text }]}
+                      >
                         {formatCurrency(participant.subtotal)}
                       </Text>
                     </View>
 
                     {/* Divider */}
-                    <View style={styles.divider} />
+                    <View
+                      style={[styles.divider, { backgroundColor: colors.divider }]}
+                    />
 
                     {/* Seção Taxas e Encargos */}
-                    <View style={styles.sectionHeader}>
-                      <Text style={styles.sectionHeaderText}>
+                    <View
+                      style={[
+                        styles.sectionHeader,
+                        { backgroundColor: colors.backgroundTertiary },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.sectionHeaderText,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
                         Taxas e Encargos
                       </Text>
                     </View>
@@ -809,15 +881,25 @@ export default function SummaryScreen() {
                             <MaterialCommunityIcons
                               name="check"
                               size={12}
-                              color="#8B2E8F"
+                              color={colors.primary}
                             />
                           )}
                         </View>
-                        <Text style={styles.dropdownFeeText}>
+                        <Text
+                          style={[
+                            styles.dropdownFeeText,
+                            { color: colors.textTertiary },
+                          ]}
+                        >
                           Taxa de Serviço
                         </Text>
                       </View>
-                      <Text style={styles.dropdownItemAmount}>
+                      <Text
+                        style={[
+                          styles.dropdownItemAmount,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
                         {formatCurrency(participant.fees[0]?.amount || 0)}
                       </Text>
                     </TouchableOpacity>
@@ -839,13 +921,25 @@ export default function SummaryScreen() {
                             <MaterialCommunityIcons
                               name="check"
                               size={12}
-                              color="#8B2E8F"
+                              color={colors.primary}
                             />
                           )}
                         </View>
-                        <Text style={styles.dropdownCouvertText}>Couvert</Text>
+                        <Text
+                          style={[
+                            styles.dropdownCouvertText,
+                            { color: colors.couvert },
+                          ]}
+                        >
+                          Couvert
+                        </Text>
                       </View>
-                      <Text style={styles.dropdownItemAmount}>
+                      <Text
+                        style={[
+                          styles.dropdownItemAmount,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
                         {formatCurrency(
                           participant.paysCouvert ? participant.couvert : 0,
                         )}
@@ -853,12 +947,20 @@ export default function SummaryScreen() {
                     </TouchableOpacity>
 
                     {/* Divider */}
-                    <View style={styles.divider} />
+                    <View
+                      style={[styles.divider, { backgroundColor: colors.divider }]}
+                    />
 
                     {/* Total Final */}
                     <View style={[styles.dropdownItem, styles.totalItem]}>
-                      <Text style={styles.totalText}>Total Final</Text>
-                      <Text style={styles.totalAmount}>
+                      <Text
+                        style={[styles.totalText, { color: colors.primary }]}
+                      >
+                        Total Final
+                      </Text>
+                      <Text
+                        style={[styles.totalAmount, { color: colors.primary }]}
+                      >
                         {formatCurrency(participant.totalAmount)}
                       </Text>
                     </View>
@@ -868,9 +970,19 @@ export default function SummaryScreen() {
             ))}
 
             {/* Card do Total */}
-            <View style={styles.totalCardWrapper}>
-              <Text style={styles.totalCardLabel}>Valor Total</Text>
-              <Text style={styles.totalCardAmount}>
+            <View
+              style={[
+                styles.totalCardWrapper,
+                {
+                  backgroundColor: colors.cardBackground,
+                  borderColor: colors.cardBorder,
+                },
+              ]}
+            >
+              <Text style={[styles.totalCardLabel, { color: colors.text }]}>
+                Valor Total
+              </Text>
+              <Text style={[styles.totalCardAmount, { color: colors.text }]}>
                 {formatCurrency(summary.grandTotal)}
               </Text>
             </View>
@@ -908,13 +1020,18 @@ export default function SummaryScreen() {
                     {formatCurrency(summary.grandTotal)}
                   </Text>
                 </View>
-                <View style={styles.validationRow}>
+                <View
+                  style={[
+                    styles.validationRow,
+                    { borderTopColor: colors.divider },
+                  ]}
+                >
                   <MaterialCommunityIcons
                     name="check-circle"
                     size={16}
-                    color="#10b981"
+                    color={colors.success}
                   />
-                  <Text style={styles.validationText}>
+                  <Text style={[styles.validationText, { color: colors.success }]}>
                     {summary.participants.length} participante
                     {summary.participants.length !== 1 ? "s" : ""} • Soma
                     verificada:{" "}
@@ -931,27 +1048,43 @@ export default function SummaryScreen() {
 
             {/* Botão Finalizar/Salvar */}
             {isCompleted ? (
-              <View style={[styles.saveButton, styles.completedButton]}>
+              <View
+                style={[
+                  styles.saveButton,
+                  styles.completedButton,
+                  { backgroundColor: colors.success },
+                ]}
+              >
                 <MaterialCommunityIcons
                   name="check-circle"
                   size={20}
-                  color="#FFF"
+                  color={colors.accent}
                 />
-                <Text style={styles.saveButtonText}>Conta Finalizada</Text>
+                <Text style={[styles.saveButtonText, { color: colors.accent }]}>
+                  Conta Finalizada
+                </Text>
               </View>
             ) : (
               <TouchableOpacity
-                style={[styles.saveButton, saving && styles.savingButton]}
+                style={[
+                  styles.saveButton,
+                  { backgroundColor: colors.primary },
+                  saving && styles.savingButton,
+                ]}
                 onPress={handleFinalize}
                 disabled={saving}
               >
                 {saving ? (
                   <>
-                    <ActivityIndicator size="small" color="#FFF" />
-                    <Text style={styles.saveButtonText}>Finalizando...</Text>
+                    <ActivityIndicator size="small" color={colors.accent} />
+                    <Text style={[styles.saveButtonText, { color: colors.accent }]}>
+                      Finalizando...
+                    </Text>
                   </>
                 ) : (
-                  <Text style={styles.saveButtonText}>Finalizar Conta</Text>
+                  <Text style={[styles.saveButtonText, { color: colors.accent }]}>
+                    Finalizar Conta
+                  </Text>
                 )}
               </TouchableOpacity>
             )}

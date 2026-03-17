@@ -1319,7 +1319,7 @@ export default function ScannedBillScreen() {
                     <MaterialCommunityIcons
                       name="pencil-outline"
                       size={18}
-                      color="#fff"
+                      color={colors.accent}
                     />
                   </View>
                   <View style={styles.editModeBannerContent}>
@@ -1338,7 +1338,7 @@ export default function ScannedBillScreen() {
                   <MaterialCommunityIcons
                     name="check-circle"
                     size={20}
-                    color="#10b981"
+                    color={colors.success}
                   />
                   <Text style={styles.completedBannerText}>
                     Conta finalizada - Somente leitura
@@ -1424,7 +1424,7 @@ export default function ScannedBillScreen() {
                   <Ionicons
                     name="alert-circle-outline"
                     size={48}
-                    color="#FF6B6B"
+                    color={colors.error}
                   />
                   <Text style={styles.errorTitle}>
                     Não foi possível reconhecer os itens
@@ -1442,9 +1442,13 @@ export default function ScannedBillScreen() {
                       disabled={retryingOcr}
                     >
                       {retryingOcr ? (
-                        <ActivityIndicator size="small" color="#fff" />
+                        <ActivityIndicator size="small" color={colors.accent} />
                       ) : (
-                        <Ionicons name="refresh-outline" size={16} color="#fff" />
+                        <Ionicons
+                          name="refresh-outline"
+                          size={16}
+                          color={colors.accent}
+                        />
                       )}
                       <Text style={styles.retryOcrButtonText}>
                         {retryingOcr ? "Processando..." : "Tentar novamente"}
@@ -1459,7 +1463,11 @@ export default function ScannedBillScreen() {
                         })
                       }
                     >
-                      <Ionicons name="camera-outline" size={16} color="#81007F" />
+                      <Ionicons
+                        name="camera-outline"
+                        size={16}
+                        color={colors.primary}
+                      />
                       <Text style={styles.retakePhotoButtonText}>
                         Nova foto
                       </Text>
@@ -1568,13 +1576,13 @@ export default function ScannedBillScreen() {
                                   {isSavingThis ? (
                                     <ActivityIndicator
                                       size="small"
-                                      color="#8B2E8F"
+                                      color={colors.primary}
                                     />
                                   ) : (
                                     <Ionicons
                                       name="checkmark"
                                       size={18}
-                                      color="#10b981"
+                                      color={colors.success}
                                     />
                                   )}
                                 </TouchableOpacity>
@@ -1585,7 +1593,7 @@ export default function ScannedBillScreen() {
                                   <Ionicons
                                     name="close"
                                     size={18}
-                                    color="#ef4444"
+                                    color={colors.error}
                                   />
                                 </TouchableOpacity>
                               </View>
@@ -1606,7 +1614,7 @@ export default function ScannedBillScreen() {
                                     <Ionicons
                                       name="pencil"
                                       size={12}
-                                      color="#999"
+                                      color={colors.textTertiary}
                                     />
                                   )}
                                 </TouchableOpacity>
@@ -1620,7 +1628,7 @@ export default function ScannedBillScreen() {
                                     <Ionicons
                                       name="close-circle"
                                       size={18}
-                                      color="#ef4444"
+                                      color={colors.error}
                                     />
                                   </TouchableOpacity>
                                 )}
@@ -1659,12 +1667,12 @@ export default function ScannedBillScreen() {
                           style={styles.feeActionBtn}
                         >
                           {savingFee ? (
-                            <ActivityIndicator size="small" color="#8B2E8F" />
+                            <ActivityIndicator size="small" color={colors.primary} />
                           ) : (
                             <Ionicons
                               name="checkmark"
                               size={18}
-                              color="#10b981"
+                              color={colors.success}
                             />
                           )}
                         </TouchableOpacity>
@@ -1681,7 +1689,11 @@ export default function ScannedBillScreen() {
                           disabled={savingFee}
                           style={styles.feeActionBtn}
                         >
-                          <Ionicons name="close" size={18} color="#ef4444" />
+                          <Ionicons
+                            name="close"
+                            size={18}
+                            color={colors.error}
+                          />
                         </TouchableOpacity>
                       </View>
                     ) : (
@@ -1699,7 +1711,11 @@ export default function ScannedBillScreen() {
                           %
                         </Text>
                         {!isCompleted && (
-                          <Ionicons name="pencil" size={14} color="#999" />
+                          <Ionicons
+                            name="pencil"
+                            size={14}
+                            color={colors.textTertiary}
+                          />
                         )}
                       </TouchableOpacity>
                     )}
@@ -1728,12 +1744,12 @@ export default function ScannedBillScreen() {
                           style={styles.feeActionBtn}
                         >
                           {savingFee ? (
-                            <ActivityIndicator size="small" color="#8B2E8F" />
+                            <ActivityIndicator size="small" color={colors.primary} />
                           ) : (
                             <Ionicons
                               name="checkmark"
                               size={18}
-                              color="#10b981"
+                              color={colors.success}
                             />
                           )}
                         </TouchableOpacity>
@@ -1752,7 +1768,11 @@ export default function ScannedBillScreen() {
                           disabled={savingFee}
                           style={styles.feeActionBtn}
                         >
-                          <Ionicons name="close" size={18} color="#ef4444" />
+                          <Ionicons
+                            name="close"
+                            size={18}
+                            color={colors.error}
+                          />
                         </TouchableOpacity>
                       </View>
                     ) : (
@@ -1771,7 +1791,11 @@ export default function ScannedBillScreen() {
                             .replace(".", ",")}
                         </Text>
                         {!isCompleted && (
-                          <Ionicons name="pencil" size={14} color="#999" />
+                          <Ionicons
+                            name="pencil"
+                            size={14}
+                            color={colors.textTertiary}
+                          />
                         )}
                       </TouchableOpacity>
                     )}

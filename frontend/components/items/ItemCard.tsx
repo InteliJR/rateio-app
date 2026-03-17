@@ -189,12 +189,10 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff",
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#ccc",
     marginBottom: 8,
   },
   deleteButton: {
@@ -218,7 +216,6 @@ const styles = StyleSheet.create({
   },
   input: {
     fontSize: 16,
-    color: "#000",
     padding: 0,
     borderBottomWidth: 1,
     borderBottomColor: "transparent", // Looks cleaner, can add color on focus if needed
@@ -230,13 +227,11 @@ const styles = StyleSheet.create({
     textAlign: "center",
     width: 30,
     borderBottomWidth: 1,
-    borderBottomColor: "#ddd",
   },
   priceInput: {
     textAlign: "right",
     minWidth: 60,
     borderBottomWidth: 1,
-    borderBottomColor: "#ddd",
   },
   inputWrapper: {
     flexDirection: "row",
@@ -244,12 +239,10 @@ const styles = StyleSheet.create({
   },
   suffix: {
     fontSize: 16,
-    color: "#666",
     marginLeft: 2,
   },
   prefix: {
     fontSize: 14,
-    color: "#666",
     marginRight: 2,
   },
   expandButton: {

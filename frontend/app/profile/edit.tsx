@@ -211,7 +211,10 @@ export default function EditProfileScreen() {
               <>
                 <Image
                   source={{ uri: avatarUrl }}
-                  style={styles.avatarImage}
+                  style={[
+                    styles.avatarImage,
+                    { backgroundColor: colors.backgroundTertiary },
+                  ]}
                   onError={(e) =>
                     console.error(
                       "[EDIT] Image load error:",
@@ -224,8 +227,10 @@ export default function EditProfileScreen() {
                 />
               </>
             ) : (
-              <View style={styles.avatar}>
-                <Ionicons name="person" size={60} color="#FFF" />
+              <View
+                style={[styles.avatar, { backgroundColor: colors.primary }]}
+              >
+                <Ionicons name="person" size={60} color={colors.accent} />
               </View>
             )}
             <TouchableOpacity
@@ -233,7 +238,7 @@ export default function EditProfileScreen() {
                 styles.cameraButton,
                 {
                   backgroundColor: colors.background,
-                  borderColor: colors.background,
+                  borderColor: colors.cardBackground,
                 },
               ]}
               onPress={pickImage}
@@ -378,10 +383,18 @@ export default function EditProfileScreen() {
           <View
             style={[
               styles.modalContent,
-              { backgroundColor: colors.cardBackground },
+              {
+                backgroundColor: colors.cardBackground,
+                borderColor: colors.cardBorder,
+              },
             ]}
           >
-            <View style={styles.modalHeader}>
+            <View
+              style={[
+                styles.modalHeader,
+                { borderBottomColor: colors.divider },
+              ]}
+            >
               <TouchableOpacity onPress={closeEditModal}>
                 <Text
                   style={[
@@ -570,6 +583,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
+    borderWidth: 1,
     paddingBottom: 40,
     minHeight: 300,
   },
