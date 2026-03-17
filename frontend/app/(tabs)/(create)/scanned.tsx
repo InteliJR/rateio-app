@@ -1420,22 +1420,33 @@ export default function ScannedBillScreen() {
 
               {/* Mensagem quando OCR falhou */}
               {billStatus === "OCR_FAILED" && items.length === 0 && (
-                <View style={styles.errorContainer}>
+                <View
+                  style={[
+                    styles.errorContainer,
+                    {
+                      backgroundColor: colors.warningLight,
+                      borderColor: colors.cardBorder,
+                    },
+                  ]}
+                >
                   <Ionicons
                     name="alert-circle-outline"
                     size={48}
                     color={colors.error}
                   />
-                  <Text style={styles.errorTitle}>
+                  <Text style={[styles.errorTitle, { color: colors.text }]}>
                     Não foi possível reconhecer os itens
                   </Text>
-                  <Text style={styles.errorText}>
+                  <Text
+                    style={[styles.errorText, { color: colors.textSecondary }]}
+                  >
                     Tente reprocessar o OCR ou adicione os itens manualmente
                   </Text>
                   <View style={styles.retryButtonsRow}>
                     <TouchableOpacity
                       style={[
                         styles.retryOcrButton,
+                        { backgroundColor: colors.primary },
                         retryingOcr && styles.retryButtonDisabled,
                       ]}
                       onPress={handleRetryOcr}
@@ -1450,12 +1461,23 @@ export default function ScannedBillScreen() {
                           color={colors.accent}
                         />
                       )}
-                      <Text style={styles.retryOcrButtonText}>
+                      <Text
+                        style={[
+                          styles.retryOcrButtonText,
+                          { color: colors.accent },
+                        ]}
+                      >
                         {retryingOcr ? "Processando..." : "Tentar novamente"}
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={styles.retakePhotoButton}
+                      style={[
+                        styles.retakePhotoButton,
+                        {
+                          borderColor: colors.primary,
+                          backgroundColor: colors.background,
+                        },
+                      ]}
                       onPress={() =>
                         router.replace({
                           pathname: "/(tabs)/(create)/camera",
@@ -1468,7 +1490,12 @@ export default function ScannedBillScreen() {
                         size={16}
                         color={colors.primary}
                       />
-                      <Text style={styles.retakePhotoButtonText}>
+                      <Text
+                        style={[
+                          styles.retakePhotoButtonText,
+                          { color: colors.primary },
+                        ]}
+                      >
                         Nova foto
                       </Text>
                     </TouchableOpacity>
@@ -1510,7 +1537,10 @@ export default function ScannedBillScreen() {
                 <View
                   style={[
                     styles.participantsSection,
-                    { backgroundColor: colors.backgroundSecondary },
+                    {
+                      backgroundColor: colors.backgroundSecondary,
+                      borderColor: colors.cardBorder,
+                    },
                   ]}
                 >
                   <View style={styles.participantsSectionHeader}>

@@ -40,6 +40,12 @@ export class BillsService {
     private feesService: FeesService,
   ) { }
 
+  private triggerOcrProcessing() {
+    void this.ocrQueue.processPendingJobs().catch((error) => {
+      console.error('[BillsService] Falha ao disparar processamento OCR:', error);
+    });
+  }
+
   /**
    * Criar conta com upload de imagem e OCR
    */
@@ -76,6 +82,7 @@ export class BillsService {
       });
 
       await this.ocrQueue.enqueue(bill.id, userId);
+      this.triggerOcrProcessing();
 
       return {
         ...bill,
@@ -238,6 +245,7 @@ export class BillsService {
     });
 
     await this.ocrQueue.enqueue(updatedBill.id, userId);
+    this.triggerOcrProcessing();
 
     return {
       ...updatedBill,
@@ -279,6 +287,7 @@ export class BillsService {
     });
 
     await this.ocrQueue.enqueue(billId, userId);
+    this.triggerOcrProcessing();
 
     return {
       ...updatedBill,
@@ -451,6 +460,10 @@ export class BillsService {
 
     if (bill.userId !== userId) {
       throw new ForbiddenException('Você não tem acesso a esta conta');
+    }
+
+    if (bill.status === BillStatus.PENDING_OCR) {
+      this.triggerOcrProcessing();
     }
 
     // Gerar nova URL pré-assinada (caso a antiga tenha expirado)
