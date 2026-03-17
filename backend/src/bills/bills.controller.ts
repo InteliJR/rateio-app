@@ -14,7 +14,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { SkipThrottle } from '@nestjs/throttler';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { BillsService } from './bills.service';
 import { CreateBillDto } from './dto/create-bill.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
@@ -109,6 +109,7 @@ export class BillsController {
   /**
    * Upload de foto da conta + OCR automático
    */
+  @Throttle({ default: { limit: 2, ttl: 60000 } })
   @Post()
   @UseInterceptors(FileInterceptor('image'))
   async create(
@@ -132,6 +133,7 @@ export class BillsController {
    * Upload de foto para conta existente + OCR
    * IMPORTANTE: Esta rota deve vir ANTES de outras rotas POST com :id
    */
+  @Throttle({ default: { limit: 2, ttl: 60000 } })
   @Post(':id/image')
   @UseInterceptors(FileInterceptor('image'))
   async uploadImage(
@@ -236,6 +238,7 @@ export class BillsController {
   /**
    * Reprocessar OCR de uma conta que falhou
    */
+  @Throttle({ default: { limit: 1, ttl: 300000 } })
   @Post(':id/retry-ocr')
   retryOcr(@Param('id') id: string, @Request() req: any) {
     return this.billsService.retryOcr(id, req.user.id);

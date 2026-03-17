@@ -137,13 +137,24 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
         style={styles.container}
       >
         {/* Backdrop escuro */}
-        <Pressable style={styles.backdrop} onPress={handleClose} />
+        <Pressable
+          style={[styles.backdrop, { backgroundColor: colors.overlay }]}
+          onPress={handleClose}
+        />
 
         {/* Conteúdo do modal */}
         <View style={styles.modalContainer}>
-          <View style={[styles.modalContent, { backgroundColor: colors.cardBackground ?? "#fff" }]}>
+          <View
+            style={[
+              styles.modalContent,
+              {
+                backgroundColor: colors.cardBackground,
+                borderColor: colors.cardBorder,
+              },
+            ]}
+          >
             {/* Handle */}
-            <View style={[styles.handle, { backgroundColor: colors.divider ?? "#ddd" }]} />
+            <View style={[styles.handle, { backgroundColor: colors.divider }]} />
 
             {/* Header */}
             <View style={styles.header}>
@@ -151,9 +162,14 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
                 onPress={handleClose}
                 style={styles.closeButton}
               >
-                <Ionicons name="close" size={24} color={colors.text ?? "#333"} />
+                <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
-              <Text style={[styles.title, { color: colors.text ?? "#333", fontSize: getFontSize(18) }]}>
+              <Text
+                style={[
+                  styles.title,
+                  { color: colors.text, fontSize: getFontSize(18) },
+                ]}
+              >
                 Novo Item
               </Text>
               <View style={{ width: 32 }} />
@@ -162,18 +178,27 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
             {/* Form */}
             <View style={styles.form}>
               <View style={styles.inputGroup}>
-                <Text style={[styles.label, { color: colors.text ?? "#666", fontSize: getFontSize(14) }]}>
+                <Text
+                  style={[
+                    styles.label,
+                    { color: colors.text, fontSize: getFontSize(14) },
+                  ]}
+                >
                   Nome
                 </Text>
                 <TextInput
                   ref={nameInputRef}
                   style={[
                     styles.input,
-                    { backgroundColor: colors.inputBackground ?? "#fff", color: colors.text ?? "#000", borderColor: errors.name ? "#ff4444" : (colors.inputBorder ?? "#ddd") },
+                    {
+                      backgroundColor: colors.inputBackground,
+                      color: colors.text,
+                      borderColor: errors.name ? colors.error : colors.inputBorder,
+                    },
                     errors.name && styles.inputError,
                   ]}
                   placeholder="Ex: Coca-cola"
-                  placeholderTextColor={colors.placeholderText ?? "#999"}
+                  placeholderTextColor={colors.placeholderText}
                   value={name}
                   onChangeText={(text) => {
                     setName(text);
@@ -183,24 +208,40 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
                   returnKeyType="next"
                 />
                 {errors.name ? (
-                  <Text style={[styles.errorText, { color: colors.error ?? "#ff4444", fontSize: getFontSize(12) }]}>
+                  <Text
+                    style={[
+                      styles.errorText,
+                      { color: colors.error, fontSize: getFontSize(12) },
+                    ]}
+                  >
                     {errors.name}
                   </Text>
                 ) : null}
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.label, { color: colors.text ?? "#666", fontSize: getFontSize(14) }]}>
+                <Text
+                  style={[
+                    styles.label,
+                    { color: colors.text, fontSize: getFontSize(14) },
+                  ]}
+                >
                   Quantidade
                 </Text>
                 <TextInput
                   style={[
                     styles.input,
-                    { backgroundColor: colors.inputBackground ?? "#fff", color: colors.text ?? "#000", borderColor: errors.quantity ? "#ff4444" : (colors.inputBorder ?? "#ddd") },
+                    {
+                      backgroundColor: colors.inputBackground,
+                      color: colors.text,
+                      borderColor: errors.quantity
+                        ? colors.error
+                        : colors.inputBorder,
+                    },
                     errors.quantity && styles.inputError,
                   ]}
                   placeholder="Ex: 2"
-                  placeholderTextColor={colors.placeholderText ?? "#999"}
+                  placeholderTextColor={colors.placeholderText}
                   value={quantity}
                   onChangeText={(text) => {
                     setQuantity(text.replace(/[^0-9]/g, ""));
@@ -211,24 +252,38 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
                   returnKeyType="next"
                 />
                 {errors.quantity ? (
-                  <Text style={[styles.errorText, { color: colors.error ?? "#ff4444", fontSize: getFontSize(12) }]}>
+                  <Text
+                    style={[
+                      styles.errorText,
+                      { color: colors.error, fontSize: getFontSize(12) },
+                    ]}
+                  >
                     {errors.quantity}
                   </Text>
                 ) : null}
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.label, { color: colors.text ?? "#666", fontSize: getFontSize(14) }]}>
+                <Text
+                  style={[
+                    styles.label,
+                    { color: colors.text, fontSize: getFontSize(14) },
+                  ]}
+                >
                   Preço Unitário
                 </Text>
                 <TextInput
                   style={[
                     styles.input,
-                    { backgroundColor: colors.inputBackground ?? "#fff", color: colors.text ?? "#000", borderColor: errors.value ? "#ff4444" : (colors.inputBorder ?? "#ddd") },
+                    {
+                      backgroundColor: colors.inputBackground,
+                      color: colors.text,
+                      borderColor: errors.value ? colors.error : colors.inputBorder,
+                    },
                     errors.value && styles.inputError,
                   ]}
                   placeholder="R$ 0,00"
-                  placeholderTextColor={colors.placeholderText ?? "#999"}
+                  placeholderTextColor={colors.placeholderText}
                   value={value}
                   onChangeText={handleValueChange}
                   keyboardType="numeric"
@@ -236,17 +291,27 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
                   onSubmitEditing={handleAdd}
                 />
                 {errors.value ? (
-                  <Text style={[styles.errorText, { color: colors.error ?? "#ff4444", fontSize: getFontSize(12) }]}>
+                  <Text
+                    style={[
+                      styles.errorText,
+                      { color: colors.error, fontSize: getFontSize(12) },
+                    ]}
+                  >
                     {errors.value}
                   </Text>
                 ) : null}
               </View>
 
               <TouchableOpacity
-                style={[styles.addButton, { backgroundColor: colors.primary ?? "#81007F" }]}
+                style={[styles.addButton, { backgroundColor: colors.primary }]}
                 onPress={handleAdd}
               >
-                <Text style={[styles.addButtonText, { color: colors.accent ?? "#FFFF00", fontSize: getFontSize(16) }]}>
+                <Text
+                  style={[
+                    styles.addButtonText,
+                    { color: colors.accent, fontSize: getFontSize(16) },
+                  ]}
+                >
                   Adicionar
                 </Text>
               </TouchableOpacity>
@@ -271,7 +336,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: "#fff",
+    borderWidth: 1,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingTop: 12,

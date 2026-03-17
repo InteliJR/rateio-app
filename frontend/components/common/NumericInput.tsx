@@ -91,7 +91,11 @@ export const NumericInput: React.FC<NumericInputProps> = ({
         {label}
       </Text>
       <View style={styles.inputWrapper}>
-        {prefix && <Text style={styles.prefix}>{prefix}</Text>}
+        {prefix && (
+          <Text style={[styles.prefix, { color: colors.textSecondary }]}>
+            {prefix}
+          </Text>
+        )}
         <TextInput
           style={[
             styles.input,
@@ -112,7 +116,11 @@ export const NumericInput: React.FC<NumericInputProps> = ({
           keyboardType={allowDecimal ? "decimal-pad" : "numeric"}
           {...props}
         />
-        {suffix && <Text style={styles.suffix}>{suffix}</Text>}
+        {suffix && (
+          <Text style={[styles.suffix, { color: colors.textSecondary }]}>
+            {suffix}
+          </Text>
+        )}
       </View>
       {error && (
         <Text
@@ -159,6 +167,7 @@ const styles = StyleSheet.create({
   },
   inputError: {
     borderColor: "#ff4d4d",
+    borderBottomWidth: 1,
   },
   prefix: {
     fontSize: 16,

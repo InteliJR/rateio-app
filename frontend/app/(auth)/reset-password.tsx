@@ -16,6 +16,7 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { z } from "zod";
 import { authService } from "@/services/auth.service";
 import Logo from "@/assets/images/logo.svg";
+import { useTheme } from "@/contexts/ThemeContext";
 
 const resetSchema = z
   .object({
@@ -41,6 +42,7 @@ type ResetFormData = z.infer<typeof resetSchema>;
 
 export default function ResetPasswordScreen() {
   const router = useRouter();
+  const { colors, getFontSize } = useTheme();
   const { email } = useLocalSearchParams<{ email: string }>();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -92,23 +94,23 @@ export default function ResetPasswordScreen() {
     return (
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.container}
+        style={[styles.container, { backgroundColor: colors.background }]}
       >
         <View style={styles.content}>
           <View style={styles.stack}>
             <Logo style={styles.logo} />
             <View style={styles.successIcon}>
-              <MaterialIcons name="check-circle" size={56} color="#81007F" />
+              <MaterialIcons name="check-circle" size={56} color={colors.primary} />
             </View>
-            <Text style={styles.title}>Senha redefinida!</Text>
-            <Text style={styles.successText}>
+            <Text style={[styles.title, { color: colors.text, fontSize: getFontSize(24) }]}>Senha redefinida!</Text>
+            <Text style={[styles.successText, { color: colors.textSecondary, fontSize: getFontSize(14) }]}>
               Sua senha foi alterada com sucesso. Faça login com sua nova senha.
             </Text>
             <TouchableOpacity
-              style={styles.button}
+              style={[styles.button, { backgroundColor: colors.primary }]}
               onPress={() => router.replace("/(auth)/login")}
             >
-              <Text style={styles.buttonText}>Ir para o login</Text>
+              <Text style={[styles.buttonText, { color: colors.accent, fontSize: getFontSize(16) }]}>Ir para o login</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -119,16 +121,16 @@ export default function ResetPasswordScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
     >
       <View style={styles.content}>
         <View style={styles.stack}>
           <Logo style={styles.logo} />
-          <Text style={styles.title}>Nova senha</Text>
-          <Text style={styles.subtitle}>
+          <Text style={[styles.title, { color: colors.text, fontSize: getFontSize(24) }]}>Nova senha</Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary, fontSize: getFontSize(14) }]}>
             Insira o código de 6 dígitos enviado para{" "}
             {email ? (
-              <Text style={styles.emailHighlight}>{email}</Text>
+              <Text style={[styles.emailHighlight, { color: colors.primary }]}>{email}</Text>
             ) : (
               "seu email"
             )}{" "}
@@ -136,7 +138,7 @@ export default function ResetPasswordScreen() {
           </Text>
 
           {serverError && (
-            <Text style={styles.serverErrorText}>{serverError}</Text>
+            <Text style={[styles.serverErrorText, { color: colors.error, fontSize: getFontSize(13) }]}>{serverError}</Text>
           )}
 
           {/* Código */}
@@ -145,8 +147,18 @@ export default function ResetPasswordScreen() {
             name="token"
             render={({ field: { onChange, value } }) => (
               <TextInput
-                style={[styles.input, styles.codeInput, errors.token && styles.inputError]}
+                style={[
+                  styles.input,
+                  styles.codeInput,
+                  {
+                    backgroundColor: colors.inputBackground,
+                    borderColor: colors.inputBorder,
+                    color: colors.text,
+                  },
+                  errors.token && [styles.inputError, { borderColor: colors.error }],
+                ]}
                 placeholder="Código (6 dígitos)"
+                placeholderTextColor={colors.placeholderText}
                 value={value}
                 onChangeText={onChange}
                 keyboardType="number-pad"
@@ -156,14 +168,19 @@ export default function ResetPasswordScreen() {
             )}
           />
           {errors.token && (
-            <Text style={styles.errorText}>{errors.token.message}</Text>
+            <Text style={[styles.errorText, { color: colors.error, fontSize: getFontSize(12) }]}>{errors.token.message}</Text>
           )}
 
           {/* Nova senha */}
           <View
             style={[
               styles.passwordContainer,
+              {
+                backgroundColor: colors.inputBackground,
+                borderColor: colors.inputBorder,
+              },
               errors.newPassword && styles.inputError,
+              errors.newPassword && { borderColor: colors.error },
             ]}
           >
             <Controller
@@ -171,8 +188,9 @@ export default function ResetPasswordScreen() {
               name="newPassword"
               render={({ field: { onChange, value } }) => (
                 <TextInput
-                  style={styles.passwordInput}
+                  style={[styles.passwordInput, { color: colors.text }]}
                   placeholder="Nova senha"
+                  placeholderTextColor={colors.placeholderText}
                   value={value}
                   onChangeText={onChange}
                   secureTextEntry={!showNewPassword}
@@ -188,19 +206,24 @@ export default function ResetPasswordScreen() {
               <MaterialIcons
                 name={showNewPassword ? "visibility" : "visibility-off"}
                 size={20}
-                color="#333"
+                color={colors.iconColor}
               />
             </TouchableOpacity>
           </View>
           {errors.newPassword && (
-            <Text style={styles.errorText}>{errors.newPassword.message}</Text>
+            <Text style={[styles.errorText, { color: colors.error, fontSize: getFontSize(12) }]}>{errors.newPassword.message}</Text>
           )}
 
           {/* Confirmar senha */}
           <View
             style={[
               styles.passwordContainer,
+              {
+                backgroundColor: colors.inputBackground,
+                borderColor: colors.inputBorder,
+              },
               errors.confirmPassword && styles.inputError,
+              errors.confirmPassword && { borderColor: colors.error },
             ]}
           >
             <Controller
@@ -208,8 +231,9 @@ export default function ResetPasswordScreen() {
               name="confirmPassword"
               render={({ field: { onChange, value } }) => (
                 <TextInput
-                  style={styles.passwordInput}
+                  style={[styles.passwordInput, { color: colors.text }]}
                   placeholder="Confirmar nova senha"
+                  placeholderTextColor={colors.placeholderText}
                   value={value}
                   onChangeText={onChange}
                   secureTextEntry={!showConfirmPassword}
@@ -225,12 +249,12 @@ export default function ResetPasswordScreen() {
               <MaterialIcons
                 name={showConfirmPassword ? "visibility" : "visibility-off"}
                 size={20}
-                color="#333"
+                color={colors.iconColor}
               />
             </TouchableOpacity>
           </View>
           {errors.confirmPassword && (
-            <Text style={styles.errorText}>
+            <Text style={[styles.errorText, { color: colors.error, fontSize: getFontSize(12) }]}>
               {errors.confirmPassword.message}
             </Text>
           )}
@@ -238,15 +262,16 @@ export default function ResetPasswordScreen() {
           <TouchableOpacity
             style={[
               styles.button,
+              { backgroundColor: colors.primary },
               (isSubmitting || !isValid) && styles.buttonDisabled,
             ]}
             onPress={handleSubmit(onSubmit)}
             disabled={isSubmitting || !isValid}
           >
             {isSubmitting ? (
-              <ActivityIndicator color="#FFFF00" />
+              <ActivityIndicator color={colors.accent} />
             ) : (
-              <Text style={styles.buttonText}>Redefinir senha</Text>
+              <Text style={[styles.buttonText, { color: colors.accent, fontSize: getFontSize(16) }]}>Redefinir senha</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -256,7 +281,7 @@ export default function ResetPasswordScreen() {
             onPress={() => router.push("/(auth)/forgot-password")}
             disabled={isSubmitting}
           >
-            <Text style={styles.linkBold}>Não recebi o código</Text>
+            <Text style={[styles.linkBold, { color: colors.primary, fontSize: getFontSize(14) }]}>Não recebi o código</Text>
           </TouchableOpacity>
         </View>
 

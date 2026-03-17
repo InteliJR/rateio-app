@@ -77,10 +77,24 @@ export default function ConfigScreen() {
         <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
             {avatarUrl ? (
-              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+              <Image
+                source={{ uri: avatarUrl }}
+                style={[
+                  styles.avatarImage,
+                  { backgroundColor: colors.backgroundTertiary },
+                ]}
+              />
             ) : (
-              <View style={styles.avatar}>
-                <Ionicons name="person" size={60} color="#FFF" />
+              <View
+                style={[
+                  styles.avatar,
+                  {
+                    backgroundColor: colors.primary,
+                    shadowColor: colors.shadow,
+                  },
+                ]}
+              >
+                <Ionicons name="person" size={60} color={colors.accent} />
               </View>
             )}
           </View>
@@ -99,7 +113,11 @@ export default function ConfigScreen() {
           <TouchableOpacity
             style={[
               styles.menuItem,
-              { backgroundColor: colors.menuItem, shadowColor: colors.shadow },
+              {
+                backgroundColor: colors.menuItem,
+                borderColor: colors.cardBorder,
+                shadowColor: colors.shadow,
+              },
             ]}
             onPress={handleAccessibility}
           >
@@ -128,7 +146,11 @@ export default function ConfigScreen() {
           <TouchableOpacity
             style={[
               styles.menuItem,
-              { backgroundColor: colors.menuItem, shadowColor: colors.shadow },
+              {
+                backgroundColor: colors.menuItem,
+                borderColor: colors.cardBorder,
+                shadowColor: colors.shadow,
+              },
             ]}
             onPress={handleAbout}
           >
@@ -230,6 +252,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 16,
     backgroundColor: "#FFF",
+    borderWidth: 1,
     borderRadius: 12,
     marginBottom: 12,
     shadowColor: "#000",

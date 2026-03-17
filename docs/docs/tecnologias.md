@@ -657,7 +657,7 @@ Representa o status atual de uma conta.
 
 ---
 
-## 🧾 Taxas (Garçom, Couvert)
+## 🧾 Taxas (Garçom, Couvert artístico)
 
 ### Enum: `FeeType`
 
@@ -665,7 +665,7 @@ Representa o status atual de uma conta.
 | -------------------- | ----------------------------- |
 | `SERVICE_PERCENTAGE` | Taxa percentual sobre o total |
 | `SERVICE_FIXED`      | Taxa de serviço fixa          |
-| `COVER_CHARGE`       | Couvert fixo                  |
+| `COVER_CHARGE`       | Couvert artístico fixo        |
 
 ---
 

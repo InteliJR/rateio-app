@@ -184,7 +184,10 @@ export default function ParticipantsScreen() {
               key={participant.id}
               style={[
                 styles.participantRow,
-                { backgroundColor: colors.cardBackground },
+                {
+                  backgroundColor: colors.cardBackground,
+                  borderBottomColor: colors.divider,
+                },
               ]}
             >
               <View style={styles.participantInfo}>

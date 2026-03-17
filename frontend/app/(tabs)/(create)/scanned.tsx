@@ -1252,13 +1252,13 @@ export default function ScannedBillScreen() {
           billId: id as string,
           type: FeeType.COVER_CHARGE,
           value: newValue,
-          description: "Couvert por pessoa",
+          description: "Couvert artístico por pessoa",
         });
         setFees((prev) => [...prev, newFee]);
       }
 
       setEditingCouvert(false);
-      console.log("[Scanned] Couvert saved:", newValue);
+      console.log("[Scanned] Couvert artístico saved:", newValue);
     } catch (error: any) {
       console.error("Error saving couvert:", error);
       Alert.alert("Erro", error.message || "Não foi possível salvar o couvert");
@@ -1319,7 +1319,7 @@ export default function ScannedBillScreen() {
                     <MaterialCommunityIcons
                       name="pencil-outline"
                       size={18}
-                      color="#fff"
+                      color={colors.accent}
                     />
                   </View>
                   <View style={styles.editModeBannerContent}>
@@ -1338,7 +1338,7 @@ export default function ScannedBillScreen() {
                   <MaterialCommunityIcons
                     name="check-circle"
                     size={20}
-                    color="#10b981"
+                    color={colors.success}
                   />
                   <Text style={styles.completedBannerText}>
                     Conta finalizada - Somente leitura
@@ -1420,38 +1420,64 @@ export default function ScannedBillScreen() {
 
               {/* Mensagem quando OCR falhou */}
               {billStatus === "OCR_FAILED" && items.length === 0 && (
-                <View style={styles.errorContainer}>
+                <View
+                  style={[
+                    styles.errorContainer,
+                    {
+                      backgroundColor: colors.warningLight,
+                      borderColor: colors.cardBorder,
+                    },
+                  ]}
+                >
                   <Ionicons
                     name="alert-circle-outline"
                     size={48}
-                    color="#FF6B6B"
+                    color={colors.error}
                   />
-                  <Text style={styles.errorTitle}>
+                  <Text style={[styles.errorTitle, { color: colors.text }]}>
                     Não foi possível reconhecer os itens
                   </Text>
-                  <Text style={styles.errorText}>
+                  <Text
+                    style={[styles.errorText, { color: colors.textSecondary }]}
+                  >
                     Tente reprocessar o OCR ou adicione os itens manualmente
                   </Text>
                   <View style={styles.retryButtonsRow}>
                     <TouchableOpacity
                       style={[
                         styles.retryOcrButton,
+                        { backgroundColor: colors.primary },
                         retryingOcr && styles.retryButtonDisabled,
                       ]}
                       onPress={handleRetryOcr}
                       disabled={retryingOcr}
                     >
                       {retryingOcr ? (
-                        <ActivityIndicator size="small" color="#fff" />
+                        <ActivityIndicator size="small" color={colors.accent} />
                       ) : (
-                        <Ionicons name="refresh-outline" size={16} color="#fff" />
+                        <Ionicons
+                          name="refresh-outline"
+                          size={16}
+                          color={colors.accent}
+                        />
                       )}
-                      <Text style={styles.retryOcrButtonText}>
+                      <Text
+                        style={[
+                          styles.retryOcrButtonText,
+                          { color: colors.accent },
+                        ]}
+                      >
                         {retryingOcr ? "Processando..." : "Tentar novamente"}
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={styles.retakePhotoButton}
+                      style={[
+                        styles.retakePhotoButton,
+                        {
+                          borderColor: colors.primary,
+                          backgroundColor: colors.background,
+                        },
+                      ]}
                       onPress={() =>
                         router.replace({
                           pathname: "/(tabs)/(create)/camera",
@@ -1459,8 +1485,17 @@ export default function ScannedBillScreen() {
                         })
                       }
                     >
-                      <Ionicons name="camera-outline" size={16} color="#81007F" />
-                      <Text style={styles.retakePhotoButtonText}>
+                      <Ionicons
+                        name="camera-outline"
+                        size={16}
+                        color={colors.primary}
+                      />
+                      <Text
+                        style={[
+                          styles.retakePhotoButtonText,
+                          { color: colors.primary },
+                        ]}
+                      >
                         Nova foto
                       </Text>
                     </TouchableOpacity>
@@ -1502,7 +1537,10 @@ export default function ScannedBillScreen() {
                 <View
                   style={[
                     styles.participantsSection,
-                    { backgroundColor: colors.backgroundSecondary },
+                    {
+                      backgroundColor: colors.backgroundSecondary,
+                      borderColor: colors.cardBorder,
+                    },
                   ]}
                 >
                   <View style={styles.participantsSectionHeader}>
@@ -1547,14 +1585,28 @@ export default function ScannedBillScreen() {
                         return (
                           <View
                             key={participant.id}
-                            style={styles.participantChip}
+                            style={[
+                              styles.participantChip,
+                              {
+                                backgroundColor: colors.cardBackground,
+                                borderColor: colors.cardBorder,
+                              },
+                            ]}
                           >
                             {isEditingThis ? (
                               <View style={styles.participantChipEditContainer}>
                                 <TextInput
-                                  style={styles.participantChipInput}
+                                  style={[
+                                    styles.participantChipInput,
+                                    {
+                                      color: colors.text,
+                                      borderBottomColor: colors.primary,
+                                    },
+                                  ]}
                                   value={participantNameInput}
                                   onChangeText={setParticipantNameInput}
+                                  placeholderTextColor={colors.placeholderText}
+                                  selectionColor={colors.primary}
                                   autoFocus
                                   selectTextOnFocus
                                   editable={!isSavingThis}
@@ -1568,13 +1620,13 @@ export default function ScannedBillScreen() {
                                   {isSavingThis ? (
                                     <ActivityIndicator
                                       size="small"
-                                      color="#8B2E8F"
+                                      color={colors.primary}
                                     />
                                   ) : (
                                     <Ionicons
                                       name="checkmark"
                                       size={18}
-                                      color="#10b981"
+                                      color={colors.success}
                                     />
                                   )}
                                 </TouchableOpacity>
@@ -1585,7 +1637,7 @@ export default function ScannedBillScreen() {
                                   <Ionicons
                                     name="close"
                                     size={18}
-                                    color="#ef4444"
+                                    color={colors.error}
                                   />
                                 </TouchableOpacity>
                               </View>
@@ -1599,14 +1651,19 @@ export default function ScannedBillScreen() {
                                   }
                                   disabled={isCompleted}
                                 >
-                                  <Text style={styles.participantChipName}>
+                                  <Text
+                                    style={[
+                                      styles.participantChipName,
+                                      { color: colors.text },
+                                    ]}
+                                  >
                                     {participant.name}
                                   </Text>
                                   {!isCompleted && (
                                     <Ionicons
                                       name="pencil"
                                       size={12}
-                                      color="#999"
+                                      color={colors.textTertiary}
                                     />
                                   )}
                                 </TouchableOpacity>
@@ -1620,7 +1677,7 @@ export default function ScannedBillScreen() {
                                     <Ionicons
                                       name="close-circle"
                                       size={18}
-                                      color="#ef4444"
+                                      color={colors.error}
                                     />
                                   </TouchableOpacity>
                                 )}
@@ -1636,35 +1693,69 @@ export default function ScannedBillScreen() {
 
               {/* Seção de Taxas - Editável */}
               {!processingOcr && (
-                <View style={styles.feesSection}>
-                  <Text style={styles.feesSectionTitle}>Taxas</Text>
+                <View
+                  style={[
+                    styles.feesSection,
+                    {
+                      backgroundColor: colors.couvertBackground,
+                      borderColor: colors.cardBorder,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[styles.feesSectionTitle, { color: colors.text }]}
+                  >
+                    Taxas
+                  </Text>
 
                   {/* Taxa de Serviço */}
-                  <View style={styles.feeRow}>
-                    <Text style={styles.feeLabel}>Taxa de Serviço</Text>
+                  <View
+                    style={[styles.feeRow, { borderBottomColor: colors.cardBorder }]}
+                  >
+                    <Text
+                      style={[styles.feeLabel, { color: colors.textSecondary }]}
+                    >
+                      Taxa de Serviço
+                    </Text>
                     {editingServiceFee && !isCompleted ? (
                       <View style={styles.feeEditContainer}>
                         <TextInput
-                          style={styles.feeInput}
+                          style={[
+                            styles.feeInput,
+                            {
+                              backgroundColor: colors.inputBackground,
+                              borderColor: colors.primary,
+                              color: colors.text,
+                            },
+                          ]}
                           value={serviceFeeInput}
                           onChangeText={setServiceFeeInput}
                           keyboardType="numeric"
                           placeholder="0"
+                          placeholderTextColor={colors.placeholderText}
+                          selectionColor={colors.primary}
                           editable={!savingFee}
                         />
-                        <Text style={styles.feeInputSuffix}>%</Text>
+                        <Text
+                          style={[
+                            styles.feeInputSuffix,
+                            { color: colors.textSecondary },
+                          ]}
+                        >
+                          %
+                        </Text>
                         <TouchableOpacity
                           onPress={saveServiceFee}
                           disabled={savingFee}
                           style={styles.feeActionBtn}
                         >
                           {savingFee ? (
-                            <ActivityIndicator size="small" color="#8B2E8F" />
+                            <ActivityIndicator size="small" color={colors.primary} />
                           ) : (
                             <Ionicons
                               name="checkmark"
                               size={18}
-                              color="#10b981"
+                              color={colors.success}
                             />
                           )}
                         </TouchableOpacity>
@@ -1681,7 +1772,11 @@ export default function ScannedBillScreen() {
                           disabled={savingFee}
                           style={styles.feeActionBtn}
                         >
-                          <Ionicons name="close" size={18} color="#ef4444" />
+                          <Ionicons
+                            name="close"
+                            size={18}
+                            color={colors.error}
+                          />
                         </TouchableOpacity>
                       </View>
                     ) : (
@@ -1692,27 +1787,53 @@ export default function ScannedBillScreen() {
                         }
                         disabled={isCompleted}
                       >
-                        <Text style={styles.feeValue}>
+                        <Text
+                          style={[styles.feeValue, { color: colors.primary }]}
+                        >
                           {fees.find(
                             (f) => f.type === FeeType.SERVICE_PERCENTAGE,
                           )?.value || 0}
                           %
                         </Text>
                         {!isCompleted && (
-                          <Ionicons name="pencil" size={14} color="#999" />
+                          <Ionicons
+                            name="pencil"
+                            size={14}
+                            color={colors.textTertiary}
+                          />
                         )}
                       </TouchableOpacity>
                     )}
                   </View>
 
-                  {/* Couvert */}
-                  <View style={styles.feeRow}>
-                    <Text style={styles.feeLabel}>Couvert (por pessoa)</Text>
+                  {/* Couvert artístico */}
+                  <View
+                    style={[styles.feeRow, { borderBottomColor: colors.cardBorder }]}
+                  >
+                    <Text
+                      style={[styles.feeLabel, { color: colors.textSecondary }]}
+                    >
+                      Couvert artístico (por pessoa)
+                    </Text>
                     {editingCouvert && !isCompleted ? (
                       <View style={styles.feeEditContainer}>
-                        <Text style={styles.feeInputPrefix}>R$</Text>
+                        <Text
+                          style={[
+                            styles.feeInputPrefix,
+                            { color: colors.textSecondary },
+                          ]}
+                        >
+                          R$
+                        </Text>
                         <TextInput
-                          style={styles.feeInput}
+                          style={[
+                            styles.feeInput,
+                            {
+                              backgroundColor: colors.inputBackground,
+                              borderColor: colors.primary,
+                              color: colors.text,
+                            },
+                          ]}
                           value={couvertInput}
                           onChangeText={(text) => {
                             const cleaned = text.replace(/[^0-9,]/g, "");
@@ -1720,6 +1841,8 @@ export default function ScannedBillScreen() {
                           }}
                           keyboardType="numeric"
                           placeholder="0,00"
+                          placeholderTextColor={colors.placeholderText}
+                          selectionColor={colors.primary}
                           editable={!savingFee}
                         />
                         <TouchableOpacity
@@ -1728,12 +1851,12 @@ export default function ScannedBillScreen() {
                           style={styles.feeActionBtn}
                         >
                           {savingFee ? (
-                            <ActivityIndicator size="small" color="#8B2E8F" />
+                            <ActivityIndicator size="small" color={colors.primary} />
                           ) : (
                             <Ionicons
                               name="checkmark"
                               size={18}
-                              color="#10b981"
+                              color={colors.success}
                             />
                           )}
                         </TouchableOpacity>
@@ -1752,7 +1875,11 @@ export default function ScannedBillScreen() {
                           disabled={savingFee}
                           style={styles.feeActionBtn}
                         >
-                          <Ionicons name="close" size={18} color="#ef4444" />
+                          <Ionicons
+                            name="close"
+                            size={18}
+                            color={colors.error}
+                          />
                         </TouchableOpacity>
                       </View>
                     ) : (
@@ -1761,7 +1888,9 @@ export default function ScannedBillScreen() {
                         onPress={() => !isCompleted && setEditingCouvert(true)}
                         disabled={isCompleted}
                       >
-                        <Text style={styles.feeValue}>
+                        <Text
+                          style={[styles.feeValue, { color: colors.primary }]}
+                        >
                           R${" "}
                           {(
                             fees.find((f) => f.type === FeeType.COVER_CHARGE)
@@ -1771,7 +1900,11 @@ export default function ScannedBillScreen() {
                             .replace(".", ",")}
                         </Text>
                         {!isCompleted && (
-                          <Ionicons name="pencil" size={14} color="#999" />
+                          <Ionicons
+                            name="pencil"
+                            size={14}
+                            color={colors.textTertiary}
+                          />
                         )}
                       </TouchableOpacity>
                     )}
@@ -1782,8 +1915,22 @@ export default function ScannedBillScreen() {
               {/* Lista de items */}
               {!processingOcr &&
                 items.map((item, index) => (
-                  <View key={item.id} style={styles.itemCardWrapper}>
-                    <View style={styles.itemCardMain}>
+                  <View
+                    key={item.id}
+                    style={[
+                      styles.itemCardWrapper,
+                      {
+                        backgroundColor: colors.cardBackground,
+                        borderColor: colors.cardBorder,
+                      },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.itemCardMain,
+                        { backgroundColor: colors.cardBackground },
+                      ]}
+                    >
                       <View style={styles.itemCardLeft}>
                         <View
                           style={[styles.inputWrapper, styles.nameInputWrapper]}
@@ -1804,10 +1951,10 @@ export default function ScannedBillScreen() {
                               }
                               onBlur={() => handleItemNameBlur(item.id)}
                               placeholder="Nome do item"
-                              placeholderTextColor="#999"
+                              placeholderTextColor={colors.placeholderText}
                               editable={true}
                               underlineColorAndroid="transparent"
-                              selectionColor="#8B2E8F"
+                              selectionColor={colors.primary}
                               multiline={false}
                               numberOfLines={1}
                             />
@@ -1832,7 +1979,7 @@ export default function ScannedBillScreen() {
                                 <Ionicons
                                   name="create-outline"
                                   size={14}
-                                  color="#8B2E8F"
+                                  color={colors.primary}
                                   style={styles.editIconInContainer}
                                 />
                               )}
@@ -1842,7 +1989,7 @@ export default function ScannedBillScreen() {
                         {savingItemId === item.id && (
                           <ActivityIndicator
                             size="small"
-                            color="#81007F"
+                            color={colors.primary}
                             style={styles.savingItemIndicator}
                           />
                         )}
@@ -1869,9 +2016,9 @@ export default function ScannedBillScreen() {
                             onFocus={() => setEditingItemQtyId(item.id)}
                             keyboardType="number-pad"
                             placeholder="1"
-                            placeholderTextColor="#999"
+                            placeholderTextColor={colors.placeholderText}
                             underlineColorAndroid="transparent"
-                            selectionColor="#8B2E8F"
+                            selectionColor={colors.primary}
                             editable={!isCompleted}
                           />
                         </View>
@@ -1898,9 +2045,9 @@ export default function ScannedBillScreen() {
                             onFocus={() => setEditingItemPriceId(item.id)}
                             keyboardType="numeric"
                             placeholder="0,00"
-                            placeholderTextColor="#999"
+                            placeholderTextColor={colors.placeholderText}
                             underlineColorAndroid="transparent"
-                            selectionColor="#8B2E8F"
+                            selectionColor={colors.primary}
                             editable={!isCompleted}
                           />
                         </View>
@@ -1919,7 +2066,7 @@ export default function ScannedBillScreen() {
                                 : "chevron-down"
                             }
                             size={20}
-                            color="#666"
+                            color={colors.textSecondary}
                           />
                         </TouchableOpacity>
                       </View>
@@ -1976,14 +2123,24 @@ export default function ScannedBillScreen() {
                                       <View
                                         style={[
                                           styles.checkbox,
-                                          isAssigned && styles.checkboxActive,
+                                          {
+                                            backgroundColor: colors.cardBackground,
+                                            borderColor: colors.textTertiary,
+                                          },
+                                          isAssigned && [
+                                            styles.checkboxActive,
+                                            {
+                                              backgroundColor: colors.checkboxActive,
+                                              borderColor: colors.primary,
+                                            },
+                                          ],
                                         ]}
                                       >
                                         {isAssigned && (
                                           <Ionicons
                                             name="checkmark"
                                             size={10}
-                                            color="#8B2E8F"
+                                            color={colors.primary}
                                           />
                                         )}
                                       </View>
@@ -1994,9 +2151,18 @@ export default function ScannedBillScreen() {
                                         style={styles.participantEditContainer}
                                       >
                                         <TextInput
-                                          style={styles.participantEditInput}
+                                          style={[
+                                            styles.participantEditInput,
+                                            {
+                                              backgroundColor: colors.inputBackground,
+                                              borderColor: colors.primary,
+                                              color: colors.text,
+                                            },
+                                          ]}
                                           value={participantNameInput}
                                           onChangeText={setParticipantNameInput}
+                                          placeholderTextColor={colors.placeholderText}
+                                          selectionColor={colors.primary}
                                           autoFocus
                                           selectTextOnFocus
                                           editable={!isSavingName}
@@ -2011,13 +2177,13 @@ export default function ScannedBillScreen() {
                                           {isSavingName ? (
                                             <ActivityIndicator
                                               size="small"
-                                              color="#8B2E8F"
+                                              color={colors.primary}
                                             />
                                           ) : (
                                             <Ionicons
                                               name="checkmark"
                                               size={18}
-                                              color="#10b981"
+                                              color={colors.success}
                                             />
                                           )}
                                         </TouchableOpacity>
@@ -2029,7 +2195,7 @@ export default function ScannedBillScreen() {
                                           <Ionicons
                                             name="close"
                                             size={18}
-                                            color="#ef4444"
+                                            color={colors.error}
                                           />
                                         </TouchableOpacity>
                                       </View>
@@ -2048,7 +2214,7 @@ export default function ScannedBillScreen() {
                                           <Ionicons
                                             name="pencil"
                                             size={14}
-                                            color="#999"
+                                            color={colors.textTertiary}
                                             style={{ marginLeft: 8 }}
                                           />
                                         )}
@@ -2058,7 +2224,7 @@ export default function ScannedBillScreen() {
                                     {isSaving && !isEditingThis && (
                                       <ActivityIndicator
                                         size="small"
-                                        color="#8B2E8F"
+                                        color={colors.primary}
                                         style={{ marginLeft: 8 }}
                                       />
                                     )}
@@ -2079,7 +2245,7 @@ export default function ScannedBillScreen() {
                               <MaterialCommunityIcons
                                 name="trash-can-outline"
                                 size={20}
-                                color="#999"
+                                color={colors.textTertiary}
                               />
                             </TouchableOpacity>
                           )}
@@ -2091,9 +2257,19 @@ export default function ScannedBillScreen() {
 
               {/* Card do Total - só mostrar se não estiver processando e houver itens */}
               {!processingOcr && items.length > 0 && (
-                <View style={styles.totalCardWrapper}>
-                  <Text style={styles.totalCardLabel}>Total:</Text>
-                  <Text style={styles.totalCardAmount}>
+                <View
+                  style={[
+                    styles.totalCardWrapper,
+                    {
+                      backgroundColor: colors.cardBackground,
+                      borderColor: colors.cardBorder,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.totalCardLabel, { color: colors.text }]}>
+                    Total:
+                  </Text>
+                  <Text style={[styles.totalCardAmount, { color: colors.text }]}>
                     {formatCurrency(calculateTotal())}
                   </Text>
                 </View>
@@ -2105,25 +2281,38 @@ export default function ScannedBillScreen() {
                   {isEditMode ? (
                     /* Modo Edição: Botão Concluir Edição */
                     <TouchableOpacity
-                      style={styles.saveAndGoBackBtn}
+                      style={[
+                        styles.saveAndGoBackBtn,
+                        { backgroundColor: colors.success },
+                      ]}
                       onPress={handleSaveAndGoBack}
                     >
                       <MaterialCommunityIcons
                         name="check"
                         size={20}
-                        color="#fff"
+                        color={colors.accent}
                       />
-                      <Text style={styles.saveAndGoBackBtnText}>
+                      <Text
+                        style={[
+                          styles.saveAndGoBackBtnText,
+                          { color: colors.accent },
+                        ]}
+                      >
                         Concluir Edição
                       </Text>
                     </TouchableOpacity>
                   ) : (
                     /* Modo Normal: Botão Visualizar Resumo */
                     <TouchableOpacity
-                      style={styles.summaryBtn}
+                      style={[
+                        styles.summaryBtn,
+                        { backgroundColor: colors.primary },
+                      ]}
                       onPress={handleSummary}
                     >
-                      <Text style={styles.summaryBtnText}>
+                      <Text
+                        style={[styles.summaryBtnText, { color: colors.accent }]}
+                      >
                         Visualizar resumo
                       </Text>
                     </TouchableOpacity>
@@ -2147,7 +2336,6 @@ export default function ScannedBillScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
   },
   keyboardAvoidingContainer: {
     flex: 1,
@@ -2277,11 +2465,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   itemCardWrapper: {
-    backgroundColor: "#fff",
     borderRadius: 12,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: "#E5E5E5",
     overflow: "hidden",
   },
   itemCardMain: {
@@ -2291,7 +2477,6 @@ const styles = StyleSheet.create({
     paddingLeft: 16,
     paddingRight: 12,
     paddingVertical: 18,
-    backgroundColor: "#fff",
   },
   itemCardRight: {
     flexDirection: "row",
@@ -2422,7 +2607,6 @@ const styles = StyleSheet.create({
     borderBottomColor: "#8B2E8F",
     borderBottomWidth: 2,
     borderStyle: "solid",
-    backgroundColor: "#FFF",
   },
   qtySuffix: {
     fontSize: 14,
@@ -2455,7 +2639,6 @@ const styles = StyleSheet.create({
     borderBottomColor: "#8B2E8F",
     borderBottomWidth: 2,
     borderStyle: "solid",
-    backgroundColor: "#FFF",
   },
   dropdownWrapper: {
     backgroundColor: "#F8F8F8",
@@ -2496,7 +2679,6 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     borderWidth: 1.5,
     borderColor: "#999",
-    backgroundColor: "#fff",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2526,10 +2708,7 @@ const styles = StyleSheet.create({
   participantEditInput: {
     flex: 1,
     fontSize: 14,
-    color: "#333",
-    backgroundColor: "#fff",
     borderWidth: 1,
-    borderColor: "#8B2E8F",
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -2569,13 +2748,11 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   totalCardWrapper: {
-    backgroundColor: "#fff",
     borderRadius: 12,
     padding: 16,
     marginTop: 16,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: "#E5E5E5",
   },
   totalCardLabel: {
     fontSize: 16,
@@ -2751,13 +2928,11 @@ const styles = StyleSheet.create({
   participantChip: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff",
     borderRadius: 20,
     paddingVertical: 6,
     paddingLeft: 12,
     paddingRight: 6,
     borderWidth: 1,
-    borderColor: "#E0E0E0",
   },
   participantChipEditContainer: {
     flexDirection: "row",
@@ -2766,12 +2941,10 @@ const styles = StyleSheet.create({
   },
   participantChipInput: {
     fontSize: 14,
-    color: "#333",
     minWidth: 80,
     paddingVertical: 2,
     paddingHorizontal: 4,
     borderBottomWidth: 1,
-    borderBottomColor: "#8B2E8F",
   },
   participantChipNameArea: {
     flexDirection: "row",
@@ -2780,7 +2953,6 @@ const styles = StyleSheet.create({
   },
   participantChipName: {
     fontSize: 14,
-    color: "#333",
   },
   participantChipRemove: {
     marginLeft: 4,
@@ -2788,17 +2960,14 @@ const styles = StyleSheet.create({
   },
   // Estilos da Seção de Taxas
   feesSection: {
-    backgroundColor: "#FFF9F0",
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#FFE5C4",
   },
   feesSectionTitle: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#333",
     marginBottom: 12,
   },
   feeRow: {
@@ -2807,11 +2976,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#FFE5C4",
   },
   feeLabel: {
     fontSize: 14,
-    color: "#666",
   },
   feeValueContainer: {
     flexDirection: "row",
@@ -2821,7 +2988,6 @@ const styles = StyleSheet.create({
   feeValue: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#8B2E8F",
   },
   feeEditContainer: {
     flexDirection: "row",
@@ -2830,23 +2996,18 @@ const styles = StyleSheet.create({
   },
   feeInputPrefix: {
     fontSize: 14,
-    color: "#666",
   },
   feeInput: {
     fontSize: 14,
-    color: "#333",
     minWidth: 50,
     textAlign: "right",
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderWidth: 1,
-    borderColor: "#8B2E8F",
     borderRadius: 6,
-    backgroundColor: "#fff",
   },
   feeInputSuffix: {
     fontSize: 14,
-    color: "#666",
   },
   feeActionBtn: {
     padding: 4,

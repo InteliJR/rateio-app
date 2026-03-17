@@ -1,6 +1,7 @@
 // mobile/services/bill.service.ts
 
 import { apiService } from "./api.service";
+import { storageService } from "./storage.service";
 
 export interface BillItem {
   id: string;
@@ -101,6 +102,116 @@ export interface BillSummaryResponse {
 }
 
 class BillService {
+  private buildImageFormData(
+    imageUri: string,
+    filename: string,
+    mimeType: string,
+    establishmentName?: string
+  ): FormData {
+    const formData = new FormData();
+
+    formData.append('image', {
+      uri: imageUri,
+      name: filename,
+      type: mimeType,
+    } as any);
+
+    if (establishmentName && establishmentName.trim().length > 0) {
+      formData.append('establishmentName', establishmentName.trim());
+    }
+
+    return formData;
+  }
+
+  private async uploadWithFetchRetry<T>(
+    endpoint: string,
+    makeFormData: () => FormData,
+    timeoutMs: number = 60000,
+    maxRetries: number = 3
+  ): Promise<T> {
+    let lastError: any;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const token = await storageService.getItem('accessToken');
+      const baseUrl = apiService.getCurrentBaseUrl();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+      try {
+        const response = await fetch(`${baseUrl}${endpoint}`, {
+          method: 'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: makeFormData(),
+          signal: controller.signal,
+        });
+
+        const rawBody = await response.text();
+        let parsedBody: any = undefined;
+
+        if (rawBody) {
+          try {
+            parsedBody = JSON.parse(rawBody);
+          } catch {
+            parsedBody = rawBody;
+          }
+        }
+
+        if (!response.ok) {
+          const error: any = new Error(
+            parsedBody?.message || `Upload falhou com status ${response.status}`
+          );
+          error.response = {
+            status: response.status,
+            data: parsedBody,
+          };
+
+          if (response.status === 401 && attempt < maxRetries) {
+            const refreshedToken = await apiService.refreshAccessToken();
+            if (refreshedToken) {
+              console.warn('[BillService] Token expirado no upload. Token renovado, repetindo requisição...');
+              continue;
+            }
+          }
+
+          const isRetryableHttp = response.status === 429 || response.status >= 500;
+          if (isRetryableHttp && attempt < maxRetries) {
+            const waitTime = 1000 * Math.pow(2, attempt);
+            console.warn(`[BillService] Upload HTTP ${response.status}. Retry em ${waitTime}ms... (${attempt + 1}/${maxRetries})`);
+            await new Promise((resolve) => setTimeout(resolve, waitTime));
+            continue;
+          }
+
+          throw error;
+        }
+
+        return parsedBody as T;
+      } catch (error: any) {
+        lastError = error;
+        const isAbortError = error?.name === 'AbortError';
+        const isNetworkError = !error?.response;
+
+        if ((isAbortError || isNetworkError) && attempt < maxRetries) {
+          const switchedBaseUrl = await apiService.recoverBaseUrlOnNetworkError(endpoint);
+          if (switchedBaseUrl) {
+            console.warn('[BillService] Host da API recuperado. Repetindo upload com nova baseURL...');
+            continue;
+          }
+
+          const waitTime = 1000 * Math.pow(2, attempt);
+          console.warn(`[BillService] Upload network/timeout error. Retry em ${waitTime}ms... (${attempt + 1}/${maxRetries})`);
+          await new Promise((resolve) => setTimeout(resolve, waitTime));
+          continue;
+        }
+
+        throw error;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
+
+    throw lastError;
+  }
+
   /**
    * Faz upload de uma conta (imagem) para o servidor
    * @param imageUri - URI local da imagem otimizada
@@ -122,9 +233,6 @@ class BillService {
         throw new Error('URI da imagem é obrigatória');
       }
 
-      // Criar FormData
-      const formData = new FormData();
-
       // Extrair nome do arquivo da URI
       const uriParts = imageUri.split('/');
       const filename = uriParts[uriParts.length - 1] || `bill-${Date.now()}.jpg`;
@@ -144,42 +252,18 @@ class BillService {
         mimeType,
       });
 
-      // Adicionar imagem ao FormData com estrutura correta para React Native
-      // O Expo/React Native espera um objeto com uri, name e type
-      formData.append('image', {
-        uri: imageUri,
-        name: filename,
-        type: mimeType,
-      } as any);
-
-      // Adicionar nome do estabelecimento se fornecido
       if (establishmentName && establishmentName.trim().length > 0) {
-        formData.append('establishmentName', establishmentName.trim());
         console.log('[BillService] Nome do estabelecimento adicionado:', establishmentName);
       }
 
-      // Fazer requisição com retry automático para uploads
+      // Fazer requisição de upload diretamente com fetch (mais estável para multipart no RN)
       console.log('[BillService] Enviando requisição para /bills...');
 
-      const response = await apiService.postWithRetry<UploadBillResponse>(
+      const response = await this.uploadWithFetchRetry<UploadBillResponse>(
         '/bills',
-        formData,
-        {
-          // Para uploads multipart no React Native + Axios 1.x:
-          // É preciso deletar o Content-Type via transformRequest para que o XHR
-          // nativo injete automaticamente o boundary correto (multipart/form-data; boundary=...)
-          // Definir como undefined no headers não é suficiente pois o default do
-          // Axios instance ('application/json') tem precedência em certos merge paths.
-          transformRequest: (data: any, headers: any) => {
-            if (headers) {
-              delete headers['Content-Type'];
-              delete headers['content-type'];
-            }
-            return data;
-          },
-          timeout: 60000, // 60 segundos - aumentado para dar tempo para OCR
-        },
-        3 // máximo de 3 retentativas
+        () => this.buildImageFormData(imageUri, filename, mimeType, establishmentName),
+        60000,
+        3
       );
 
       console.log('[BillService] Upload concluído com sucesso:', {
@@ -239,7 +323,6 @@ class BillService {
         throw new Error('URI da imagem é obrigatória');
       }
 
-      const formData = new FormData();
       const uriParts = imageUri.split('/');
       const filename = uriParts[uriParts.length - 1] || `bill-${Date.now()}.jpg`;
 
@@ -247,27 +330,11 @@ class BillService {
       if (filename.toLowerCase().endsWith('.png')) mimeType = 'image/png';
       else if (filename.toLowerCase().endsWith('.webp')) mimeType = 'image/webp';
 
-      formData.append('image', {
-        uri: imageUri,
-        name: filename,
-        type: mimeType,
-      } as any);
-
-      // Usar retry automático para upload de imagem
-      const response = await apiService.postWithRetry<UploadBillResponse>(
+      const response = await this.uploadWithFetchRetry<UploadBillResponse>(
         `/bills/${billId}/image`,
-        formData,
-        {
-          transformRequest: (data: any, headers: any) => {
-            if (headers) {
-              delete headers['Content-Type'];
-              delete headers['content-type'];
-            }
-            return data;
-          },
-          timeout: 60000,
-        },
-        3 // máximo de 3 retentativas
+        () => this.buildImageFormData(imageUri, filename, mimeType),
+        60000,
+        3
       );
 
       console.log('[BillService] Upload de imagem concluído:', response);

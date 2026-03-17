@@ -4,9 +4,11 @@ import { AppModule } from './app.module';
 import { join } from 'path';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
+import { StorageService } from './storage/storage.service';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  app.set('trust proxy', 1);
 
   app.use(
     helmet({
@@ -14,9 +16,12 @@ async function bootstrap() {
     }),
   );
 
-  app.useStaticAssets(join(__dirname, '..', '..', 'uploads'), {
-    prefix: '/uploads/',
-  });
+  const storageService = app.get(StorageService);
+  if (storageService.shouldServeLocalUploads()) {
+    app.useStaticAssets(join(__dirname, '..', '..', 'uploads'), {
+      prefix: '/uploads/',
+    });
+  }
 
   app.useGlobalPipes(
     new ValidationPipe({

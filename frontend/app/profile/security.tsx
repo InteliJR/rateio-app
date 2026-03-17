@@ -135,10 +135,24 @@ export default function SecurityScreen() {
         <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
             {avatarUrl ? (
-              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+              <Image
+                source={{ uri: avatarUrl }}
+                style={[
+                  styles.avatarImage,
+                  { backgroundColor: colors.backgroundTertiary },
+                ]}
+              />
             ) : (
-              <View style={styles.avatar}>
-                <Ionicons name="person" size={60} color="#FFF" />
+              <View
+                style={[
+                  styles.avatar,
+                  {
+                    backgroundColor: colors.primary,
+                    shadowColor: colors.shadow,
+                  },
+                ]}
+              >
+                <Ionicons name="person" size={60} color={colors.accent} />
               </View>
             )}
           </View>
@@ -165,7 +179,10 @@ export default function SecurityScreen() {
           <TouchableOpacity
             style={[
               styles.optionItem,
-              { backgroundColor: colors.cardBackground },
+              {
+                backgroundColor: colors.cardBackground,
+                borderColor: colors.cardBorder,
+              },
             ]}
             onPress={openPasswordModal}
           >
@@ -199,10 +216,18 @@ export default function SecurityScreen() {
           <View
             style={[
               styles.modalContent,
-              { backgroundColor: colors.cardBackground },
+              {
+                backgroundColor: colors.cardBackground,
+                borderColor: colors.cardBorder,
+              },
             ]}
           >
-            <View style={styles.modalHeader}>
+            <View
+              style={[
+                styles.modalHeader,
+                { borderBottomColor: colors.divider },
+              ]}
+            >
               <TouchableOpacity onPress={closePasswordModal}>
                 <Text
                   style={[
@@ -439,6 +464,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: 16,
     paddingHorizontal: 16,
+    borderWidth: 1,
     backgroundColor: "#FFF",
   },
   optionText: {
@@ -454,6 +480,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
+    borderWidth: 1,
     paddingBottom: 40,
     maxHeight: "80%",
   },

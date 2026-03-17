@@ -216,10 +216,14 @@ export default function BillDetail() {
             {/* Botão Editar - só aparece para a conta mais recente */}
             {isLatestBill ? (
               <TouchableOpacity
-                style={styles.editButton}
+                style={[styles.editButton, { borderColor: colors.primary }]}
                 onPress={handleEditBill}
               >
-                <Text style={styles.editButtonText}>Editar</Text>
+                <Text
+                  style={[styles.editButtonText, { color: colors.primary }]}
+                >
+                  Editar
+                </Text>
               </TouchableOpacity>
             ) : (
               <View style={styles.editButtonPlaceholder} />
@@ -279,7 +283,10 @@ export default function BillDetail() {
           <View
             style={[
               styles.sectionCard,
-              { backgroundColor: colors.cardBackground },
+              {
+                backgroundColor: colors.cardBackground,
+                borderColor: colors.cardBorder,
+              },
             ]}
           >
             {(data.items || []).map((item, index) => (
@@ -327,7 +334,12 @@ export default function BillDetail() {
             <View
               style={[styles.divider, { backgroundColor: colors.divider }]}
             />
-            <View style={styles.totalRow}>
+            <View
+              style={[
+                styles.totalRow,
+                { backgroundColor: colors.backgroundSecondary },
+              ]}
+            >
               <Text
                 style={[
                   styles.totalLabel,
@@ -361,7 +373,10 @@ export default function BillDetail() {
               key={participant.id}
               style={[
                 styles.participantCardWrapper,
-                { backgroundColor: colors.cardBackground },
+                {
+                  backgroundColor: colors.cardBackground,
+                  borderColor: colors.cardBorder,
+                },
               ]}
             >
               <TouchableOpacity
@@ -402,7 +417,10 @@ export default function BillDetail() {
                 <View
                   style={[
                     styles.participantDetails,
-                    { backgroundColor: colors.dropdownBackground },
+                    {
+                      backgroundColor: colors.dropdownBackground,
+                      borderTopColor: colors.divider,
+                    },
                   ]}
                 >
                   {/* Itens do participante */}
@@ -444,9 +462,17 @@ export default function BillDetail() {
                             style={[
                               styles.detailRow,
                               fee.type === "SERVICE_PERCENTAGE" &&
-                                styles.detailRowFee,
+                                [
+                                  styles.detailRowFee,
+                                  { backgroundColor: colors.checkboxActive },
+                                ],
                               fee.type === "COVER_CHARGE" &&
-                                styles.detailRowCouvert,
+                                [
+                                  styles.detailRowCouvert,
+                                  {
+                                    backgroundColor: colors.couvertBackground,
+                                  },
+                                ],
                             ]}
                           >
                             <Text
@@ -463,7 +489,7 @@ export default function BillDetail() {
                               {fee.type === "SERVICE_PERCENTAGE"
                                 ? "Taxa de Serviço"
                                 : fee.type === "COVER_CHARGE"
-                                  ? "Couvert"
+                                  ? "Couvert artístico"
                                   : "Taxa"}
                             </Text>
                             <Text
@@ -492,7 +518,10 @@ export default function BillDetail() {
           <View
             style={[
               styles.finalSummaryCard,
-              { backgroundColor: colors.cardBackground },
+              {
+                backgroundColor: colors.cardBackground,
+                borderColor: colors.cardBorder,
+              },
             ]}
           >
             <View style={styles.summaryRow}>
@@ -531,7 +560,13 @@ export default function BillDetail() {
                 {formatCurrency(data.summary.totalFees)}
               </Text>
             </View>
-            <View style={[styles.summaryRow, styles.marginTop]}>
+            <View
+              style={[
+                styles.summaryRow,
+                styles.marginTop,
+                { borderTopColor: colors.divider },
+              ]}
+            >
               <Text
                 style={[
                   styles.finalTotalLabel,
@@ -589,7 +624,6 @@ export default function BillDetail() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
   },
   scrollContent: {
     paddingBottom: 20,
@@ -601,7 +635,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingVertical: 12,
     marginBottom: 0,
-    backgroundColor: "#FFFFFF",
     gap: 4,
   },
   backButton: {
@@ -627,7 +660,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderWidth: 1.5,
-    borderColor: "#8B2E8F",
     borderRadius: 18,
   },
   editButtonPlaceholder: {
@@ -636,14 +668,12 @@ const styles = StyleSheet.create({
   editButtonText: {
     fontSize: 13,
     fontWeight: "500",
-    color: "#8B2E8F",
   },
   contentContainer: {
     paddingHorizontal: 20,
     paddingTop: 0,
     paddingBottom: 8,
     gap: 10,
-    backgroundColor: "#FFFFFF",
   },
   sectionTitle: {
     fontSize: 16,
@@ -655,9 +685,7 @@ const styles = StyleSheet.create({
   },
   sectionCard: {
     borderWidth: 1,
-    borderColor: "#E0E0E0",
     borderRadius: 10,
-    backgroundColor: "#FFFFFF",
     overflow: "hidden",
   },
   itemRow: {
@@ -669,7 +697,6 @@ const styles = StyleSheet.create({
   },
   borderBottom: {
     borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
   },
   itemInfo: {
     flex: 1,
@@ -694,7 +721,6 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: "#E0E0E0",
     marginHorizontal: 16,
   },
   totalRow: {
@@ -703,7 +729,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: "#FAFAFA",
   },
   totalLabel: {
     fontSize: 15,
@@ -717,10 +742,8 @@ const styles = StyleSheet.create({
   },
   participantCardWrapper: {
     borderWidth: 1,
-    borderColor: "#E0E0E0",
     borderRadius: 10,
     overflow: "hidden",
-    backgroundColor: "#FFFFFF",
   },
   participantHeader: {
     flexDirection: "row",
@@ -744,10 +767,8 @@ const styles = StyleSheet.create({
     color: "#8B2E8F",
   },
   participantDetails: {
-    backgroundColor: "#F9F9F9",
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: "#E5E5EA",
   },
   detailRow: {
     flexDirection: "row",
@@ -765,7 +786,6 @@ const styles = StyleSheet.create({
   },
   detailDivider: {
     height: 1,
-    backgroundColor: "#E5E5EA",
     marginVertical: 8,
   },
   detailTextFee: {
@@ -780,14 +800,12 @@ const styles = StyleSheet.create({
     color: "#8B2E8F",
   },
   detailRowFee: {
-    backgroundColor: "#FAF5FA",
     marginHorizontal: -16,
     paddingHorizontal: 16,
     paddingVertical: 4,
     marginBottom: 2,
   },
   detailRowCouvert: {
-    backgroundColor: "#FFFBF5",
     marginHorizontal: -16,
     paddingHorizontal: 16,
     paddingVertical: 4,
@@ -800,7 +818,7 @@ const styles = StyleSheet.create({
     color: "#d97706",
   },
   finalSummaryCard: {
-    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
     borderRadius: 12,
     padding: 16,
     marginTop: 8,
@@ -813,7 +831,6 @@ const styles = StyleSheet.create({
   marginTop: {
     marginTop: 8,
     borderTopWidth: 1,
-    borderTopColor: "#E5E5EA",
     paddingTop: 8,
   },
   summaryLabel: {

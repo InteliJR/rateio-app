@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import * as ImageManipulator from "expo-image-manipulator";
 import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../../contexts/ThemeContext";
 
 // Touch target size for corner handles
 const HANDLE_HIT = 48;
@@ -52,6 +53,7 @@ export function CropModal({
   onCrop,
   onCancel,
 }: CropModalProps) {
+  const { colors } = useTheme();
   const [imageDims, setImageDims] = useState<{ w: number; h: number } | null>(null);
   const [displayInfo, setDisplayInfo] = useState<DisplayInfo | null>(null);
   const [cropRect, setCropRect] = useState<CropRect | null>(null);
@@ -279,30 +281,46 @@ export function CropModal({
 
   return (
     <Modal visible animationType="slide" statusBarTranslucent>
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* ── Header ── */}
-        <SafeAreaView style={styles.header}>
+        <SafeAreaView
+          style={[
+            styles.header,
+            { backgroundColor: colors.backgroundSecondary },
+          ]}
+        >
           <TouchableOpacity style={styles.headerBtn} onPress={onCancel}>
-            <Ionicons name="close" size={24} color="#fff" />
+            <Ionicons name="close" size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Ajustar corte</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>
+            Ajustar corte
+          </Text>
           <TouchableOpacity
-            style={[styles.headerBtn, styles.applyBtn]}
+            style={[
+              styles.headerBtn,
+              styles.applyBtn,
+              { backgroundColor: colors.primary },
+            ]}
             onPress={applyCrop}
             disabled={applying || !cropRect}
           >
             {applying ? (
-              <ActivityIndicator size="small" color="#fff" />
+              <ActivityIndicator size="small" color={colors.accent} />
             ) : (
-              <Text style={styles.applyBtnText}>Aplicar</Text>
+              <Text style={[styles.applyBtnText, { color: colors.accent }]}>
+                Aplicar
+              </Text>
             )}
           </TouchableOpacity>
         </SafeAreaView>
 
         {/* ── Image area ── */}
-        <View style={styles.imageArea} onLayout={handleAreaLayout}>
+        <View
+          style={[styles.imageArea, { backgroundColor: colors.background }]}
+          onLayout={handleAreaLayout}
+        >
           {!imageDims || !cropRect || !displayInfo ? (
-            <ActivityIndicator size="large" color="#fff" />
+            <ActivityIndicator size="large" color={colors.accent} />
           ) : (
             <>
               {/* Image positioned EXPLICITLY at the computed offset so crop coords match exactly */}
@@ -319,19 +337,19 @@ export function CropModal({
               />
 
               {/* ── Dark overlays outside crop ── */}
-              <View pointerEvents="none" style={[styles.overlay, { top: 0, left: 0, right: 0, height: cropRect.top }]} />
-              <View pointerEvents="none" style={[styles.overlay, { top: cropRect.bottom, left: 0, right: 0, bottom: 0 }]} />
-              <View pointerEvents="none" style={[styles.overlay, { top: cropRect.top, left: 0, width: cropRect.left, height: cH }]} />
-              <View pointerEvents="none" style={[styles.overlay, { top: cropRect.top, left: cropRect.right, right: 0, height: cH }]} />
+              <View pointerEvents="none" style={[styles.overlay, { backgroundColor: colors.overlay, top: 0, left: 0, right: 0, height: cropRect.top }]} />
+              <View pointerEvents="none" style={[styles.overlay, { backgroundColor: colors.overlay, top: cropRect.bottom, left: 0, right: 0, bottom: 0 }]} />
+              <View pointerEvents="none" style={[styles.overlay, { backgroundColor: colors.overlay, top: cropRect.top, left: 0, width: cropRect.left, height: cH }]} />
+              <View pointerEvents="none" style={[styles.overlay, { backgroundColor: colors.overlay, top: cropRect.top, left: cropRect.right, right: 0, height: cH }]} />
 
               {/* ── Crop border ── */}
-              <View pointerEvents="none" style={[styles.cropBorder, { left: cropRect.left, top: cropRect.top, width: cW, height: cH }]} />
+              <View pointerEvents="none" style={[styles.cropBorder, { borderColor: colors.text, left: cropRect.left, top: cropRect.top, width: cW, height: cH }]} />
 
               {/* ── Rule-of-thirds grid ── */}
-              <View pointerEvents="none" style={[styles.gridV, { left: cropRect.left + cW / 3, top: cropRect.top, height: cH }]} />
-              <View pointerEvents="none" style={[styles.gridV, { left: cropRect.left + (cW * 2) / 3, top: cropRect.top, height: cH }]} />
-              <View pointerEvents="none" style={[styles.gridH, { top: cropRect.top + cH / 3, left: cropRect.left, width: cW }]} />
-              <View pointerEvents="none" style={[styles.gridH, { top: cropRect.top + (cH * 2) / 3, left: cropRect.left, width: cW }]} />
+              <View pointerEvents="none" style={[styles.gridV, { backgroundColor: colors.divider, left: cropRect.left + cW / 3, top: cropRect.top, height: cH }]} />
+              <View pointerEvents="none" style={[styles.gridV, { backgroundColor: colors.divider, left: cropRect.left + (cW * 2) / 3, top: cropRect.top, height: cH }]} />
+              <View pointerEvents="none" style={[styles.gridH, { backgroundColor: colors.divider, top: cropRect.top + cH / 3, left: cropRect.left, width: cW }]} />
+              <View pointerEvents="none" style={[styles.gridH, { backgroundColor: colors.divider, top: cropRect.top + (cH * 2) / 3, left: cropRect.left, width: cW }]} />
 
               {/* ── Move handle: fills interior (behind corners) ── */}
               <View
@@ -347,28 +365,28 @@ export function CropModal({
               {/* ── Corner handles (touch targets + L-shaped visuals) ── */}
               {/* Top-left */}
               <View {...panTL.panHandlers} style={[styles.cornerHit, { left: cropRect.left - HANDLE_HIT / 2, top: cropRect.top - HANDLE_HIT / 2 }]}>
-                <View style={styles.cornerTL} />
+                <View style={[styles.cornerTL, { borderColor: colors.text }]} />
               </View>
               {/* Top-right */}
               <View {...panTR.panHandlers} style={[styles.cornerHit, { left: cropRect.right - HANDLE_HIT / 2, top: cropRect.top - HANDLE_HIT / 2 }]}>
-                <View style={styles.cornerTR} />
+                <View style={[styles.cornerTR, { borderColor: colors.text }]} />
               </View>
               {/* Bottom-left */}
               <View {...panBL.panHandlers} style={[styles.cornerHit, { left: cropRect.left - HANDLE_HIT / 2, top: cropRect.bottom - HANDLE_HIT / 2 }]}>
-                <View style={styles.cornerBL} />
+                <View style={[styles.cornerBL, { borderColor: colors.text }]} />
               </View>
               {/* Bottom-right */}
               <View {...panBR.panHandlers} style={[styles.cornerHit, { left: cropRect.right - HANDLE_HIT / 2, top: cropRect.bottom - HANDLE_HIT / 2 }]}>
-                <View style={styles.cornerBR} />
+                <View style={[styles.cornerBR, { borderColor: colors.text }]} />
               </View>
             </>
           )}
         </View>
 
         {/* ── Bottom hint ── */}
-        <View style={styles.hintBar}>
-          <Ionicons name="crop-outline" size={16} color="rgba(255,255,255,0.6)" />
-          <Text style={styles.hintText}>
+        <View style={[styles.hintBar, { backgroundColor: colors.backgroundSecondary }]}>
+          <Ionicons name="crop-outline" size={16} color={colors.textSecondary} />
+          <Text style={[styles.hintText, { color: colors.textSecondary }]}>
             Arraste os cantos para redimensionar • Interior para mover
           </Text>
         </View>
