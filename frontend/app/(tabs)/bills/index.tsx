@@ -383,7 +383,6 @@ export default function BillsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
   },
   header: {
     paddingHorizontal: 20,
@@ -392,7 +391,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: "600",
-    color: "#000",
   },
   searchFilterRow: {
     flexDirection: "row",
@@ -407,24 +405,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderWidth: 1.5,
-    borderColor: "#8B2E8F",
     borderRadius: 20,
     gap: 6,
   },
   filterButtonText: {
-    color: "#8B2E8F",
     fontSize: 12,
     fontWeight: "600",
   },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F8F8F8",
     borderRadius: 24,
     paddingHorizontal: 16,
     flex: 1,
     borderWidth: 1,
-    borderColor: "#E0E0E0",
     height: 44,
   },
   searchIcon: {
@@ -433,7 +427,6 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 14,
-    color: "#000",
     padding: 0,
   },
   filtersContainer: {
@@ -447,12 +440,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
   },
   filterTitle: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#000",
   },
   filterOptions: {
     paddingHorizontal: 20,
@@ -466,7 +457,6 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   filterOptionActive: {
-    backgroundColor: "#F5F5F5",
     marginHorizontal: -10,
     paddingHorizontal: 10,
     borderRadius: 8,
@@ -475,7 +465,6 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderWidth: 2,
-    borderColor: "#8B2E8F",
     borderRadius: 4,
     justifyContent: "center",
     alignItems: "center",
@@ -483,7 +472,6 @@ const styles = StyleSheet.create({
   filterOptionText: {
     fontSize: 14,
     fontWeight: "500",
-    color: "#333",
   },
   card: {
     paddingHorizontal: 20,
@@ -499,12 +487,10 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 16,
     fontWeight: "400",
-    color: "#333333",
     flex: 1,
   },
   cardDate: {
     fontSize: 14,
-    color: "#999999",
     fontWeight: "400",
     flexShrink: 0,
   },
@@ -517,7 +503,6 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     fontWeight: "500",
-    color: "#666",
     marginTop: 16,
     textAlign: "center",
   },
