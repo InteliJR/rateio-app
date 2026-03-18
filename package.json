@@ -1,0 +1,12 @@
+{
+  "name": "rateio-app",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "eas:android:preview": "cd frontend && eas build --profile preview --platform android",
+    "eas:android:production": "cd frontend && eas build --profile production --platform android"
+  }
+}
