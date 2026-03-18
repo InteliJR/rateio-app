@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "rateio",
-    "slug": "rateio",
+    "slug": "rateio-frontend",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -58,7 +58,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "57119aff-18fe-4ce1-9038-df41d75950ee"
+        "projectId": "055cfa1c-fbb5-4a16-bca6-11f7ceac9a32"
       }
     },
     "owner": "m4rcusml"
