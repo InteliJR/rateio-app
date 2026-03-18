@@ -36,8 +36,8 @@ CREATE TABLE "revoked_tokens" (
 CREATE TABLE "bills" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
-    "imageUrl" TEXT NOT NULL,
-    "imageKey" TEXT NOT NULL,
+    "imageUrl" TEXT,
+    "imageKey" TEXT,
     "status" "BillStatus" NOT NULL DEFAULT 'PENDING_OCR',
     "ocrRawText" TEXT,
     "totalAmount" DECIMAL(10,2),

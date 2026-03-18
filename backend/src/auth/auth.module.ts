@@ -5,12 +5,16 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { UsersModule } from '../users/users.module';
 import { TokenRevocationModule } from '../token-revocation/token-revocation.module';
+import { MailModule } from '../mail/mail.module';
+import { PrismaModule } from '../prisma/prisma.module';
 import { JwtStrategy } from './strategies/jwt.strategy';
 
 @Module({
   imports: [
     UsersModule,
     TokenRevocationModule,
+    MailModule,
+    PrismaModule,
     PassportModule,
     JwtModule.register({
       global: true,

@@ -33,12 +33,16 @@ services:
       NODE_ENV: development
       DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@db:5432/${DB_NAME:-rateio_dev}
       PORT: 3000
+    env_file:
+      - ./backend/.env
     ports:
       - "3000:3000"
     volumes:
       # Hot reload em desenvolvimento
       - ./backend/src:/app/src
       - ./backend/prisma:/app/prisma
+      # Mapear uploads para o host
+      - ./backend/uploads:/app/uploads
       # Proteger node_modules do container
       - backend_node_modules:/app/node_modules
     networks:
@@ -46,7 +50,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    command: sh -c "npx prisma generate && npx prisma migrate deploy && npm run start:dev"
+    command: sh -c "npm install --legacy-peer-deps && npx prisma generate && npx prisma migrate deploy && npm run start:dev"
 
 volumes:
   postgres_data:

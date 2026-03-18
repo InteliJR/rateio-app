@@ -8,8 +8,14 @@ import {
   UseGuards,
   Request,
   ValidationPipe,
+  UseInterceptors,
+  UploadedFile,
+  Delete,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { UsersService } from './users.service';
+import { StorageService } from '../storage/storage.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -65,7 +71,10 @@ class UpdateOwnProfileDto {
 
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly storageService: StorageService,
+  ) {}
 
   // ========================================
   // ADMIN ONLY ROUTES
@@ -126,5 +135,44 @@ export class UsersController {
     @Body(ValidationPipe) updateProfileDto: UpdateOwnProfileDto,
   ) {
     return this.usersService.updateOwnProfile(req.user.id, updateProfileDto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('me/avatar')
+  @UseInterceptors(FileInterceptor('avatar'))
+  async uploadAvatar(
+    @Request() req: any,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Nenhum arquivo foi enviado');
+    }
+
+    if (!this.storageService.validateFileType(file.mimetype)) {
+      throw new BadRequestException('Apenas imagens sao permitidas (JPEG, PNG, WebP, GIF)');
+    }
+
+    if (!this.storageService.validateFileSize(file.size)) {
+      throw new BadRequestException('Tamanho maximo: 10MB');
+    }
+
+    const uploaded = await this.storageService.uploadFile(file, 'avatars');
+
+    return this.usersService.updateAvatarUrl(req.user.id, uploaded.url);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('me/avatar')
+  async removeAvatar(@Request() req: any) {
+    const user = await this.usersService.findById(req.user.id) as any;
+    
+    if (user?.avatarUrl) {
+      const key = this.storageService.extractStorageKeyFromUrl(user.avatarUrl);
+      if (key) {
+        await this.storageService.deleteFile(key);
+      }
+    }
+
+    return this.usersService.removeAvatar(req.user.id);
   }
 }

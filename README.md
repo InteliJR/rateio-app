@@ -52,7 +52,7 @@ A documentação completa do projeto pode ser acessada através deste **[link](h
 - PostgreSQL 16
 - JWT Authentication
 - Argon2 (Password Hashing)
-- Google Cloud Vision API (OCR)
+- OpenAI API (GPT-4o) para OCR
 - Sharp (Image Processing)
 - AWS S3 (Image Storage)
 - Docker & Docker Compose
@@ -76,7 +76,7 @@ A documentação completa do projeto pode ser acessada através deste **[link](h
 - **Expo CLI** (`npm install -g expo-cli`)
 - Conta Expo (criar em [expo.dev](https://expo.dev))
 - Android Studio (para emulador Android, opcional)
-- Conta Google Cloud (para Vision API)
+- Conta OpenAI (para API com GPT-4o)
 - Conta AWS (para S3, opcional em dev)
 
 ---
@@ -100,7 +100,8 @@ cp backend/.env.example backend/.env
 # Edite backend/.env e adicione suas credenciais:
 # - DATABASE_URL
 # - JWT_SECRET
-# - GOOGLE_VISION_API_KEY
+# - OPENAI_API_KEY
+# - OPENAI_MODEL
 # - AWS_S3_* (se usar S3)
 
 # Inicie o backend + banco de dados com Docker
@@ -275,7 +276,7 @@ SEED_USER_NAME=Seu Nome
 │   │   ├── participants/          # Pessoas que dividem
 │   │   ├── divisions/             # Divisões dos itens
 │   │   ├── fees/                  # Taxas (garçom/couvert)
-│   │   ├── ocr/                   # Serviço de OCR (Vision API)
+│   │   ├── ocr/                   # Serviço de OCR (OpenAI GPT-4o)
 │   │   ├── storage/               # Upload S3
 │   │   ├── prisma/                # Prisma Service
 │   │   └── main.ts
@@ -465,7 +466,7 @@ Tela Principal → Botão "Nova Conta" → Abre Câmera (Expo Camera)
 
 ### 3️⃣ Reconhecimento OCR
 ```
-API recebe imagem → Valida → Upload S3 → Google Vision API
+API recebe imagem → Valida → Upload S3 → OpenAI API (GPT-4o)
                                               │
                                               ▼
                                        Retorna texto OCR
@@ -504,7 +505,7 @@ Usuário atribui itens às pessoas
 Usuário adiciona taxas opcionais
          │
          ├─→ Garçom (% ou fixo)
-         ├─→ Couvert (fixo)
+         ├─→ Couvert artístico (fixo)
          │
          ▼
 App calcula divisão (preview local)
@@ -568,7 +569,8 @@ DATABASE_URL="postgresql://user:senha@seu-db.provider.com:5432/rateio_prod?sslmo
    JWT_SECRET=seu-secret-seguro
    JWT_REFRESH_SECRET=outro-secret
    PASSWORD_PEPPER=pepper-seguro
-   GOOGLE_VISION_API_KEY=sua-key
+   OPENAI_API_KEY=sua-key
+   OPENAI_MODEL=gpt-4o-mini
    AWS_S3_BUCKET=seu-bucket
    AWS_S3_REGION=us-east-1
    AWS_S3_ACCESS_KEY=key
@@ -791,7 +793,7 @@ if (!permission?.granted) {
 - Tire foto em boa iluminação
 - Evite reflexos e sombras
 - Use Expo ImageManipulator para melhorar qualidade
-- Verifique se `GOOGLE_VISION_API_KEY` está correta
+- Verifique se `OPENAI_API_KEY` e `OPENAI_MODEL` estão corretas
 - Verifique logs do backend: `docker-compose logs -f api`
 
 ### ❌ Erro ao fazer upload de imagem

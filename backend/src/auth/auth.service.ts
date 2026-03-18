@@ -6,6 +6,8 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { TokenRevocationService } from '../token-revocation/token-revocation.service';
+import { MailService } from '../mail/mail.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { UserRole } from '@prisma/client';
 
 @Injectable()
@@ -14,12 +16,13 @@ export class AuthService {
     private usersService: UsersService,
     private jwtService: JwtService,
     private tokenRevocationService: TokenRevocationService,
-  ) {}
+    private mailService: MailService,
+    private prisma: PrismaService,
+  ) { }
 
   /**
    * Registro de usuário
-   * IMPORTANTE: Usuários são criados INATIVOS por padrão
-   * Apenas ADMIN pode ativá-los posteriormente
+   * Usuários são criados ATIVOS e podem fazer login imediatamente
    */
   async register(
     email: string,
@@ -34,20 +37,28 @@ export class AuthService {
       );
     }
 
-    // Criar usuário INATIVO por padrão
+    // Criar usuário ATIVO por padrão
     const user = await this.usersService.create(
       email,
       name,
       password,
-      role || UserRole.USER, // ✅ MUDANÇA AQUI
-      false, // isActive = false
+      role || UserRole.USER,
+      true, // isActive = true - usuário pode fazer login imediatamente
     );
 
-    // Não retornar tokens - usuário precisa ser ativado primeiro
+    // Gerar tokens para login automático
+    const tokens = await this.generateTokens(user.id, user.email, user.role);
+
     return {
-      user,
-      message:
-        'Usuário criado com sucesso. Aguarde ativação por um administrador.',
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        createdAt: user.createdAt,
+      },
+      ...tokens,
+      message: 'Usuário criado com sucesso. Você já pode fazer login.',
     };
   }
 
@@ -162,5 +173,73 @@ export class AuthService {
   async logoutAllDevices(userId: string) {
     await this.tokenRevocationService.revokeAllUserTokens(userId);
     return { message: 'Logout realizado em todos os dispositivos' };
+  }
+
+  async forgotPassword(email: string): Promise<{ message: string }> {
+    const genericMessage =
+      'Se este email estiver cadastrado, você receberá um código de recuperação em breve.';
+
+    const user = await this.usersService.findByEmail(email);
+    if (!user || !user.isActive) {
+      // Resposta genérica para não revelar se o email existe
+      return { message: genericMessage };
+    }
+
+    // Invalidar tokens anteriores deste email
+    await this.prisma.passwordResetToken.updateMany({
+      where: { email, used: false },
+      data: { used: true },
+    });
+
+    // Gerar código de 6 dígitos
+    const token = Math.floor(100000 + Math.random() * 900000).toString();
+
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 1);
+
+    await this.prisma.passwordResetToken.create({
+      data: { token, email, expiresAt },
+    });
+
+    await this.mailService.sendPasswordResetEmail(email, token);
+
+    return { message: genericMessage };
+  }
+
+  async resetPassword(
+    email: string,
+    token: string,
+    newPassword: string,
+  ): Promise<{ message: string }> {
+    const resetToken = await this.prisma.passwordResetToken.findFirst({
+      where: {
+        token,
+        email,
+        used: false,
+        expiresAt: { gt: new Date() },
+      },
+    });
+
+    if (!resetToken) {
+      throw new UnauthorizedException(
+        'Código inválido ou expirado. Solicite um novo código.',
+      );
+    }
+
+    // Marcar token como usado
+    await this.prisma.passwordResetToken.update({
+      where: { id: resetToken.id },
+      data: { used: true },
+    });
+
+    // Atualizar senha do usuário
+    const user = await this.usersService.findByEmail(email);
+    if (!user) {
+      throw new UnauthorizedException('Usuário não encontrado.');
+    }
+
+    await this.usersService.updateOwnProfile(user.id, { password: newPassword });
+
+    return { message: 'Senha redefinida com sucesso. Faça login com sua nova senha.' };
   }
 }

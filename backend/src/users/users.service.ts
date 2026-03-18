@@ -56,6 +56,7 @@ export class UsersService {
         name: true,
         role: true,
         isActive: true,
+        avatarUrl: true,
         createdAt: true,
       },
     });
@@ -76,6 +77,7 @@ export class UsersService {
         id: true,
         email: true,
         name: true,
+        avatarUrl: true,
         role: true,
         isActive: true,
         createdAt: true,
@@ -100,6 +102,7 @@ export class UsersService {
         isActive: true,
         createdAt: true,
         updatedAt: true,
+        avatarUrl: true,
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -168,6 +171,7 @@ export class UsersService {
         isActive: true,
         createdAt: true,
         updatedAt: true,
+        avatarUrl: true,
       },
     });
   }
@@ -197,6 +201,7 @@ export class UsersService {
         id: true,
         email: true,
         name: true,
+        avatarUrl: true,
         role: true,
         isActive: true,
         createdAt: true,
@@ -224,5 +229,49 @@ export class UsersService {
     }
 
     return this.create(email, name, password, UserRole.ADMIN, true);
+  }
+
+  async updateAvatarUrl(userId: string, avatarUrl: string | null) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { avatarUrl: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Usuário não encontrado');
+    }
+
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { avatarUrl },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        avatarUrl: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+      },
+    });
+  }
+
+  /**
+   * Remove avatar do usuário
+   */
+  async removeAvatar(userId: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { avatarUrl: null },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        avatarUrl: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+      },
+    });
   }
 }

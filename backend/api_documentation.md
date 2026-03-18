@@ -1748,7 +1748,7 @@ Authorization: Bearer <access_token>
     "id": "uuid-fee-2",
     "billId": "uuid-da-conta",
     "type": "COVER_CHARGE",
-    "description": "Couvert Artístico",
+    "description": "Couvert artístico",
     "value": "15.00",
     "createdAt": "2025-11-03T15:00:00.000Z",
     "updatedAt": "2025-11-03T15:00:00.000Z"
@@ -2014,12 +2014,12 @@ POST /fees
   "value": 10.00
 }
 
-# 2. Couvert fixo
+# 2. Couvert artístico fixo
 POST /fees
 {
   "billId": ":billId",
   "type": "COVER_CHARGE",
-  "description": "Couvert Artístico",
+  "description": "Couvert artístico",
   "value": 15.00
 }
 ```

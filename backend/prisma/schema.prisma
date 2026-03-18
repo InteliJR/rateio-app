@@ -1,7 +1,7 @@
 // prisma/schema.prisma
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
@@ -25,10 +25,12 @@ model User {
   password  String
   role      UserRole @default(USER)
   isActive  Boolean  @default(true)
+  avatarUrl String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   bills         Bill[]
+  ocrJobs       OcrJob[]
   revokedTokens RevokedToken[]
 
   @@map("users")
@@ -49,35 +51,49 @@ model RevokedToken {
   @@map("revoked_tokens")
 }
 
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  email     String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([email])
+  @@map("password_reset_tokens")
+}
+
 // ============================================
 // CONTAS (BILLS)
 // ============================================
 
 enum BillStatus {
-  PENDING_OCR    // Aguardando processamento OCR
-  OCR_FAILED     // Falha no OCR
-  REVIEWING      // Usuário revisando itens
-  DIVIDING       // Usuário dividindo conta
-  COMPLETED      // Divisão finalizada
+  PENDING_OCR // Aguardando processamento OCR
+  OCR_FAILED // Falha no OCR
+  REVIEWING // Usuário revisando itens
+  DIVIDING // Usuário dividindo conta
+  COMPLETED // Divisão finalizada
 }
 
 model Bill {
-  id              String     @id @default(uuid())
-  userId          String
-  imageUrl        String     // URL da imagem no S3
-  imageKey        String     // Chave do S3 para deletar
-  status          BillStatus @default(PENDING_OCR)
-  ocrRawText      String?    @db.Text // Texto bruto do OCR
-  totalAmount     Decimal?   @db.Decimal(10, 2)
+  id                String     @id @default(uuid())
+  userId            String
+  imageUrl          String? // URL da imagem no S3
+  imageKey          String? // Chave do S3 para deletar
+  status            BillStatus @default(PENDING_OCR)
+  ocrRawText        String?    @db.Text // Texto bruto do OCR
+  totalAmount       Decimal?   @db.Decimal(10, 2)
   establishmentName String?
-  
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   items        BillItem[]
   participants Participant[]
   fees         Fee[]
+  ocrJob       OcrJob?
 
   @@index([userId])
   @@index([status])
@@ -90,15 +106,15 @@ model Bill {
 // ============================================
 
 model BillItem {
-  id          String  @id @default(uuid())
-  billId      String
-  name        String
-  quantity    Int     @default(1)
-  unitPrice   Decimal @db.Decimal(10, 2)
-  totalPrice  Decimal @db.Decimal(10, 2)
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String  @id @default(uuid())
+  billId     String
+  name       String
+  quantity   Int     @default(1)
+  unitPrice  Decimal @db.Decimal(10, 2)
+  totalPrice Decimal @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   bill      Bill       @relation(fields: [billId], references: [id], onDelete: Cascade)
   divisions Division[]
@@ -112,10 +128,10 @@ model BillItem {
 // ============================================
 
 model Participant {
-  id        String   @id @default(uuid())
-  billId    String
-  name      String
-  
+  id     String @id @default(uuid())
+  billId String
+  name   String
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -135,9 +151,9 @@ model Division {
   billItemId    String
   participantId String
   shareAmount   Decimal @db.Decimal(10, 2) // Valor que essa pessoa paga deste item
-  
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   billItem    BillItem    @relation(fields: [billItemId], references: [id], onDelete: Cascade)
   participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
@@ -149,24 +165,54 @@ model Division {
 }
 
 // ============================================
-// TAXAS (Garçom, Couvert)
+// TAXAS (Garçom, Couvert artístico)
 // ============================================
 
 enum FeeType {
   SERVICE_PERCENTAGE // Taxa de serviço (% sobre total)
-  SERVICE_FIXED      // Taxa fixa de serviço
-  COVER_CHARGE       // Couvert fixo
+  SERVICE_FIXED // Taxa fixa de serviço
+  COVER_CHARGE // Couvert artístico fixo
+}
+
+enum OcrJobStatus {
+  PENDING
+  RUNNING
+  FAILED
+  COMPLETED
+}
+
+model OcrJob {
+  id         String       @id @default(uuid())
+  billId      String       @unique
+  userId      String
+  status      OcrJobStatus @default(PENDING)
+  attempts    Int          @default(0)
+  lockedAt    DateTime?
+  availableAt DateTime     @default(now())
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  lastError   String?      @db.Text
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  bill Bill @relation(fields: [billId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, availableAt])
+  @@index([userId])
+  @@index([lockedAt])
+  @@map("ocr_jobs")
 }
 
 model Fee {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   billId      String
   type        FeeType
   description String?
-  value       Decimal  @db.Decimal(10, 2) // Valor ou percentual
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  value       Decimal @db.Decimal(10, 2) // Valor ou percentual
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   bill Bill @relation(fields: [billId], references: [id], onDelete: Cascade)
 

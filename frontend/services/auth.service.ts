@@ -1,7 +1,16 @@
 // mobile/services/auth.service.ts
 
 import { api } from "./api.service";
-import { LoginRequest, LoginResponse } from "../types/auth.types";
+import {
+  LoginRequest,
+  LoginResponse,
+  RegisterRequest,
+  RegisterResponse,
+  ForgotPasswordRequest,
+  ForgotPasswordResponse,
+  ResetPasswordRequest,
+  ResetPasswordResponse,
+} from "../types/auth.types";
 
 export const authService = {
   async login(data: LoginRequest): Promise<LoginResponse> {
@@ -14,9 +23,44 @@ export const authService = {
     return response.data;
   },
 
+  async register(data: RegisterRequest): Promise<RegisterResponse> {
+    try {
+      console.log("[AuthService] Attempting registration with:", {
+        email: data.email,
+        name: data.name,
+      });
+      const response = await api.post<RegisterResponse>("/auth/register", data);
+      console.log("[AuthService] Registration successful:", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("[AuthService] Registration failed:", error);
+      throw error;
+    }
+  },
+
   async logout() {
     // Apenas limpa tokens localmente
     // Se tiver endpoint de logout no backend, chame aqui
     return Promise.resolve();
+  },
+
+  async forgotPassword(
+    data: ForgotPasswordRequest
+  ): Promise<ForgotPasswordResponse> {
+    const response = await api.post<ForgotPasswordResponse>(
+      "/auth/forgot-password",
+      data
+    );
+    return response.data;
+  },
+
+  async resetPassword(
+    data: ResetPasswordRequest
+  ): Promise<ResetPasswordResponse> {
+    const response = await api.post<ResetPasswordResponse>(
+      "/auth/reset-password",
+      data
+    );
+    return response.data;
   },
 };

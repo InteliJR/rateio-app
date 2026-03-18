@@ -11,41 +11,237 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { BillsService } from './bills.service';
 import { CreateBillDto } from './dto/create-bill.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { FinalizeBillDto } from './dto/finalize-bill.dto';
+import { CreateBillItemDto } from '../bill-items/dto/create-bill-item.dto';
+import { UpdateBillItemDto } from '../bill-items/dto/update-bill-item.dto';
+import { BatchUpdateBillItemsDto } from './dto/update-bill.dto';
+import { CreateFeeDto } from '../fees/dto/create-fee.dto';
+import { BillStatus } from '@prisma/client';
 
 @Controller('bills')
 @UseGuards(JwtAuthGuard)
 export class BillsController {
-  constructor(private readonly billsService: BillsService) {}
+  constructor(private readonly billsService: BillsService) { }
+
+  /**
+   * Listar contas do usuário com paginação, filtros e ordenação
+   */
+  @SkipThrottle()
+  @Get()
+  findAll(
+    @Request() req: any,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('status') status?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('search') search?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 10;
+
+    // Campos válidos para ordenação
+    const validSortFields = ['createdAt', 'totalAmount'];
+    const validSortOrders = ['asc', 'desc'];
+
+    // Construir objeto de filtros
+    const filters: {
+      status?: BillStatus;
+      startDate?: Date;
+      endDate?: Date;
+      search?: string;
+      sortBy?: 'createdAt' | 'totalAmount';
+      sortOrder?: 'asc' | 'desc';
+    } = {};
+
+    // Validar e aplicar filtro de status
+    if (status && Object.values(BillStatus).includes(status as BillStatus)) {
+      filters.status = status as BillStatus;
+    }
+
+    // Validar e aplicar filtro de data inicial
+    if (startDate) {
+      const parsedStartDate = new Date(startDate);
+      if (!isNaN(parsedStartDate.getTime())) {
+        filters.startDate = parsedStartDate;
+      }
+    }
+
+    // Validar e aplicar filtro de data final
+    if (endDate) {
+      const parsedEndDate = new Date(endDate);
+      if (!isNaN(parsedEndDate.getTime())) {
+        filters.endDate = parsedEndDate;
+      }
+    }
+
+    if (search) {
+      filters.search = search;
+    }
+
+    // Validar e aplicar ordenação
+    if (sortBy && validSortFields.includes(sortBy)) {
+      filters.sortBy = sortBy as 'createdAt' | 'totalAmount';
+    }
+
+    if (sortOrder && validSortOrders.includes(sortOrder.toLowerCase())) {
+      filters.sortOrder = sortOrder.toLowerCase() as 'asc' | 'desc';
+    }
+
+    return this.billsService.findAllByUser(
+      req.user.id,
+      pageNum,
+      limitNum,
+      Object.keys(filters).length > 0 ? filters : undefined,
+    );
+  }
 
   /**
    * Upload de foto da conta + OCR automático
    */
+  @Throttle({ default: { limit: 2, ttl: 60000 } })
   @Post()
   @UseInterceptors(FileInterceptor('image'))
   async create(
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: Express.Multer.File | undefined,
     @Body() createBillDto: CreateBillDto,
     @Request() req: any,
   ) {
-    if (!file) {
-      throw new BadRequestException('Imagem da conta é obrigatória');
-    }
-
+    // if (!file) check removed to allow manual creation
     return this.billsService.create(file, req.user.id, createBillDto);
   }
 
   /**
-   * Listar contas do usuário
+   * Retornar resumo da conta com valores por participante
    */
-  @Get()
-  findAll(@Request() req: any) {
-    return this.billsService.findAllByUser(req.user.id);
+  @Get(':id/summary')
+  getSummary(@Param('id') id: string, @Request() req: any) {
+    return this.billsService.getSummary(id, req.user.id);
+  }
+
+  /**
+   * Upload de foto para conta existente + OCR
+   * IMPORTANTE: Esta rota deve vir ANTES de outras rotas POST com :id
+   */
+  @Throttle({ default: { limit: 2, ttl: 60000 } })
+  @Post(':id/image')
+  @UseInterceptors(FileInterceptor('image'))
+  async uploadImage(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Request() req: any,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Imagem obrigatória');
+    }
+    return this.billsService.uploadImage(id, file, req.user.id);
+  }
+
+  /**
+   * Criar item individual
+   */
+  @Post(':id/items')
+  createItem(
+    @Param('id') billId: string,
+    @Body() createBillItemDto: CreateBillItemDto,
+    @Request() req: any,
+  ) {
+    return this.billsService.createItem(billId, req.user.id, createBillItemDto);
+  }
+
+  /**
+   * Atualizar itens em lote
+   */
+  @Patch(':id/items')
+  batchUpdateItems(
+    @Param('id') billId: string,
+    @Body() batchUpdateDto: BatchUpdateBillItemsDto,
+    @Request() req: any,
+  ) {
+    return this.billsService.batchUpdateItems(billId, req.user.id, batchUpdateDto);
+  }
+
+  /**
+   * Atualizar item individual
+   */
+  @Patch(':id/items/:itemId')
+  updateItem(
+    @Param('id') billId: string,
+    @Param('itemId') itemId: string,
+    @Body() updateBillItemDto: UpdateBillItemDto,
+    @Request() req: any,
+  ) {
+    return this.billsService.updateItem(
+      billId,
+      itemId,
+      req.user.id,
+      updateBillItemDto,
+    );
+  }
+
+  /**
+   * Deletar item individual
+   */
+  @Delete(':id/items/:itemId')
+  deleteItem(
+    @Param('id') billId: string,
+    @Param('itemId') itemId: string,
+    @Request() req: any,
+  ) {
+    return this.billsService.deleteItem(billId, itemId, req.user.id);
+  }
+
+  /**
+   * Criar taxa/couvert
+   */
+  @Post(':id/fees')
+  createFee(
+    @Param('id') billId: string,
+    @Body() createFeeDto: CreateFeeDto,
+    @Request() req: any,
+  ) {
+    // Preencher billId da URL no DTO antes de validar
+    createFeeDto.billId = billId;
+    return this.billsService.createFee(billId, req.user.id, createFeeDto);
+  }
+
+  /**
+   * Finalizar divisão da conta
+   */
+  @Post(':id/finalize')
+  finalize(
+    @Param('id') id: string,
+    @Body() finalizeBillDto: FinalizeBillDto,
+    @Request() req: any,
+  ) {
+    return this.billsService.finalize(id, req.user.id, finalizeBillDto);
+  }
+
+  /**
+   * Duplicar conta (reutilizar) - cria uma nova conta com os mesmos itens e participantes
+   */
+  @Post(':id/duplicate')
+  duplicate(@Param('id') id: string, @Request() req: any) {
+    return this.billsService.duplicate(id, req.user.id);
+  }
+
+  /**
+   * Reprocessar OCR de uma conta que falhou
+   */
+  @Throttle({ default: { limit: 1, ttl: 300000 } })
+  @Post(':id/retry-ocr')
+  retryOcr(@Param('id') id: string, @Request() req: any) {
+    return this.billsService.retryOcr(id, req.user.id);
   }
 
   /**
