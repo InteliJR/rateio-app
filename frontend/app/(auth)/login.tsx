@@ -55,7 +55,7 @@ export default function LoginScreen() {
     setIsSubmitting(true);
     try {
       await login(data.email, data.password);
-      router.replace("/(tabs)/(create)/new");
+      router.replace("/(tabs)/bills");
     } catch (error: any) {
       const message = getApiErrorMessage(error);
       setServerError(message);

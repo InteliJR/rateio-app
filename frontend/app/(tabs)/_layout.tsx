@@ -18,19 +18,6 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen
-        name="(create)"
-        options={{
-          tabBarIcon: ({ color }) => (
-            <MaterialCommunityIcons
-              name="camera-outline"
-              size={24}
-              color={color}
-            />
-          ),
-          tabBarLabel: "Scanner",
-        }}
-      />
-      <Tabs.Screen
         name="bills"
         options={{
           tabBarIcon: ({ color }) => (
@@ -40,7 +27,20 @@ export default function TabsLayout() {
               color={color}
             />
           ),
-          tabBarLabel: "Contas",
+          tabBarLabel: "Historico",
+        }}
+      />
+      <Tabs.Screen
+        name="(create)"
+        options={{
+          tabBarIcon: ({ color }) => (
+            <MaterialCommunityIcons
+              name="camera-outline"
+              size={24}
+              color={color}
+            />
+          ),
+          tabBarLabel: "Camera",
         }}
       />
       <Tabs.Screen

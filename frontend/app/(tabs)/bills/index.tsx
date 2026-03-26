@@ -305,7 +305,7 @@ export default function BillsScreen() {
             { color: colors.text, fontSize: getFontSize(24) },
           ]}
         >
-          Contas
+          Historico
         </Text>
       </View>
 

@@ -1,105 +1,111 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import {
-  StyleSheet,
-  Text,
-  View,
-  ScrollView,
-  TouchableOpacity,
   ActivityIndicator,
   Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
-import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import billService, {
-  BillSummaryResponse,
-} from "../../../services/bill.service";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useTheme } from "../../../contexts/ThemeContext";
+import { parseFeeParticipantIds } from "../../../lib/rateio";
+import billService from "../../../services/bill.service";
 
-interface BillPerson {
-  name: string;
-  amount: number;
-}
-
-interface BillItem {
-  description: string;
-  amount: number;
-  quantity?: number;
-  people?: BillPerson[];
-}
-
-interface BillDetail {
+interface DetailParticipant {
   id: string;
-  establishmentName: string;
-  totalAmount: number;
-  createdAt: string;
-  items?: BillItem[];
+  name: string;
+  subtotal: number;
+  fees: Array<{
+    id: string;
+    type: string;
+    label: string;
+    amount: number;
+  }>;
+  items: Array<{
+    id: string;
+    name: string;
+    quantity: number;
+    shareAmount: number;
+  }>;
+  total: number;
 }
 
-export default function BillDetail() {
+interface DetailData {
+  bill: any;
+  items: Array<{
+    id: string;
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    totalPrice: number;
+  }>;
+  participants: DetailParticipant[];
+  summary: {
+    subtotal: number;
+    feesTotal: number;
+    total: number;
+  };
+}
+
+const round2 = (value: number) => Math.round(value * 100) / 100;
+
+export default function BillDetailScreen() {
   const { colors, getFontSize } = useTheme();
-  const { id } = useLocalSearchParams();
+  const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const [data, setData] = useState<BillSummaryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [duplicating, setDuplicating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [isLatestBill, setIsLatestBill] = useState(false);
-  const [expandedParticipantId, setExpandedParticipantId] = useState<
-    string | null
-  >(null);
-
-  // Usar useFocusEffect para recarregar dados quando a tela ganha foco
-  // Isso garante que os dados sejam atualizados após edição
-  useFocusEffect(
-    useCallback(() => {
-      loadBillDetails();
-      checkIfLatestBill();
-    }, [id]),
+  const [expandedParticipantId, setExpandedParticipantId] = useState<string | null>(
+    null,
   );
+  const [detail, setDetail] = useState<DetailData | null>(null);
 
-  const loadBillDetails = async () => {
+  const loadData = useCallback(async () => {
+    if (!id) return;
+
     try {
       setLoading(true);
-      const response = await billService.getSummary(id as string);
-      setData(response);
-    } catch (err) {
-      console.error("Erro ao carregar conta:", err);
+      const [bill, latestBills] = await Promise.all([
+        billService.getBill(id),
+        billService.listBills(1, 1),
+      ]);
+
+      setIsLatestBill(latestBills.data[0]?.id === id);
+      setDetail(buildDetailData(bill));
+    } catch (error) {
+      setDetail(null);
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
-  const checkIfLatestBill = async () => {
-    try {
-      // Buscar a lista de contas ordenada por data (mais recente primeiro)
-      const response = await billService.listBills(1, 1);
+  useFocusEffect(
+    useCallback(() => {
+      void loadData();
+    }, [loadData]),
+  );
 
-      // Se esta conta é a primeira da lista (mais recente), permitir edição
-      if (response.data.length > 0 && response.data[0].id === id) {
-        setIsLatestBill(true);
-      } else {
-        setIsLatestBill(false);
-      }
-    } catch (err) {
-      console.error("Erro ao verificar conta mais recente:", err);
-      setIsLatestBill(false);
-    }
-  };
+  const formatCurrency = (value: number) =>
+    `R$ ${value.toFixed(2).replace(".", ",")}`;
 
   const handleEditBill = () => {
-    // Navegar para a tela de edição (scanned.tsx) com a conta atual
-    // Passamos editMode=true para permitir edição mesmo se a conta estiver COMPLETED
     router.push({
       pathname: "/(tabs)/(create)/scanned",
-      params: { id: id as string, editMode: "true" },
+      params: { id, editMode: "true" },
     });
   };
 
   const handleReuseBill = () => {
     Alert.alert(
       "Reutilizar conta",
-      "Será criada uma cópia desta conta com os mesmos participantes e configurações. Deseja continuar?",
+      "Uma nova conta sera criada com os mesmos itens e participantes.",
       [
         { text: "Cancelar", style: "cancel" },
         {
@@ -107,21 +113,15 @@ export default function BillDetail() {
           onPress: async () => {
             try {
               setDuplicating(true);
-
-              // Duplicar a conta no backend
-              const newBill = await billService.duplicateBill(id as string);
-
-              // Navegar para a tela de edição da nova conta
+              const duplicatedBill = await billService.duplicateBill(id);
               router.push({
                 pathname: "/(tabs)/(create)/scanned",
-                params: { id: newBill.id },
+                params: { id: duplicatedBill.id },
               });
-            } catch (err: any) {
-              console.error("Erro ao reutilizar conta:", err);
+            } catch (error: any) {
               Alert.alert(
                 "Erro",
-                err.message ||
-                  "Não foi possível reutilizar a conta. Tente novamente.",
+                error.message || "Nao foi possivel reutilizar a conta.",
               );
             } finally {
               setDuplicating(false);
@@ -132,57 +132,52 @@ export default function BillDetail() {
     );
   };
 
-  const formatCurrency = (value?: number): string => {
-    if (value === undefined || value === null) return "R$ 0,00";
-    return `R$ ${value.toLocaleString("pt-BR", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
-  };
-
-  const toggleParticipant = (participantId: string) => {
-    if (expandedParticipantId === participantId) {
-      setExpandedParticipantId(null);
-    } else {
-      setExpandedParticipantId(participantId);
-    }
+  const handleDeleteBill = () => {
+    Alert.alert(
+      "Excluir conta",
+      "Esta conta sera removida permanentemente do historico. Deseja continuar?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Excluir",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setDeleting(true);
+              await billService.deleteBill(id);
+              router.replace("/(tabs)/bills");
+            } catch (error: any) {
+              Alert.alert(
+                "Erro",
+                error.message || "Nao foi possivel excluir a conta.",
+              );
+            } finally {
+              setDeleting(false);
+            }
+          },
+        },
+      ],
+    );
   };
 
   if (loading) {
     return (
       <SafeAreaView
-        style={[styles.container, { backgroundColor: colors.background }]}
+        style={[styles.centered, { backgroundColor: colors.background }]}
       >
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text
-            style={[
-              styles.loadingText,
-              { color: colors.text, fontSize: getFontSize(14) },
-            ]}
-          >
-            Carregando conta...
-          </Text>
-        </View>
+        <ActivityIndicator size="large" color={colors.primary} />
       </SafeAreaView>
     );
   }
 
-  if (!data) {
+  if (!detail) {
     return (
       <SafeAreaView
-        style={[styles.container, { backgroundColor: colors.background }]}
+        style={[styles.centered, { backgroundColor: colors.background }]}
       >
-        <View style={styles.errorContainer}>
-          <Text
-            style={[
-              styles.errorText,
-              { color: colors.text, fontSize: getFontSize(16) },
-            ]}
-          >
-            Conta não encontrada
-          </Text>
-        </View>
+        <Text style={[styles.emptyText, { color: colors.text }]}>
+          Conta nao encontrada.
+        </Text>
       </SafeAreaView>
     );
   }
@@ -192,95 +187,66 @@ export default function BillDetail() {
       style={[styles.container, { backgroundColor: colors.background }]}
       edges={["bottom", "left", "right"]}
     >
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        <View style={styles.contentContainer}>
-          {/* Título com Seta de Voltar e Botão Editar */}
-          <View style={styles.titleSection}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => router.back()}
-            >
-              <Ionicons name="chevron-back" size={22} color={colors.text} />
-            </TouchableOpacity>
-            <Text
-              style={[
-                styles.titleText,
-                { color: colors.text, fontSize: getFontSize(18) },
-              ]}
-            >
-              {data.bill.establishmentName || "Detalhes"}
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="chevron-back" size={22} color={colors.text} />
+          </TouchableOpacity>
+          <View style={styles.headerText}>
+            <Text style={[styles.title, { color: colors.text }]}>
+              {detail.bill.establishmentName || "Conta"}
             </Text>
-            {/* Botão Editar - só aparece para a conta mais recente */}
-            {isLatestBill ? (
-              <TouchableOpacity
-                style={[styles.editButton, { borderColor: colors.primary }]}
-                onPress={handleEditBill}
-              >
-                <Text
-                  style={[styles.editButtonText, { color: colors.primary }]}
-                >
-                  Editar
-                </Text>
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.editButtonPlaceholder} />
-            )}
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+              {new Date(detail.bill.createdAt).toLocaleDateString("pt-BR")}
+            </Text>
           </View>
-
-          {/* Aviso de Falha (Se houver) */}
-          {data.bill.status === "OCR_FAILED" && (
-            <View
-              style={[
-                styles.warningCard,
-                { backgroundColor: colors.warningLight ?? "#FFEBEE" },
-              ]}
+          {isLatestBill ? (
+            <TouchableOpacity
+              style={[styles.editButton, { borderColor: colors.primary }]}
+              onPress={handleEditBill}
             >
-              <MaterialCommunityIcons
-                name="alert-circle-outline"
-                size={24}
-                color={colors.error ?? "#D32F2F"}
-              />
-              <View style={styles.warningContent}>
-                <Text
-                  style={[
-                    styles.warningTitle,
-                    {
-                      color: colors.error ?? "#D32F2F",
-                      fontSize: getFontSize(15),
-                    },
-                  ]}
-                >
-                  Falha no processamento
+              <Text style={[styles.editButtonText, { color: colors.primary }]}>
+                Editar
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.editPlaceholder} />
+          )}
+        </View>
+
+        <View
+          style={[
+            styles.sectionCard,
+            {
+              backgroundColor: colors.cardBackground,
+              borderColor: colors.cardBorder,
+            },
+          ]}
+        >
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Itens da conta
+          </Text>
+          {detail.items.map((item) => (
+            <View key={item.id} style={styles.row}>
+              <View style={styles.rowText}>
+                <Text style={[styles.rowLabel, { color: colors.text }]}>
+                  {item.name}
                 </Text>
-                <Text
-                  style={[
-                    styles.warningText,
-                    {
-                      color: colors.secondaryText ?? "#B71C1C",
-                      fontSize: getFontSize(13),
-                    },
-                  ]}
-                >
-                  Não foi possível ler os itens da nota automaticamente. Por
-                  favor, verifique os valores ou edite manualmente.
+                <Text style={[styles.rowMeta, { color: colors.textSecondary }]}>
+                  {item.quantity}x • {formatCurrency(item.unitPrice)}
                 </Text>
               </View>
+              <Text style={[styles.rowValue, { color: colors.text }]}>
+                {formatCurrency(item.totalPrice)}
+              </Text>
             </View>
-          )}
+          ))}
+        </View>
 
-          {/* Seção de Itens da Conta */}
-          <Text
-            style={[
-              styles.sectionTitle,
-              { color: colors.text, fontSize: getFontSize(18) },
-            ]}
-          >
-            Itens da Conta
-          </Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Por pessoa</Text>
+        {detail.participants.map((participant) => (
           <View
+            key={participant.id}
             style={[
               styles.sectionCard,
               {
@@ -289,630 +255,392 @@ export default function BillDetail() {
               },
             ]}
           >
-            {(data.items || []).map((item, index) => (
-              <View
-                key={item.id}
-                style={[
-                  styles.itemRow,
-                  index < (data.items || []).length - 1 && [
-                    styles.borderBottom,
-                    { borderColor: colors.divider },
-                  ],
-                ]}
-              >
-                <View style={styles.itemInfo}>
-                  <Text
-                    style={[
-                      styles.itemName,
-                      { color: colors.text, fontSize: getFontSize(15) },
-                    ]}
-                  >
-                    {item.name}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.itemQty,
-                      {
-                        color: colors.secondaryText,
-                        fontSize: getFontSize(13),
-                      },
-                    ]}
-                  >
-                    {item.quantity}x {formatCurrency(item.unitPrice)}
-                  </Text>
-                </View>
-                <Text
-                  style={[
-                    styles.itemTotal,
-                    { color: colors.text, fontSize: getFontSize(15) },
-                  ]}
-                >
-                  {formatCurrency(item.totalPrice)}
+            <TouchableOpacity
+              style={styles.participantHeader}
+              onPress={() =>
+                setExpandedParticipantId((current) =>
+                  current === participant.id ? null : participant.id,
+                )
+              }
+            >
+              <Text style={[styles.participantName, { color: colors.text }]}>
+                {participant.name}
+              </Text>
+              <View style={styles.participantHeaderRight}>
+                <Text style={[styles.participantTotal, { color: colors.primary }]}>
+                  {formatCurrency(participant.total)}
                 </Text>
+                <MaterialCommunityIcons
+                  name={
+                    expandedParticipantId === participant.id
+                      ? "chevron-up"
+                      : "chevron-down"
+                  }
+                  size={20}
+                  color={colors.textSecondary}
+                />
               </View>
-            ))}
-            <View
-              style={[styles.divider, { backgroundColor: colors.divider }]}
-            />
-            <View
-              style={[
-                styles.totalRow,
-                { backgroundColor: colors.backgroundSecondary },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.totalLabel,
-                  { color: colors.text, fontSize: getFontSize(15) },
-                ]}
-              >
-                Subtotal
-              </Text>
-              <Text
-                style={[
-                  styles.totalValue,
-                  { color: colors.primary, fontSize: getFontSize(15) },
-                ]}
-              >
-                {formatCurrency(data.summary?.subtotal)}
-              </Text>
-            </View>
-          </View>
+            </TouchableOpacity>
 
-          {/* Seção de Participantes */}
-          <Text
-            style={[
-              styles.sectionTitle,
-              { color: colors.text, fontSize: getFontSize(18) },
-            ]}
-          >
-            Por Pessoa
-          </Text>
-          {(data.participants || []).map((participant) => (
-            <View
-              key={participant.id}
-              style={[
-                styles.participantCardWrapper,
-                {
-                  backgroundColor: colors.cardBackground,
-                  borderColor: colors.cardBorder,
-                },
-              ]}
-            >
-              <TouchableOpacity
-                style={styles.participantHeader}
-                onPress={() => toggleParticipant(participant.id)}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[
-                    styles.participantName,
-                    { color: colors.text, fontSize: getFontSize(16) },
-                  ]}
-                >
-                  {participant.name}
-                </Text>
-                <View style={styles.participantHeaderRight}>
-                  <Text
-                    style={[
-                      styles.participantTotal,
-                      { color: colors.primary, fontSize: getFontSize(16) },
-                    ]}
-                  >
-                    {formatCurrency(participant.total)}
-                  </Text>
-                  <MaterialCommunityIcons
-                    name={
-                      expandedParticipantId === participant.id
-                        ? "chevron-up"
-                        : "chevron-down"
-                    }
-                    size={20}
-                    color={colors.iconColor}
-                  />
-                </View>
-              </TouchableOpacity>
+            {expandedParticipantId === participant.id && (
+              <View style={styles.dropdown}>
+                {participant.items.map((item) => (
+                  <View key={`${participant.id}-${item.id}`} style={styles.row}>
+                    <Text
+                      style={[styles.rowLabel, { color: colors.textSecondary }]}
+                    >
+                      {item.name}
+                      {item.quantity > 1 ? ` (${item.quantity}x)` : ""}
+                    </Text>
+                    <Text
+                      style={[styles.rowValue, { color: colors.textSecondary }]}
+                    >
+                      {formatCurrency(item.shareAmount)}
+                    </Text>
+                  </View>
+                ))}
 
-              {expandedParticipantId === participant.id && (
-                <View
-                  style={[
-                    styles.participantDetails,
-                    {
-                      backgroundColor: colors.dropdownBackground,
-                      borderTopColor: colors.divider,
-                    },
-                  ]}
-                >
-                  {/* Itens do participante */}
-                  {(participant.items || []).map((item) => (
-                    <View key={item.id} style={styles.detailRow}>
-                      <Text
-                        style={[
-                          styles.detailText,
-                          { color: colors.text, fontSize: getFontSize(14) },
-                        ]}
-                      >
-                        {item.name} (
-                        {item.quantity > 1 ? `${item.quantity}x` : "1x"})
-                      </Text>
-                      <Text
-                        style={[
-                          styles.detailValue,
-                          { color: colors.text, fontSize: getFontSize(14) },
-                        ]}
-                      >
-                        {formatCurrency(item.shareAmount)}
-                      </Text>
-                    </View>
-                  ))}
-
-                  {/* Taxas do participante */}
-                  {participant.feeDetails &&
-                    participant.feeDetails.length > 0 && (
-                      <>
-                        <View
-                          style={[
-                            styles.detailDivider,
-                            { backgroundColor: colors.divider },
-                          ]}
-                        />
-                        {participant.feeDetails.map((fee) => (
-                          <View
-                            key={fee.id}
-                            style={[
-                              styles.detailRow,
-                              fee.type === "SERVICE_PERCENTAGE" &&
-                                [
-                                  styles.detailRowFee,
-                                  { backgroundColor: colors.checkboxActive },
-                                ],
-                              fee.type === "COVER_CHARGE" &&
-                                [
-                                  styles.detailRowCouvert,
-                                  {
-                                    backgroundColor: colors.couvertBackground,
-                                  },
-                                ],
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.detailTextFee,
-                                {
-                                  color: colors.secondaryText,
-                                  fontSize: getFontSize(13),
-                                },
-                                fee.type === "COVER_CHARGE" &&
-                                  styles.detailTextCouvert,
-                              ]}
-                            >
-                              {fee.type === "SERVICE_PERCENTAGE"
-                                ? "Taxa de Serviço"
-                                : fee.type === "COVER_CHARGE"
-                                  ? "Couvert artístico"
-                                  : "Taxa"}
-                            </Text>
-                            <Text
-                              style={[
-                                styles.detailValueFee,
-                                {
-                                  color: colors.secondaryText,
-                                  fontSize: getFontSize(13),
-                                },
-                                fee.type === "COVER_CHARGE" &&
-                                  styles.detailValueCouvert,
-                              ]}
-                            >
-                              {formatCurrency(fee.participantShare)}
-                            </Text>
-                          </View>
-                        ))}
-                      </>
-                    )}
-                </View>
-              )}
-            </View>
-          ))}
-
-          {/* Resumo Final */}
-          <View
-            style={[
-              styles.finalSummaryCard,
-              {
-                backgroundColor: colors.cardBackground,
-                borderColor: colors.cardBorder,
-              },
-            ]}
-          >
-            <View style={styles.summaryRow}>
-              <Text
-                style={[
-                  styles.summaryLabel,
-                  { color: colors.text, fontSize: getFontSize(15) },
-                ]}
-              >
-                Subtotal
-              </Text>
-              <Text
-                style={[
-                  styles.summaryValue,
-                  { color: colors.text, fontSize: getFontSize(15) },
-                ]}
-              >
-                {formatCurrency(data.summary.subtotal)}
-              </Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text
-                style={[
-                  styles.summaryLabel,
-                  { color: colors.text, fontSize: getFontSize(15) },
-                ]}
-              >
-                Taxas / Serviço
-              </Text>
-              <Text
-                style={[
-                  styles.summaryValue,
-                  { color: colors.text, fontSize: getFontSize(15) },
-                ]}
-              >
-                {formatCurrency(data.summary.totalFees)}
-              </Text>
-            </View>
-            <View
-              style={[
-                styles.summaryRow,
-                styles.marginTop,
-                { borderTopColor: colors.divider },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.finalTotalLabel,
-                  { color: colors.primary, fontSize: getFontSize(17) },
-                ]}
-              >
-                Total Geral
-              </Text>
-              <Text
-                style={[
-                  styles.finalTotalValue,
-                  { color: colors.primary, fontSize: getFontSize(17) },
-                ]}
-              >
-                {formatCurrency(data.summary.total)}
-              </Text>
-            </View>
-          </View>
-
-          {/* Botão Reutilizar Conta */}
-          <TouchableOpacity
-            style={[
-              styles.reuseButton,
-              { backgroundColor: colors.primary },
-              duplicating && styles.reuseButtonDisabled,
-            ]}
-            onPress={handleReuseBill}
-            disabled={duplicating}
-          >
-            {duplicating ? (
-              <ActivityIndicator
-                size="small"
-                color={colors.accent ?? "#ffff00"}
-              />
-            ) : (
-              <Text
-                style={[
-                  styles.reuseButtonText,
-                  {
-                    color: colors.accent ?? "#ffff00",
-                    fontSize: getFontSize(16),
-                  },
-                ]}
-              >
-                Reutilizar Conta
-              </Text>
+                {participant.fees.length > 0 && (
+                  <>
+                    <View
+                      style={[styles.divider, { backgroundColor: colors.divider }]}
+                    />
+                    {participant.fees.map((fee) => (
+                      <View key={fee.id} style={styles.row}>
+                        <Text
+                          style={[styles.rowLabel, { color: colors.textSecondary }]}
+                        >
+                          {fee.label}
+                        </Text>
+                        <Text
+                          style={[styles.rowValue, { color: colors.textSecondary }]}
+                        >
+                          {formatCurrency(fee.amount)}
+                        </Text>
+                      </View>
+                    ))}
+                  </>
+                )}
+              </View>
             )}
-          </TouchableOpacity>
+          </View>
+        ))}
+
+        <View
+          style={[
+            styles.sectionCard,
+            {
+              backgroundColor: colors.cardBackground,
+              borderColor: colors.cardBorder,
+            },
+          ]}
+        >
+          <View style={styles.row}>
+            <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>
+              Subtotal
+            </Text>
+            <Text style={[styles.rowValue, { color: colors.text }]}>
+              {formatCurrency(detail.summary.subtotal)}
+            </Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>
+              Taxas e couvert
+            </Text>
+            <Text style={[styles.rowValue, { color: colors.text }]}>
+              {formatCurrency(detail.summary.feesTotal)}
+            </Text>
+          </View>
+          <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+          <View style={styles.row}>
+            <Text style={[styles.totalLabel, { color: colors.primary }]}>
+              Total geral
+            </Text>
+            <Text style={[styles.totalValue, { color: colors.primary }]}>
+              {formatCurrency(detail.summary.total)}
+            </Text>
+          </View>
         </View>
+
+        <TouchableOpacity
+          style={[
+            styles.primaryButton,
+            { backgroundColor: colors.primary },
+            duplicating && styles.buttonDisabled,
+          ]}
+          onPress={handleReuseBill}
+          disabled={duplicating}
+        >
+          {duplicating ? (
+            <ActivityIndicator size="small" color={colors.accent} />
+          ) : (
+            <Text style={[styles.primaryButtonText, { color: colors.accent }]}>
+              Reutilizar conta
+            </Text>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.deleteButton,
+            { borderColor: colors.error },
+            deleting && styles.buttonDisabled,
+          ]}
+          onPress={handleDeleteBill}
+          disabled={deleting}
+        >
+          {deleting ? (
+            <ActivityIndicator size="small" color={colors.error} />
+          ) : (
+            <Text style={[styles.deleteButtonText, { color: colors.error }]}>
+              Excluir conta
+            </Text>
+          )}
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+function buildDetailData(bill: any): DetailData {
+  const participantsMap = (bill.participants || []).reduce(
+    (acc: Record<string, DetailParticipant>, participant: any) => {
+      const items = (participant.divisions || []).map((division: any) => ({
+        id: division.billItemId,
+        name: bill.items.find((item: any) => item.id === division.billItemId)?.name || "Item",
+      quantity:
+        bill.items.find((item: any) => item.id === division.billItemId)?.quantity || 1,
+      shareAmount: Number(division.shareAmount),
+    }));
+
+    const subtotal = round2(
+      items.reduce((sum: number, item: any) => sum + item.shareAmount, 0),
+    );
+
+    acc[participant.id] = {
+      id: participant.id,
+      name: participant.name,
+      subtotal,
+      fees: [],
+      items,
+      total: subtotal,
+    };
+
+      return acc;
+    },
+    {} as Record<string, DetailParticipant>,
+  );
+
+  let feesTotal = 0;
+
+  for (const fee of bill.fees || []) {
+    const selectedParticipantIds = parseFeeParticipantIds(fee.description);
+    if (selectedParticipantIds.length === 0) continue;
+
+    const totalFee =
+      fee.type === "SERVICE_PERCENTAGE"
+        ? round2(
+            ((bill.items || []).reduce(
+              (sum: number, item: any) => sum + Number(item.totalPrice),
+              0,
+            ) *
+              Number(fee.value)) /
+              100,
+          )
+        : round2(Number(fee.value));
+
+    if (totalFee <= 0) continue;
+
+    feesTotal = round2(feesTotal + totalFee);
+    const baseShare = round2(totalFee / selectedParticipantIds.length);
+
+    selectedParticipantIds.forEach((participantId, index) => {
+      const participant = participantsMap[participantId];
+      if (!participant) return;
+
+      const amount =
+        index === selectedParticipantIds.length - 1
+          ? round2(totalFee - baseShare * (selectedParticipantIds.length - 1))
+          : baseShare;
+
+      participant.fees.push({
+        id: fee.id,
+        type: fee.type,
+        label:
+          fee.type === "SERVICE_PERCENTAGE"
+            ? "Taxa de servico"
+            : fee.type === "COVER_CHARGE"
+              ? "Couvert artistico"
+              : "Taxa",
+        amount,
+      });
+      participant.total = round2(participant.total + amount);
+    });
+  }
+
+  const items = (bill.items || []).map((item: any) => ({
+    id: item.id,
+    name: item.name,
+    quantity: item.quantity,
+    unitPrice: Number(item.unitPrice),
+    totalPrice: Number(item.totalPrice),
+  }));
+
+  const subtotal = round2(
+    items.reduce((sum: number, item: any) => sum + item.totalPrice, 0),
+  );
+
+  return {
+    bill,
+    items,
+    participants: Object.values(participantsMap),
+    summary: {
+      subtotal,
+      feesTotal,
+      total: round2(subtotal + feesTotal),
+    },
+  };
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  scrollContent: {
-    paddingBottom: 20,
-  },
-  titleSection: {
-    flexDirection: "row",
-    justifyContent: "flex-start",
-    alignItems: "center",
-    paddingHorizontal: 4,
-    paddingVertical: 12,
-    marginBottom: 0,
-    gap: 4,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  centered: {
+    flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    paddingHorizontal: 24,
   },
-  backButtonText: {
-    fontSize: 28,
-    fontWeight: "300",
-    color: "#000",
-    lineHeight: 28,
-  },
-  titleText: {
+  emptyText: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#000",
+  },
+  content: {
+    padding: 20,
+    gap: 16,
+    paddingBottom: 36,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerText: {
     flex: 1,
   },
-  editButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderWidth: 1.5,
-    borderRadius: 18,
+  title: {
+    fontSize: 22,
+    fontWeight: "700",
   },
-  editButtonPlaceholder: {
-    width: 70, // Aproximadamente a largura do botão "Editar"
+  subtitle: {
+    marginTop: 4,
+    fontSize: 13,
+  },
+  editButton: {
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   editButtonText: {
     fontSize: 13,
-    fontWeight: "500",
-  },
-  contentContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 0,
-    paddingBottom: 8,
-    gap: 10,
-  },
-  sectionTitle: {
-    fontSize: 16,
     fontWeight: "600",
-    color: "#333",
-    marginTop: 8,
-    marginBottom: 8,
-    paddingHorizontal: 4,
+  },
+  editPlaceholder: {
+    width: 68,
   },
   sectionCard: {
     borderWidth: 1,
-    borderRadius: 10,
-    overflow: "hidden",
+    borderRadius: 16,
+    padding: 16,
+    gap: 10,
   },
-  itemRow: {
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+  },
+  row: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    gap: 12,
   },
-  borderBottom: {
-    borderBottomWidth: 1,
-  },
-  itemInfo: {
+  rowText: {
     flex: 1,
-    marginRight: 12,
   },
-  itemName: {
+  rowLabel: {
     fontSize: 14,
-    fontWeight: "500",
-    color: "#333",
-    marginBottom: 2,
   },
-  itemQty: {
+  rowMeta: {
+    marginTop: 4,
     fontSize: 12,
-    color: "#888",
   },
-  itemTotal: {
+  rowValue: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#333",
-    minWidth: 70,
-    textAlign: "right",
-  },
-  divider: {
-    height: 1,
-    marginHorizontal: 16,
-  },
-  totalRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  totalLabel: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#333",
-  },
-  totalValue: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#333",
-  },
-  participantCardWrapper: {
-    borderWidth: 1,
-    borderRadius: 10,
-    overflow: "hidden",
   },
   participantHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 16,
-  },
-  participantName: {
-    fontSize: 16,
-    fontWeight: "500",
-    color: "#000",
   },
   participantHeaderRight: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
-  participantTotal: {
-    fontSize: 16,
+  participantName: {
+    fontSize: 17,
     fontWeight: "600",
-    color: "#8B2E8F",
   },
-  participantDetails: {
-    padding: 16,
-    borderTopWidth: 1,
+  participantTotal: {
+    fontSize: 15,
+    fontWeight: "700",
   },
-  detailRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 6,
+  dropdown: {
+    gap: 8,
   },
-  detailText: {
-    fontSize: 14,
-    color: "#333",
-  },
-  detailValue: {
-    fontSize: 14,
-    color: "#333",
-    fontWeight: "500",
-  },
-  detailDivider: {
+  divider: {
     height: 1,
-    marginVertical: 8,
+    marginVertical: 4,
   },
-  detailTextFee: {
-    fontSize: 13,
-    fontWeight: "400",
-    color: "#8B2E8F",
-    fontStyle: "italic",
-  },
-  detailValueFee: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: "#8B2E8F",
-  },
-  detailRowFee: {
-    marginHorizontal: -16,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    marginBottom: 2,
-  },
-  detailRowCouvert: {
-    marginHorizontal: -16,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    marginBottom: 2,
-  },
-  detailTextCouvert: {
-    color: "#d97706",
-  },
-  detailValueCouvert: {
-    color: "#d97706",
-  },
-  finalSummaryCard: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 8,
-  },
-  summaryRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  marginTop: {
-    marginTop: 8,
-    borderTopWidth: 1,
-    paddingTop: 8,
-  },
-  summaryLabel: {
-    fontSize: 15,
-    color: "#666",
-  },
-  summaryValue: {
-    fontSize: 15,
-    fontWeight: "500",
-    color: "#333",
-  },
-  finalTotalLabel: {
-    fontSize: 17,
+  totalLabel: {
+    fontSize: 18,
     fontWeight: "700",
-    color: "#000",
   },
-  finalTotalValue: {
-    fontSize: 17,
+  totalValue: {
+    fontSize: 18,
     fontWeight: "700",
-    color: "#8B2E8F",
   },
-  reuseButton: {
-    marginTop: 16,
-    paddingVertical: 14,
-    backgroundColor: "#8B2E8F",
+  primaryButton: {
+    minHeight: 54,
     borderRadius: 28,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 50,
   },
-  reuseButtonDisabled: {
-    opacity: 0.7,
-  },
-  reuseButtonText: {
+  primaryButtonText: {
     fontSize: 16,
-    fontWeight: "600",
-    color: "#ffff00",
+    fontWeight: "700",
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
+  deleteButton: {
+    minHeight: 54,
+    borderRadius: 28,
+    borderWidth: 1.5,
     alignItems: "center",
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: "#666",
-  },
-  errorContainer: {
-    flex: 1,
     justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 20,
   },
-  errorText: {
+  deleteButtonText: {
     fontSize: 16,
-    fontWeight: "500",
-    color: "#333",
-    textAlign: "center",
+    fontWeight: "700",
   },
-  warningCard: {
-    backgroundColor: "#FFEBEE",
-    borderWidth: 1,
-    borderColor: "#FFCDD2",
-    borderRadius: 8,
-    padding: 12,
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-  },
-  warningContent: {
-    flex: 1,
-  },
-  warningTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#D32F2F",
-    marginBottom: 2,
-  },
-  warningText: {
-    fontSize: 13,
-    color: "#B71C1C",
-    lineHeight: 18,
+  buttonDisabled: {
+    opacity: 0.6,
   },
 });

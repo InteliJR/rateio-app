@@ -247,7 +247,7 @@ export default function NewBillScreen() {
               name="couvertValue"
               render={({ field: { onChange, value, onBlur } }) => (
                 <NumericInput
-                  label="Valor por pessoa"
+                  label="Valor total do couvert"
                   placeholder="Ex: 20.00"
                   value={value ?? ""}
                   onChange={onChange}

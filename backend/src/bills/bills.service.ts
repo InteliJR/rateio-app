@@ -31,6 +31,47 @@ export interface BillFilters {
   sortOrder?: SortOrder;
 }
 
+const round2 = (value: number) => Math.round(value * 100) / 100;
+
+const parseSelectedParticipantIds = (description?: string | null): string[] => {
+  if (!description) return [];
+
+  try {
+    const parsed = JSON.parse(description);
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      Array.isArray(parsed.selectedParticipantIds)
+    ) {
+      return parsed.selectedParticipantIds.filter(
+        (value: unknown): value is string => typeof value === 'string',
+      );
+    }
+  } catch {
+    return [];
+  }
+
+  return [];
+};
+
+const distributeEvenly = (total: number, participantIds: string[]) => {
+  if (participantIds.length === 0 || total <= 0) {
+    return {} as Record<string, number>;
+  }
+
+  const baseShare = round2(total / participantIds.length);
+  const distribution: Record<string, number> = {};
+
+  participantIds.forEach((participantId, index) => {
+    distribution[participantId] =
+      index === participantIds.length - 1
+        ? round2(total - baseShare * (participantIds.length - 1))
+        : baseShare;
+  });
+
+  return distribution;
+};
+
 @Injectable()
 export class BillsService {
   constructor(
@@ -130,7 +171,7 @@ export class BillsService {
         }
       }
 
-      // Adicionar couvert se houver (sempre por pessoa)
+      // Adicionar couvert se houver (valor total informado pelo usuario)
       if (
         createBillDto.coverChargeValue !== undefined &&
         createBillDto.coverChargeValue !== null &&
@@ -138,15 +179,12 @@ export class BillsService {
         Number(createBillDto.coverChargeValue) > 0
       ) {
         try {
-          // O valor do couvert é sempre por pessoa
-          const valuePerPerson = Number(createBillDto.coverChargeValue);
-
           await this.prisma.fee.create({
             data: {
               billId: bill.id,
               type: 'COVER_CHARGE',
-              value: valuePerPerson,
-              description: 'Couvert artístico por pessoa',
+              value: Number(createBillDto.coverChargeValue),
+              description: 'Couvert artistico',
             },
           });
         } catch (feeError) {
@@ -522,7 +560,8 @@ export class BillsService {
       0,
     );
 
-    const participantCount = bill.participants.length;
+    const participantIds = bill.participants.map((participant) => participant.id);
+    const participantCount = participantIds.length;
 
     // Calcular valor total real das taxas (por tipo)
     let totalFees = 0;
@@ -531,7 +570,7 @@ export class BillsService {
         totalFees += subtotal * (Number(fee.value) / 100);
       } else if (fee.type === 'COVER_CHARGE') {
         // fee.value é por pessoa (salvo na criação da conta)
-        totalFees += Number(fee.value) * participantCount;
+        totalFees += Number(fee.value);
       } else {
         totalFees += Number(fee.value);
       }
@@ -752,7 +791,9 @@ export class BillsService {
     if (
       !(
         bill.status === BillStatus.DIVIDING ||
-        bill.status === BillStatus.REVIEWING
+        bill.status === BillStatus.REVIEWING ||
+        bill.status === BillStatus.PENDING_OCR ||
+        bill.status === BillStatus.OCR_FAILED
       )
     ) {
       throw new BadRequestException(
@@ -857,10 +898,7 @@ export class BillsService {
     if (finalizeBillDto.fees && finalizeBillDto.fees.length > 0) {
       for (const fee of finalizeBillDto.fees) {
         // COVER_CHARGE: o frontend envia o total (couvertPerPerson × N pagantes).
-        const storedValue =
-          fee.type === 'COVER_CHARGE' && finParticipantCount > 0
-            ? fee.value / finParticipantCount
-            : fee.value;
+        const storedValue = fee.value;
 
         const persistedFee = await this.prisma.fee.create({
           data: {
@@ -1038,7 +1076,7 @@ export class BillsService {
       }
       if (fee.type === 'COVER_CHARGE') {
         // fee.value é por pessoa na criação; taxa total = valor × nº participantes
-        return acc + Number(fee.value) * recalcParticipantCount;
+        return acc + Number(fee.value);
       }
       return acc + Number(fee.value);
     }, 0);
