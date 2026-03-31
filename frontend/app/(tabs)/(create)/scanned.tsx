@@ -48,8 +48,40 @@ export default function ScannedBillScreen() {
   const [items, setItems] = useState<BillItem[]>([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [fees, setFees] = useState<Fee[]>([]);
-  const [serviceFeeInput, setServiceFeeInput] = useState("0");
-  const [couvertInput, setCouvertInput] = useState("0,00");
+  const [serviceFeeInput, setServiceFeeInput] = useState("0,00%");
+  const [couvertInput, setCouvertInput] = useState("R$ 0,00");
+
+  const parseCurrency = (value: string) => {
+    const numeric = value.replace(/[^0-9]/g, "");
+    return parseInt(numeric || "0", 10) / 100;
+  };
+
+  const parsePercentage = (value: string) => {
+    const numeric = value.replace(/[^0-9]/g, "");
+    return parseInt(numeric || "0", 10) / 100;
+  };
+
+  const formatPercentageInput = (value: string) => {
+    const numeric = value.replace(/[^0-9]/g, "");
+    if (!numeric) return "";
+
+    const amount = parseInt(numeric, 10) / 100;
+    return `${amount.toLocaleString("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}%`;
+  };
+
+  const formatCurrencyInput = (value: string) => {
+    const numeric = value.replace(/[^0-9]/g, "");
+    if (!numeric) return "";
+
+    const amount = parseInt(numeric, 10) / 100;
+    return amount.toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    });
+  };
 
   const [addItemVisible, setAddItemVisible] = useState(false);
   const [newParticipantName, setNewParticipantName] = useState("");
@@ -103,11 +135,17 @@ export default function ScannedBillScreen() {
         (fee: Fee) => fee.type === FeeType.COVER_CHARGE,
       );
 
-      setServiceFeeInput(loadedServiceFee ? String(Number(loadedServiceFee.value)) : "0");
+      setServiceFeeInput(
+        loadedServiceFee
+          ? formatPercentageInput(
+              String(Math.round(Number(loadedServiceFee.value) * 100)),
+            )
+          : "0,00%",
+      );
       setCouvertInput(
         loadedCouvert
-          ? Number(loadedCouvert.value).toFixed(2).replace(".", ",")
-          : "0,00",
+          ? formatCurrencyInput(String(Math.round(Number(loadedCouvert.value) * 100)))
+          : "R$ 0,00",
       );
     } catch (error: any) {
       Alert.alert(
@@ -140,9 +178,6 @@ export default function ScannedBillScreen() {
 
     return () => clearInterval(interval);
   }, [billStatus, id, loadBillData]);
-
-  const parseCurrency = (value: string) =>
-    Number(value.replace(/\./g, "").replace(",", ".").replace(/[^0-9.-]/g, "")) || 0;
 
   const syncFee = async (
     existingFee: Fee | undefined,
@@ -242,7 +277,7 @@ export default function ScannedBillScreen() {
           }))
         : await itemsService.getItems(id);
 
-      const serviceFeeValue = Number(serviceFeeInput.replace(/[^0-9.]/g, "")) || 0;
+      const serviceFeeValue = parsePercentage(serviceFeeInput);
       const couvertValue = parseCurrency(couvertInput);
 
       await syncFee(serviceFee, FeeType.SERVICE_PERCENTAGE, serviceFeeValue);
@@ -487,7 +522,7 @@ export default function ScannedBillScreen() {
                   keyboardType="numeric"
                   value={serviceFeeInput}
                   onChangeText={(text) =>
-                    setServiceFeeInput(text.replace(/[^0-9.]/g, ""))
+                    setServiceFeeInput(formatPercentageInput(text) || "0,00%")
                   }
                 />
               </View>
@@ -508,7 +543,7 @@ export default function ScannedBillScreen() {
                   keyboardType="numeric"
                   value={couvertInput}
                   onChangeText={(text) =>
-                    setCouvertInput(text.replace(/[^0-9,]/g, ""))
+                    setCouvertInput(formatCurrencyInput(text) || "R$ 0,00")
                   }
                 />
               </View>
