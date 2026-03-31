@@ -528,6 +528,7 @@ class BillService {
       return response.data;
     } catch (error: any) {
       console.error('[BillService] Error finalizing bill:', error);
+      console.error('[BillService] Finalize response payload:', error?.response?.data);
 
       // Tratar mensagem de erro que pode ser string ou array
       let errorMessage = "Erro ao finalizar conta";
@@ -539,6 +540,11 @@ class BillService {
           // Se for array, juntar todas as mensagens
           errorMessage = error.response.data.message.join('\n');
         }
+      } else if (error.response?.data) {
+        errorMessage =
+          typeof error.response.data === 'string'
+            ? error.response.data
+            : JSON.stringify(error.response.data);
       } else if (error.message) {
         errorMessage = error.message;
       }

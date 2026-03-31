@@ -326,7 +326,7 @@ export default function CameraScreen() {
       // Navegar para tela de itens escaneados (scanned.tsx)
       router.replace({
         pathname: "/(tabs)/(create)/scanned",
-        params: { id: uploadedBill.id },
+        params: { id: uploadedBill.id, editMode: "false" },
       });
     } catch (error: any) {
       console.error("❌ Erro ao processar conta:", {

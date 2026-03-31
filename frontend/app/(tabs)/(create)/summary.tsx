@@ -37,9 +37,14 @@ export default function SummaryScreen() {
     clearDraft,
   } = useRateioDraftStore();
 
+  const validParticipantIds = useMemo(
+    () => new Set(participants.map((participant) => participant.id)),
+    [participants],
+  );
+
   const issues = useMemo(
-    () => validateItemAllocations(items, itemAllocations),
-    [items, itemAllocations],
+    () => validateItemAllocations(items, itemAllocations, participants),
+    [items, itemAllocations, participants],
   );
 
   const summary = useMemo(
@@ -106,26 +111,26 @@ export default function SummaryScreen() {
         description: string;
       }> = [];
 
-      if (
-        serviceFeePercentage > 0 &&
-        serviceFeeConfig.selectedParticipantIds.length > 0
-      ) {
+      const serviceFeePayers = serviceFeeConfig.selectedParticipantIds.filter(
+        (participantId) => validParticipantIds.has(participantId),
+      );
+      const couvertPayers = couvertConfig.selectedParticipantIds.filter(
+        (participantId) => validParticipantIds.has(participantId),
+      );
+
+      if (serviceFeePercentage > 0 && serviceFeePayers.length > 0) {
         fees.push({
           type: "SERVICE_PERCENTAGE",
           value: serviceFeePercentage,
-          description: serializeFeeParticipantIds(
-            serviceFeeConfig.selectedParticipantIds,
-          ),
+          description: serializeFeeParticipantIds(serviceFeePayers),
         });
       }
 
-      if (couvertValue > 0 && couvertConfig.selectedParticipantIds.length > 0) {
+      if (couvertValue > 0 && couvertPayers.length > 0) {
         fees.push({
           type: "COVER_CHARGE",
           value: couvertValue,
-          description: serializeFeeParticipantIds(
-            couvertConfig.selectedParticipantIds,
-          ),
+          description: serializeFeeParticipantIds(couvertPayers),
         });
       }
 

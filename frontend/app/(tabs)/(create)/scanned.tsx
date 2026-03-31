@@ -37,6 +37,7 @@ export default function ScannedBillScreen() {
   const router = useRouter();
   const { id, editMode } = useLocalSearchParams<{ id: string; editMode?: string }>();
   const initializeDraft = useRateioDraftStore((state) => state.initializeDraft);
+  const draftAllocations = useRateioDraftStore((state) => state.itemAllocations);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -169,73 +170,36 @@ export default function ScannedBillScreen() {
     });
   };
 
-  const buildExistingAllocations = () => {
-    const allParticipantIds = participants.map((participant) => participant.id);
+  const mapAllocationsToPersistedItems = (
+    sourceItems: BillItem[],
+    targetItems: BillItem[],
+  ) => {
+    const sourceParticipants = participants.map((participant) => ({
+      id: participant.id,
+      name: participant.name,
+    }));
+    const sourceKeys = sourceItems.reduce<Record<string, string[]>>((acc, item) => {
+      const key = `${item.name.trim().toLowerCase()}::${item.quantity}::${item.price.toFixed(2)}`;
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(item.id);
+      return acc;
+    }, {});
 
-    return items.reduce<Record<string, ReturnType<typeof buildDefaultAllocation>>>(
-      (acc, item) => {
-        const rawItem = (item as any) ?? {};
-        const divisions =
-          Array.isArray(rawItem.divisions) && rawItem.divisions.length > 0
-            ? rawItem.divisions
-            : [];
+    const mapped: Record<string, ReturnType<typeof buildDefaultAllocation>> = {};
 
-        if (divisions.length === 0) {
-          acc[item.id] = buildDefaultAllocation(
-            {
-              id: item.id,
-              name: item.name,
-              quantity: item.quantity,
-              price: item.price,
-            },
-            participants.map((participant) => ({
-              id: participant.id,
-              name: participant.name,
-            })),
-          );
-          return acc;
-        }
+    targetItems.forEach((item) => {
+      const key = `${item.name.trim().toLowerCase()}::${item.quantity}::${item.price.toFixed(2)}`;
+      const sourceItemId = sourceKeys[key]?.shift();
 
-        const selectedParticipantIds = divisions.map((division: any) =>
-          String(division.participant?.id || division.participantId),
-        );
-        const quantities = participants.reduce<Record<string, number>>(
-          (qtyAcc, participant) => {
-            qtyAcc[participant.id] = 0;
-            return qtyAcc;
-          },
-          {},
-        );
+      if (sourceItemId && draftAllocations[sourceItemId]) {
+        mapped[item.id] = draftAllocations[sourceItemId];
+        return;
+      }
 
-        if (item.quantity <= 1) {
-          acc[item.id] = {
-            selectedParticipantIds,
-            quantities,
-          };
-          return acc;
-        }
+      mapped[item.id] = buildDefaultAllocation(item, sourceParticipants);
+    });
 
-        divisions.forEach((division: any) => {
-          const participantId = String(
-            division.participant?.id || division.participantId,
-          );
-          quantities[participantId] = Math.round(
-            Number(division.shareAmount) / Math.max(item.price, 0.01),
-          );
-        });
-
-        acc[item.id] = {
-          selectedParticipantIds:
-            selectedParticipantIds.length > 0
-              ? selectedParticipantIds
-              : allParticipantIds,
-          quantities,
-        };
-
-        return acc;
-      },
-      {},
-    );
+    return mapped;
   };
 
   const handleContinue = async () => {
@@ -254,9 +218,29 @@ export default function ScannedBillScreen() {
     try {
       setSaving(true);
 
-      await billService.updateBill(id, {
+      const shouldReopenForEditing =
+        editMode === "true" || billStatus === "COMPLETED";
+
+      const updatedBill = await billService.updateBill(id, {
         establishmentName: billName.trim() || undefined,
+        status: shouldReopenForEditing ? "REVIEWING" : undefined,
+        items: items.map((item) => ({
+          name: item.name,
+          quantity: item.quantity,
+          unitPrice: item.price,
+          totalPrice: Number((item.price * item.quantity).toFixed(2)),
+        })),
       });
+
+      const persistedItems: BillItem[] = Array.isArray(updatedBill.items)
+        ? updatedBill.items.map((item: any) => ({
+            id: item.id,
+            name: item.name,
+            quantity: Number(item.quantity) || 1,
+            price: Number(item.unitPrice) || 0,
+            assignedParticipants: [],
+          }))
+        : await itemsService.getItems(id);
 
       const serviceFeeValue = Number(serviceFeeInput.replace(/[^0-9.]/g, "")) || 0;
       const couvertValue = parseCurrency(couvertInput);
@@ -283,7 +267,7 @@ export default function ScannedBillScreen() {
           id: participant.id,
           name: participant.name,
         })),
-        items: items.map((item) => ({
+        items: persistedItems.map((item) => ({
           id: item.id,
           name: item.name,
           quantity: item.quantity,
@@ -297,7 +281,7 @@ export default function ScannedBillScreen() {
         couvertSelectedParticipantIds: parseFeeParticipantIds(
           refreshedCouvert?.description,
         ),
-        itemAllocations: buildExistingAllocations(),
+        itemAllocations: mapAllocationsToPersistedItems(items, persistedItems),
       });
 
       router.push({

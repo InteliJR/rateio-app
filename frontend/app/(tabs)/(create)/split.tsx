@@ -33,9 +33,14 @@ export default function SplitScreen() {
     setFeeSelection,
   } = useRateioDraftStore();
 
+  const validParticipantIds = useMemo(
+    () => new Set(participants.map((participant) => participant.id)),
+    [participants],
+  );
+
   const issues = useMemo(
-    () => validateItemAllocations(items, itemAllocations),
-    [items, itemAllocations],
+    () => validateItemAllocations(items, itemAllocations, participants),
+    [items, itemAllocations, participants],
   );
 
   if (!billId) {
@@ -104,7 +109,11 @@ export default function SplitScreen() {
         })),
       );
     const currentQuantity = allocation.quantities[participantId] ?? 0;
-    const currentAssigned = getAssignedQuantity(item, allocation);
+    const currentAssigned = getAssignedQuantity(
+      item,
+      allocation,
+      validParticipantIds,
+    );
     const nextQuantity = Math.max(0, currentQuantity + delta);
     const nextAssigned = currentAssigned - currentQuantity + nextQuantity;
 
@@ -177,7 +186,11 @@ export default function SplitScreen() {
               name: participant.name,
             })),
           );
-        const assignedQuantity = getAssignedQuantity(item, allocation);
+        const assignedQuantity = getAssignedQuantity(
+          item,
+          allocation,
+          validParticipantIds,
+        );
         const remainingQuantity = Math.max(item.quantity - assignedQuantity, 0);
 
         return (

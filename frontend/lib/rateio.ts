@@ -77,31 +77,46 @@ export const buildDefaultAllocation = (
 export const getAssignedQuantity = (
   item: DraftItem,
   allocation: DraftItemAllocation | undefined,
+  validParticipantIds?: Set<string>,
 ): number => {
   if (!allocation) return 0;
 
   if (item.quantity <= 1) {
-    return allocation.selectedParticipantIds.length > 0 ? 1 : 0;
+    const selected = validParticipantIds
+      ? allocation.selectedParticipantIds.filter((participantId) =>
+          validParticipantIds.has(participantId),
+        )
+      : allocation.selectedParticipantIds;
+    return selected.length > 0 ? 1 : 0;
   }
 
-  return Object.values(allocation.quantities).reduce(
-    (acc, quantity) => acc + quantity,
-    0,
-  );
+  return Object.entries(allocation.quantities).reduce((acc, [participantId, quantity]) => {
+    if (validParticipantIds && !validParticipantIds.has(participantId)) {
+      return acc;
+    }
+    return acc + quantity;
+  }, 0);
 };
 
 export const validateItemAllocations = (
   items: DraftItem[],
   allocations: Record<string, DraftItemAllocation>,
+  participants: DraftParticipant[],
 ): ValidationIssue[] => {
   const issues: ValidationIssue[] = [];
+  const validParticipantIds = new Set(participants.map((participant) => participant.id));
 
   for (const item of items) {
     const allocation = allocations[item.id];
-    const assignedQuantity = getAssignedQuantity(item, allocation);
+    const assignedQuantity = getAssignedQuantity(item, allocation, validParticipantIds);
 
     if (item.quantity <= 1) {
-      if (!allocation || allocation.selectedParticipantIds.length === 0) {
+      const selected = allocation
+        ? allocation.selectedParticipantIds.filter((participantId) =>
+            validParticipantIds.has(participantId),
+          )
+        : [];
+      if (!allocation || selected.length === 0) {
         issues.push({
           itemId: item.id,
           message: `Selecione ao menos uma pessoa para pagar "${item.name}".`,
@@ -145,6 +160,8 @@ export const buildRateioSummary = ({
   couvertValue: number;
   couvertConfig: DraftFeeConfig;
 }): RateioSummary => {
+  const validParticipantIds = new Set(participants.map((participant) => participant.id));
+
   const participantMap = participants.reduce<Record<string, ParticipantBreakdown>>(
     (acc, participant) => {
       acc[participant.id] = {
@@ -166,7 +183,9 @@ export const buildRateioSummary = ({
     if (!allocation) continue;
 
     if (item.quantity <= 1) {
-      const selected = allocation.selectedParticipantIds;
+      const selected = allocation.selectedParticipantIds.filter((participantId) =>
+        validParticipantIds.has(participantId),
+      );
       if (selected.length === 0) continue;
 
       const share = round2(item.price / selected.length);
@@ -214,13 +233,18 @@ export const buildRateioSummary = ({
 
   const serviceFeeTotal =
     serviceFeePercentage > 0 ? round2((subtotal * serviceFeePercentage) / 100) : 0;
-  const servicePayers = serviceFeeConfig.selectedParticipantIds;
-  if (servicePayers.length > 0 && serviceFeeTotal > 0) {
-    const evenShare = round2(serviceFeeTotal / servicePayers.length);
+  const servicePayers = serviceFeeConfig.selectedParticipantIds.filter(
+    (participantId) => validParticipantIds.has(participantId),
+  );
+  const appliedServiceFeeTotal =
+    servicePayers.length > 0 && serviceFeeTotal > 0 ? serviceFeeTotal : 0;
+
+  if (appliedServiceFeeTotal > 0) {
+    const evenShare = round2(appliedServiceFeeTotal / servicePayers.length);
     servicePayers.forEach((participantId, index) => {
       const amount =
         index === servicePayers.length - 1
-          ? round2(serviceFeeTotal - evenShare * (servicePayers.length - 1))
+          ? round2(appliedServiceFeeTotal - evenShare * (servicePayers.length - 1))
           : evenShare;
       participantMap[participantId].feeTotal = round2(
         participantMap[participantId].feeTotal + amount,
@@ -233,13 +257,18 @@ export const buildRateioSummary = ({
     });
   }
 
-  const couvertPayers = couvertConfig.selectedParticipantIds;
-  if (couvertPayers.length > 0 && couvertValue > 0) {
-    const evenShare = round2(couvertValue / couvertPayers.length);
+  const couvertPayers = couvertConfig.selectedParticipantIds.filter(
+    (participantId) => validParticipantIds.has(participantId),
+  );
+  const appliedCouvertTotal =
+    couvertPayers.length > 0 && couvertValue > 0 ? couvertValue : 0;
+
+  if (appliedCouvertTotal > 0) {
+    const evenShare = round2(appliedCouvertTotal / couvertPayers.length);
     couvertPayers.forEach((participantId, index) => {
       const amount =
         index === couvertPayers.length - 1
-          ? round2(couvertValue - evenShare * (couvertPayers.length - 1))
+          ? round2(appliedCouvertTotal - evenShare * (couvertPayers.length - 1))
           : evenShare;
       participantMap[participantId].feeTotal = round2(
         participantMap[participantId].feeTotal + amount,
@@ -260,7 +289,7 @@ export const buildRateioSummary = ({
     };
   });
 
-  const feesTotal = round2(serviceFeeTotal + (couvertPayers.length > 0 ? couvertValue : 0));
+  const feesTotal = round2(appliedServiceFeeTotal + appliedCouvertTotal);
   const grandTotal = round2(subtotal + feesTotal);
 
   return {
@@ -280,6 +309,7 @@ export const buildDivisionsPayload = ({
   items: DraftItem[];
   itemAllocations: Record<string, DraftItemAllocation>;
 }) => {
+  const validParticipantIds = new Set(participants.map((participant) => participant.id));
   const divisions: Array<{
     billItemId: string;
     participantId: string;
@@ -291,7 +321,9 @@ export const buildDivisionsPayload = ({
     if (!allocation) continue;
 
     if (item.quantity <= 1) {
-      const selected = allocation.selectedParticipantIds;
+      const selected = allocation.selectedParticipantIds.filter((participantId) =>
+        validParticipantIds.has(participantId),
+      );
       if (selected.length === 0) continue;
 
       const baseShare = round2(item.price / selected.length);
