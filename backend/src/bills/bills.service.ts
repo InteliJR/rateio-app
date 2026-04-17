@@ -72,6 +72,80 @@ const distributeEvenly = (total: number, participantIds: string[]) => {
   return distribution;
 };
 
+const distributeProportionally = (
+  total: number,
+  participantTotals: Record<string, number>,
+) => {
+  const participantIds = Object.keys(participantTotals).filter(
+    (participantId) => participantTotals[participantId] > 0,
+  );
+
+  if (participantIds.length === 0 || total <= 0) {
+    return {} as Record<string, number>;
+  }
+
+  let allocated = 0;
+  const distribution: Record<string, number> = {};
+
+  participantIds.forEach((participantId, index) => {
+    const participantSubtotal = participantTotals[participantId];
+    const amount =
+      index === participantIds.length - 1
+        ? round2(total - allocated)
+        : round2(participantSubtotal * (total / Object.values(participantTotals).reduce(
+            (acc, value) => acc + value,
+            0,
+          )));
+
+    distribution[participantId] = amount;
+    allocated = round2(allocated + amount);
+  });
+
+  return distribution;
+};
+
+const buildFeeDistribution = (
+  fee: {
+    type: string;
+    value: number | string | Prisma.Decimal;
+    description?: string | null;
+  },
+  participantTotals: Record<string, number>,
+  participantIds: string[],
+) => {
+  if (fee.type === 'SERVICE_PERCENTAGE') {
+    const selectedParticipantIds = parseSelectedParticipantIds(fee.description).filter(
+      (participantId) =>
+        participantIds.includes(participantId) && participantTotals[participantId] > 0,
+    );
+    const feePayers =
+      selectedParticipantIds.length > 0
+        ? selectedParticipantIds
+        : participantIds.filter((participantId) => participantTotals[participantId] > 0);
+    const selectedParticipantTotals = feePayers.reduce<Record<string, number>>(
+      (acc, participantId) => {
+        acc[participantId] = participantTotals[participantId] ?? 0;
+        return acc;
+      },
+      {},
+    );
+    const subtotal = Object.values(selectedParticipantTotals).reduce(
+      (acc, value) => acc + value,
+      0,
+    );
+    const total = round2(subtotal * (Number(fee.value) / 100));
+    return distributeProportionally(total, selectedParticipantTotals);
+  }
+
+  const selectedParticipantIds = parseSelectedParticipantIds(fee.description).filter(
+    (participantId) => participantIds.includes(participantId),
+  );
+  const feePayers =
+    selectedParticipantIds.length > 0 ? selectedParticipantIds : participantIds;
+
+  return distributeEvenly(round2(Number(fee.value)), feePayers);
+};
+
 @Injectable()
 export class BillsService {
   constructor(
@@ -561,22 +635,28 @@ export class BillsService {
     );
 
     const participantIds = bill.participants.map((participant) => participant.id);
-    const participantCount = participantIds.length;
 
     // Calcular valor total real das taxas (por tipo)
     let totalFees = 0;
     for (const fee of bill.fees) {
-      if (fee.type === 'SERVICE_PERCENTAGE') {
-        totalFees += subtotal * (Number(fee.value) / 100);
-      } else if (fee.type === 'COVER_CHARGE') {
-        // fee.value é por pessoa (salvo na criação da conta)
-        totalFees += Number(fee.value);
-      } else {
-        totalFees += Number(fee.value);
-      }
+      const feeDistribution = buildFeeDistribution(
+        fee,
+        bill.participants.reduce<Record<string, number>>((acc, participant) => {
+          acc[participant.id] = participant.divisions.reduce(
+            (divisionAcc, division) => divisionAcc + Number(division.shareAmount),
+            0,
+          );
+          return acc;
+        }, {}),
+        participantIds,
+      );
+      totalFees += Object.values(feeDistribution).reduce(
+        (acc, value) => acc + value,
+        0,
+      );
     }
 
-    // 1ª passagem: calcular valores brutos por participante (sem arredondar)
+    // 1ª passagem: calcular subtotal dos itens por participante
     const participantRawData = bill.participants.map((participant) => {
       const itemsSubtotal = participant.divisions.reduce(
         (acc, division) => acc + Number(division.shareAmount),
@@ -592,37 +672,44 @@ export class BillsService {
         shareAmount: Number(division.shareAmount),
       }));
 
-      // Distribuição por tipo de taxa
+      return { participant, itemsSubtotal, items };
+    });
+
+    const participantTotals = participantRawData.reduce<Record<string, number>>(
+      (acc, data) => {
+        acc[data.participant.id] = data.itemsSubtotal;
+        return acc;
+      },
+      {},
+    );
+
+    // 2ª passagem: calcular taxas já com a regra correta por participante
+    const participantFeeBreakdown = participantRawData.map((data) => {
       const feeDetails = bill.fees.map((fee) => {
-        let rawFeeValue = 0;
-        if (fee.type === 'SERVICE_PERCENTAGE') {
-          // Proporcional ao consumo individual
-          rawFeeValue = itemsSubtotal * (Number(fee.value) / 100);
-        } else if (fee.type === 'COVER_CHARGE') {
-          // Valor fixo por pessoa (fee.value já é por pessoa)
-          rawFeeValue = Number(fee.value);
-        } else {
-          // SERVICE_FIXED: dividido igualmente entre todos
-          rawFeeValue = participantCount > 0 ? Number(fee.value) / participantCount : 0;
-        }
+        const feeDistribution = buildFeeDistribution(
+          fee,
+          participantTotals,
+          participantIds,
+        );
+
         return {
           id: fee.id,
           type: fee.type,
           description: fee.description,
           originalValue: Number(fee.value),
-          rawFeeValue,
+          rawFeeValue: feeDistribution[data.participant.id] ?? 0,
         };
       });
 
       const rawFees = feeDetails.reduce((acc, f) => acc + f.rawFeeValue, 0);
-      return { participant, itemsSubtotal, items, feeDetails, rawFees };
+      return { ...data, feeDetails, rawFees };
     });
 
-    // 2ª passagem: arredondar com correção de resto no último participante
-    const totalRawFees = participantRawData.reduce((acc, d) => acc + d.rawFees, 0);
+    // 3ª passagem: arredondar com correção de resto no último participante
+    const totalRawFees = participantFeeBreakdown.reduce((acc, d) => acc + d.rawFees, 0);
     let runningFeesSum = 0;
-    const participants = participantRawData.map((data, idx) => {
-      const isLast = idx === participantRawData.length - 1;
+    const participants = participantFeeBreakdown.map((data, idx) => {
+      const isLast = idx === participantFeeBreakdown.length - 1;
 
       let participantFees: number;
       if (isLast) {
@@ -892,12 +979,8 @@ export class BillsService {
     let totalFees = 0;
     const persistedFees: Awaited<ReturnType<typeof this.prisma.fee.create>>[] =
       [];
-    // Número de participantes para normalizar COVER_CHARGE por pessoa
-    const finParticipantCount = participants.length;
-
     if (finalizeBillDto.fees && finalizeBillDto.fees.length > 0) {
       for (const fee of finalizeBillDto.fees) {
-        // COVER_CHARGE: o frontend envia o total (couvertPerPerson × N pagantes).
         const storedValue = fee.value;
 
         const persistedFee = await this.prisma.fee.create({
@@ -911,66 +994,41 @@ export class BillsService {
         persistedFees.push(persistedFee);
 
         // Calcular valor real da taxa para o sumário de retorno
-        if (fee.type === 'SERVICE_PERCENTAGE') {
-          totalFees += subtotal * (Number(fee.value) / 100);
-        } else {
-          totalFees += Number(fee.value);
-        }
+        const feeDistribution = buildFeeDistribution(
+          fee,
+          participantTotals,
+          Object.keys(participantTotals),
+        );
+        totalFees += Object.values(feeDistribution).reduce(
+          (acc, value) => acc + value,
+          0,
+        );
       }
     }
 
     // Calcular total por participante incluindo taxas
-    // Taxas percentuais: proporcionais ao consumo
-    // Taxas fixas/couvert: divididas igualmente (com correção de resto no último)
     const participantTotalsWithFees: Record<
       string,
       { subtotal: number; fees: number; total: number }
     > = {};
-
-    const servicePctFees = (finalizeBillDto.fees || [])
-      .filter((f) => f.type === 'SERVICE_PERCENTAGE')
-      .reduce((acc, f) => acc + subtotal * (Number(f.value) / 100), 0);
-
-    const fixedFees = (finalizeBillDto.fees || [])
-      .filter((f) => f.type !== 'SERVICE_PERCENTAGE')
-      .reduce((acc, f) => acc + Number(f.value), 0);
-
     const participantIds = Object.keys(participantTotals);
-    let runningPctAllocated = 0;
-    let runningFixedAllocated = 0;
+    const feeDistributions = (finalizeBillDto.fees || []).map((fee) =>
+      buildFeeDistribution(fee, participantTotals, participantIds),
+    );
 
-    for (let i = 0; i < participantIds.length; i++) {
-      const participantId = participantIds[i];
-      const isLast = i === participantIds.length - 1;
+    for (const participantId of participantIds) {
       const participantSubtotal = participantTotals[participantId];
+      const totalParticipantFees = round2(
+        feeDistributions.reduce(
+          (acc, distribution) => acc + (distribution[participantId] ?? 0),
+          0,
+        ),
+      );
 
-      // Taxa percentual: proporcional ao consumo
-      let pctFee: number;
-      if (isLast) {
-        pctFee = Math.round((servicePctFees - runningPctAllocated) * 100) / 100;
-      } else {
-        pctFee = subtotal > 0
-          ? Math.round((participantSubtotal / subtotal) * servicePctFees * 100) / 100
-          : 0;
-        runningPctAllocated += pctFee;
-      }
-
-      // Taxa fixa/couvert: dividida igualmente
-      let fixedFee: number;
-      if (isLast) {
-        fixedFee = Math.round((fixedFees - runningFixedAllocated) * 100) / 100;
-      } else {
-        fixedFee = finParticipantCount > 0
-          ? Math.round((fixedFees / finParticipantCount) * 100) / 100
-          : 0;
-        runningFixedAllocated += fixedFee;
-      }
-
-      const totalParticipantFees = Math.round((pctFee + fixedFee) * 100) / 100;
       participantTotalsWithFees[participantId] = {
-        subtotal: Math.round(participantSubtotal * 100) / 100,
+        subtotal: round2(participantSubtotal),
         fees: totalParticipantFees,
-        total: Math.round((participantSubtotal + totalParticipantFees) * 100) / 100,
+        total: round2(participantSubtotal + totalParticipantFees),
       };
     }
 

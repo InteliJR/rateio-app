@@ -4,6 +4,7 @@ import {
   DraftItemAllocation,
   DraftParticipant,
 } from "../store/rateioDraftStore";
+import { round2 } from "./formatters";
 
 export interface ParticipantBreakdown {
   id: string;
@@ -35,7 +36,9 @@ export interface RateioSummary {
   grandTotal: number;
 }
 
-const round2 = (value: number) => Math.round(value * 100) / 100;
+type ItemUnitAssignment = {
+  participantIds: string[];
+};
 
 export const parseFeeParticipantIds = (
   description?: string | null,
@@ -74,28 +77,177 @@ export const buildDefaultAllocation = (
   }, {}),
 });
 
+const getItemTotal = (item: DraftItem) => round2(item.quantity * item.price);
+
+const getSelectedParticipantIds = (
+  allocation: DraftItemAllocation | undefined,
+  validParticipantIds?: Set<string>,
+) => {
+  if (!allocation) return [];
+
+  return allocation.selectedParticipantIds.filter((participantId) => {
+    if (validParticipantIds && !validParticipantIds.has(participantId)) {
+      return false;
+    }
+
+    return true;
+  });
+};
+
+const getNormalizedParticipantQuantities = (
+  item: DraftItem,
+  allocation: DraftItemAllocation | undefined,
+  validParticipantIds?: Set<string>,
+) => {
+  if (!allocation) {
+    return [] as Array<{ participantId: string; quantity: number }>;
+  }
+
+  return getSelectedParticipantIds(allocation, validParticipantIds)
+    .map((participantId) => ({
+      participantId,
+      quantity: Math.max(
+        0,
+        Math.min(
+          item.quantity,
+          Math.trunc(allocation.quantities[participantId] ?? 0),
+        ),
+      ),
+    }))
+    .filter(({ quantity }) => quantity > 0);
+};
+
 export const getAssignedQuantity = (
   item: DraftItem,
   allocation: DraftItemAllocation | undefined,
   validParticipantIds?: Set<string>,
-): number => {
-  if (!allocation) return 0;
+) =>
+  getNormalizedParticipantQuantities(item, allocation, validParticipantIds).reduce(
+    (acc, participant) => acc + participant.quantity,
+    0,
+  );
 
-  if (item.quantity <= 1) {
-    const selected = validParticipantIds
-      ? allocation.selectedParticipantIds.filter((participantId) =>
-          validParticipantIds.has(participantId),
-        )
-      : allocation.selectedParticipantIds;
-    return selected.length > 0 ? 1 : 0;
+export const getSharedQuantity = (
+  item: DraftItem,
+  allocation: DraftItemAllocation | undefined,
+  validParticipantIds?: Set<string>,
+) =>
+  Math.max(
+    0,
+    getAssignedQuantity(item, allocation, validParticipantIds) - item.quantity,
+  );
+
+const buildItemUnitAssignments = (
+  item: DraftItem,
+  allocation: DraftItemAllocation | undefined,
+  validParticipantIds: Set<string>,
+) => {
+  const participantQuantities = getNormalizedParticipantQuantities(
+    item,
+    allocation,
+    validParticipantIds,
+  );
+
+  if (participantQuantities.length === 0) {
+    return [] as ItemUnitAssignment[];
   }
 
-  return Object.entries(allocation.quantities).reduce((acc, [participantId, quantity]) => {
-    if (validParticipantIds && !validParticipantIds.has(participantId)) {
+  const units = Array.from({ length: item.quantity }, () => ({
+    participantIds: [] as string[],
+  }));
+  const remainingByParticipant = participantQuantities.reduce<Record<string, number>>(
+    (acc, participant) => {
+      acc[participant.participantId] = participant.quantity;
       return acc;
+    },
+    {},
+  );
+  const orderedParticipantIds = participantQuantities.map(
+    (participant) => participant.participantId,
+  );
+
+  while (
+    orderedParticipantIds.some(
+      (participantId) => (remainingByParticipant[participantId] ?? 0) > 0,
+    )
+  ) {
+    orderedParticipantIds.forEach((participantId) => {
+      if ((remainingByParticipant[participantId] ?? 0) <= 0) {
+        return;
+      }
+
+      let targetIndex = -1;
+      let lowestOccupancy = Number.POSITIVE_INFINITY;
+
+      units.forEach((unit, index) => {
+        if (unit.participantIds.includes(participantId)) {
+          return;
+        }
+
+        if (unit.participantIds.length < lowestOccupancy) {
+          lowestOccupancy = unit.participantIds.length;
+          targetIndex = index;
+        }
+      });
+
+      if (targetIndex === -1) {
+        return;
+      }
+
+      units[targetIndex].participantIds.push(participantId);
+      remainingByParticipant[participantId] -= 1;
+    });
+  }
+
+  return units;
+};
+
+export const buildItemParticipantAmounts = (
+  item: DraftItem,
+  allocation: DraftItemAllocation | undefined,
+  validParticipantIds: Set<string>,
+) => {
+  const units = buildItemUnitAssignments(item, allocation, validParticipantIds);
+  const amounts: Record<string, number> = {};
+
+  units.forEach((unit) => {
+    if (unit.participantIds.length === 0) {
+      return;
     }
-    return acc + quantity;
-  }, 0);
+
+    const splitAmount = round2(item.price / unit.participantIds.length);
+    let allocated = 0;
+
+    unit.participantIds.forEach((participantId, index) => {
+      const amount =
+        index === unit.participantIds.length - 1
+          ? round2(item.price - allocated)
+          : splitAmount;
+
+      allocated = round2(allocated + amount);
+      amounts[participantId] = round2((amounts[participantId] ?? 0) + amount);
+    });
+  });
+
+  return amounts;
+};
+
+const distributeEvenly = (total: number, participantIds: string[]) => {
+  if (participantIds.length === 0 || total <= 0) {
+    return {} as Record<string, number>;
+  }
+
+  const evenShare = round2(total / participantIds.length);
+  const distribution: Record<string, number> = {};
+
+  participantIds.forEach((participantId, index) => {
+    distribution[participantId] =
+      index === participantIds.length - 1
+        ? round2(total - evenShare * (participantIds.length - 1))
+        : evenShare;
+  });
+
+  return distribution;
 };
 
 export const validateItemAllocations = (
@@ -108,34 +260,61 @@ export const validateItemAllocations = (
 
   for (const item of items) {
     const allocation = allocations[item.id];
-    const assignedQuantity = getAssignedQuantity(item, allocation, validParticipantIds);
 
-    if (item.quantity <= 1) {
-      const selected = allocation
-        ? allocation.selectedParticipantIds.filter((participantId) =>
-            validParticipantIds.has(participantId),
-          )
-        : [];
-      if (!allocation || selected.length === 0) {
-        issues.push({
-          itemId: item.id,
-          message: `Selecione ao menos uma pessoa para pagar "${item.name}".`,
-        });
-      }
+    if (!allocation) {
+      issues.push({
+        itemId: item.id,
+        message: `Defina quem vai pagar "${item.name}".`,
+      });
       continue;
     }
 
-    if (assignedQuantity > item.quantity) {
+    const selectedParticipantIds = getSelectedParticipantIds(
+      allocation,
+      validParticipantIds,
+    );
+
+    if (selectedParticipantIds.length === 0) {
       issues.push({
         itemId: item.id,
-        message: `A soma atribuida para "${item.name}" ultrapassa a quantidade comprada.`,
+        message: `Selecione ao menos uma pessoa para pagar "${item.name}".`,
       });
+      continue;
     }
+
+    const normalizedParticipantQuantities = getNormalizedParticipantQuantities(
+      item,
+      allocation,
+      validParticipantIds,
+    );
+
+    if (normalizedParticipantQuantities.length === 0) {
+      issues.push({
+        itemId: item.id,
+        message: `Informe ao menos uma quantidade para "${item.name}".`,
+      });
+      continue;
+    }
+
+    const hasInvalidQuantity = selectedParticipantIds.some((participantId) => {
+      const quantity = allocation.quantities[participantId] ?? 0;
+      return !Number.isInteger(quantity) || quantity < 0 || quantity > item.quantity;
+    });
+
+    if (hasInvalidQuantity) {
+      issues.push({
+        itemId: item.id,
+        message: `Cada pessoa pode pagar no máximo ${item.quantity} unidade(s) de "${item.name}".`,
+      });
+      continue;
+    }
+
+    const assignedQuantity = getAssignedQuantity(item, allocation, validParticipantIds);
 
     if (assignedQuantity < item.quantity) {
       issues.push({
         itemId: item.id,
-        message: `Ainda ha unidades de "${item.name}" ausentes para adicionar.`,
+        message: `Ainda faltam atribuições de quantidade para "${item.name}".`,
       });
     }
   }
@@ -180,48 +359,24 @@ export const buildRateioSummary = ({
 
   for (const item of items) {
     const allocation = itemAllocations[item.id];
-    if (!allocation) continue;
+    const participantAmounts = buildItemParticipantAmounts(
+      item,
+      allocation,
+      validParticipantIds,
+    );
 
-    if (item.quantity <= 1) {
-      const selected = allocation.selectedParticipantIds.filter((participantId) =>
-        validParticipantIds.has(participantId),
+    Object.entries(participantAmounts).forEach(([participantId, amount]) => {
+      if (amount <= 0) return;
+
+      participantMap[participantId].itemSubtotal = round2(
+        participantMap[participantId].itemSubtotal + amount,
       );
-      if (selected.length === 0) continue;
-
-      const share = round2(item.price / selected.length);
-
-      selected.forEach((participantId, index) => {
-        const amount =
-          index === selected.length - 1
-            ? round2(item.price - share * (selected.length - 1))
-            : share;
-        participantMap[participantId].itemSubtotal = round2(
-          participantMap[participantId].itemSubtotal + amount,
-        );
-        participantMap[participantId].items.push({
-          itemId: item.id,
-          name: item.name,
-          amount,
-        });
-      });
-
-      continue;
-    }
-
-    for (const participant of participants) {
-      const quantity = allocation.quantities[participant.id] ?? 0;
-      if (quantity <= 0) continue;
-
-      const amount = round2(quantity * item.price);
-      participantMap[participant.id].itemSubtotal = round2(
-        participantMap[participant.id].itemSubtotal + amount,
-      );
-      participantMap[participant.id].items.push({
+      participantMap[participantId].items.push({
         itemId: item.id,
-        name: `${item.name} (${quantity}x)`,
+        name: item.name,
         amount,
       });
-    }
+    });
   }
 
   const subtotal = round2(
@@ -231,51 +386,65 @@ export const buildRateioSummary = ({
     ),
   );
 
-  const serviceFeeTotal =
-    serviceFeePercentage > 0 ? round2((subtotal * serviceFeePercentage) / 100) : 0;
-  const servicePayers = serviceFeeConfig.selectedParticipantIds.filter(
-    (participantId) => validParticipantIds.has(participantId),
-  );
-  const appliedServiceFeeTotal =
-    servicePayers.length > 0 && serviceFeeTotal > 0 ? serviceFeeTotal : 0;
+  if (serviceFeePercentage > 0) {
+    const serviceParticipants = participants.filter((participant) => {
+      if (
+        !serviceFeeConfig.selectedParticipantIds.includes(participant.id)
+      ) {
+        return false;
+      }
 
-  if (appliedServiceFeeTotal > 0) {
-    const evenShare = round2(appliedServiceFeeTotal / servicePayers.length);
-    servicePayers.forEach((participantId, index) => {
+      return participantMap[participant.id].itemSubtotal > 0;
+    });
+    const serviceBase = round2(
+      serviceParticipants.reduce(
+        (acc, participant) => acc + participantMap[participant.id].itemSubtotal,
+        0,
+      ),
+    );
+    const serviceTotal = round2(serviceBase * (serviceFeePercentage / 100));
+    let allocatedServiceFee = 0;
+
+    serviceParticipants.forEach((participant, index) => {
+      const subtotalBase = participantMap[participant.id].itemSubtotal;
       const amount =
-        index === servicePayers.length - 1
-          ? round2(appliedServiceFeeTotal - evenShare * (servicePayers.length - 1))
-          : evenShare;
-      participantMap[participantId].feeTotal = round2(
-        participantMap[participantId].feeTotal + amount,
+        index === serviceParticipants.length - 1
+          ? round2(serviceTotal - allocatedServiceFee)
+          : round2(subtotalBase * (serviceFeePercentage / 100));
+
+      if (amount <= 0) return;
+
+      allocatedServiceFee = round2(allocatedServiceFee + amount);
+      participantMap[participant.id].feeTotal = round2(
+        participantMap[participant.id].feeTotal + amount,
       );
-      participantMap[participantId].fees.push({
+      participantMap[participant.id].fees.push({
         type: "SERVICE_PERCENTAGE",
-        label: "Taxa de servico",
+        label: "Taxa de serviço",
         amount,
       });
     });
   }
 
-  const couvertPayers = couvertConfig.selectedParticipantIds.filter(
-    (participantId) => validParticipantIds.has(participantId),
+  const couvertPayers = couvertConfig.selectedParticipantIds.filter((participantId) =>
+    validParticipantIds.has(participantId),
   );
-  const appliedCouvertTotal =
+  const coveredCouvertTotal =
     couvertPayers.length > 0 && couvertValue > 0 ? couvertValue : 0;
 
-  if (appliedCouvertTotal > 0) {
-    const evenShare = round2(appliedCouvertTotal / couvertPayers.length);
-    couvertPayers.forEach((participantId, index) => {
-      const amount =
-        index === couvertPayers.length - 1
-          ? round2(appliedCouvertTotal - evenShare * (couvertPayers.length - 1))
-          : evenShare;
+  if (coveredCouvertTotal > 0) {
+    const couvertDistribution = distributeEvenly(
+      coveredCouvertTotal,
+      couvertPayers,
+    );
+
+    Object.entries(couvertDistribution).forEach(([participantId, amount]) => {
       participantMap[participantId].feeTotal = round2(
         participantMap[participantId].feeTotal + amount,
       );
       participantMap[participantId].fees.push({
         type: "COVER_CHARGE",
-        label: "Couvert artistico",
+        label: "Couvert artístico",
         amount,
       });
     });
@@ -289,7 +458,9 @@ export const buildRateioSummary = ({
     };
   });
 
-  const feesTotal = round2(appliedServiceFeeTotal + appliedCouvertTotal);
+  const feesTotal = round2(
+    participantSummaries.reduce((acc, participant) => acc + participant.feeTotal, 0),
+  );
   const grandTotal = round2(subtotal + feesTotal);
 
   return {
@@ -318,37 +489,19 @@ export const buildDivisionsPayload = ({
 
   for (const item of items) {
     const allocation = itemAllocations[item.id];
-    if (!allocation) continue;
+    const participantAmounts = buildItemParticipantAmounts(
+      item,
+      allocation,
+      validParticipantIds,
+    );
 
-    if (item.quantity <= 1) {
-      const selected = allocation.selectedParticipantIds.filter((participantId) =>
-        validParticipantIds.has(participantId),
-      );
-      if (selected.length === 0) continue;
-
-      const baseShare = round2(item.price / selected.length);
-      selected.forEach((participantId, index) => {
-        const shareAmount =
-          index === selected.length - 1
-            ? round2(item.price - baseShare * (selected.length - 1))
-            : baseShare;
-        divisions.push({
-          billItemId: item.id,
-          participantId,
-          shareAmount,
-        });
-      });
-      continue;
-    }
-
-    participants.forEach((participant) => {
-      const quantity = allocation.quantities[participant.id] ?? 0;
-      if (quantity <= 0) return;
+    Object.entries(participantAmounts).forEach(([participantId, shareAmount]) => {
+      if (shareAmount <= 0) return;
 
       divisions.push({
         billItemId: item.id,
-        participantId: participant.id,
-        shareAmount: round2(quantity * item.price),
+        participantId,
+        shareAmount,
       });
     });
   }

@@ -11,7 +11,7 @@ import {
   TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import billService, {
@@ -165,6 +165,13 @@ export default function BillsScreen() {
     refetch();
   }, [refetch]);
 
+  useFocusEffect(
+    useCallback(() => {
+      if (!user?.id) return;
+      void refetch();
+    }, [refetch, user?.id]),
+  );
+
   // Renderizar filtros
   const renderFilters = () => (
     <View style={[styles.filtersContainer, { backgroundColor: colors.card }]}>
@@ -305,7 +312,7 @@ export default function BillsScreen() {
             { color: colors.text, fontSize: getFontSize(24) },
           ]}
         >
-          Historico
+          Histórico
         </Text>
       </View>
 

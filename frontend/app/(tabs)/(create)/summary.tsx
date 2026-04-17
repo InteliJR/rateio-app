@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "../../../contexts/ThemeContext";
 import {
   buildDivisionsPayload,
@@ -17,12 +18,14 @@ import {
   serializeFeeParticipantIds,
   validateItemAllocations,
 } from "../../../lib/rateio";
+import { formatCurrency } from "../../../lib/formatters";
 import billService from "../../../services/bill.service";
 import { useRateioDraftStore } from "../../../store/rateioDraftStore";
 
 export default function SummaryScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const {
     billId,
@@ -73,22 +76,19 @@ export default function SummaryScreen() {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
         <Text style={[styles.emptyTitle, { color: colors.text }]}>
-          Nenhum resumo disponivel.
+          Nenhum resumo disponível.
         </Text>
         <TouchableOpacity
           style={[styles.primaryButton, { backgroundColor: colors.primary }]}
           onPress={() => router.replace("/(tabs)/bills")}
         >
           <Text style={[styles.primaryButtonText, { color: colors.accent }]}>
-            Voltar ao historico
+            Voltar ao histórico
           </Text>
         </TouchableOpacity>
       </View>
     );
   }
-
-  const formatCurrency = (value: number) =>
-    `R$ ${value.toFixed(2).replace(".", ",")}`;
 
   const handleFinalize = async () => {
     if (issues.length > 0) {
@@ -108,21 +108,20 @@ export default function SummaryScreen() {
       const fees: Array<{
         type: "SERVICE_PERCENTAGE" | "COVER_CHARGE";
         value: number;
-        description: string;
+        description?: string;
       }> = [];
-
-      const serviceFeePayers = serviceFeeConfig.selectedParticipantIds.filter(
+      const servicePayers = serviceFeeConfig.selectedParticipantIds.filter(
         (participantId) => validParticipantIds.has(participantId),
       );
       const couvertPayers = couvertConfig.selectedParticipantIds.filter(
         (participantId) => validParticipantIds.has(participantId),
       );
 
-      if (serviceFeePercentage > 0 && serviceFeePayers.length > 0) {
+      if (serviceFeePercentage > 0 && servicePayers.length > 0) {
         fees.push({
           type: "SERVICE_PERCENTAGE",
           value: serviceFeePercentage,
-          description: serializeFeeParticipantIds(serviceFeePayers),
+          description: serializeFeeParticipantIds(servicePayers),
         });
       }
 
@@ -139,12 +138,13 @@ export default function SummaryScreen() {
         fees,
       });
 
+      await queryClient.invalidateQueries({ queryKey: ["bills"] });
       clearDraft();
       router.replace(`/(tabs)/bills/${billId}`);
     } catch (error: any) {
       Alert.alert(
         "Erro",
-        error.message || "Nao foi possivel finalizar a conta.",
+        error.message || "Não foi possível finalizar a conta.",
       );
     } finally {
       setSaving(false);

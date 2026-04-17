@@ -12,8 +12,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { parseFeeParticipantIds } from "../../../lib/rateio";
+import { formatCurrency } from "../../../lib/formatters";
 import billService from "../../../services/bill.service";
 
 interface DetailParticipant {
@@ -29,7 +31,6 @@ interface DetailParticipant {
   items: Array<{
     id: string;
     name: string;
-    quantity: number;
     shareAmount: number;
   }>;
   total: number;
@@ -58,6 +59,7 @@ export default function BillDetailScreen() {
   const { colors, getFontSize } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(true);
   const [duplicating, setDuplicating] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -92,9 +94,6 @@ export default function BillDetailScreen() {
     }, [loadData]),
   );
 
-  const formatCurrency = (value: number) =>
-    `R$ ${value.toFixed(2).replace(".", ",")}`;
-
   const handleEditBill = () => {
     router.push({
       pathname: "/(tabs)/(create)/scanned",
@@ -105,7 +104,7 @@ export default function BillDetailScreen() {
   const handleReuseBill = () => {
     Alert.alert(
       "Reutilizar conta",
-      "Uma nova conta sera criada com os mesmos itens e participantes.",
+      "Uma nova conta será criada com os mesmos itens e participantes.",
       [
         { text: "Cancelar", style: "cancel" },
         {
@@ -121,7 +120,7 @@ export default function BillDetailScreen() {
             } catch (error: any) {
               Alert.alert(
                 "Erro",
-                error.message || "Nao foi possivel reutilizar a conta.",
+                error.message || "Não foi possível reutilizar a conta.",
               );
             } finally {
               setDuplicating(false);
@@ -135,7 +134,7 @@ export default function BillDetailScreen() {
   const handleDeleteBill = () => {
     Alert.alert(
       "Excluir conta",
-      "Esta conta sera removida permanentemente do historico. Deseja continuar?",
+      "Esta conta será removida permanentemente do histórico. Deseja continuar?",
       [
         { text: "Cancelar", style: "cancel" },
         {
@@ -145,6 +144,7 @@ export default function BillDetailScreen() {
             try {
               setDeleting(true);
               await billService.deleteBill(id);
+              await queryClient.invalidateQueries({ queryKey: ["bills"] });
               router.replace("/(tabs)/bills");
             } catch (error: any) {
               Alert.alert(
@@ -176,7 +176,7 @@ export default function BillDetailScreen() {
         style={[styles.centered, { backgroundColor: colors.background }]}
       >
         <Text style={[styles.emptyText, { color: colors.text }]}>
-          Conta nao encontrada.
+          Conta não encontrada.
         </Text>
       </SafeAreaView>
     );
@@ -290,7 +290,6 @@ export default function BillDetailScreen() {
                       style={[styles.rowLabel, { color: colors.textSecondary }]}
                     >
                       {item.name}
-                      {item.quantity > 1 ? ` (${item.quantity}x)` : ""}
                     </Text>
                     <Text
                       style={[styles.rowValue, { color: colors.textSecondary }]}
@@ -408,10 +407,8 @@ function buildDetailData(bill: any): DetailData {
       const items = (participant.divisions || []).map((division: any) => ({
         id: division.billItemId,
         name: bill.items.find((item: any) => item.id === division.billItemId)?.name || "Item",
-      quantity:
-        bill.items.find((item: any) => item.id === division.billItemId)?.quantity || 1,
-      shareAmount: Number(division.shareAmount),
-    }));
+        shareAmount: Number(division.shareAmount),
+      }));
 
     const subtotal = round2(
       items.reduce((sum: number, item: any) => sum + item.shareAmount, 0),
@@ -432,46 +429,81 @@ function buildDetailData(bill: any): DetailData {
   );
 
   let feesTotal = 0;
+  const participantIds = Object.keys(participantsMap);
 
   for (const fee of bill.fees || []) {
-    const selectedParticipantIds = parseFeeParticipantIds(fee.description);
-    if (selectedParticipantIds.length === 0) continue;
-
     const totalFee =
       fee.type === "SERVICE_PERCENTAGE"
-        ? round2(
-            ((bill.items || []).reduce(
-              (sum: number, item: any) => sum + Number(item.totalPrice),
-              0,
-            ) *
-              Number(fee.value)) /
-              100,
-          )
+        ? 0
         : round2(Number(fee.value));
+
+    if (fee.type === "SERVICE_PERCENTAGE") {
+      const selectedParticipantIds = parseFeeParticipantIds(fee.description).filter(
+        (participantId) => participantsMap[participantId]?.subtotal > 0,
+      );
+      const servicePayers =
+        selectedParticipantIds.length > 0
+          ? selectedParticipantIds
+          : participantIds.filter(
+              (participantId) => participantsMap[participantId].subtotal > 0,
+            );
+      const serviceBase = round2(
+        servicePayers.reduce(
+          (sum, participantId) => sum + participantsMap[participantId].subtotal,
+          0,
+        ),
+      );
+      const serviceTotal = round2((serviceBase * Number(fee.value)) / 100);
+
+      if (serviceTotal <= 0) continue;
+
+      feesTotal = round2(feesTotal + serviceTotal);
+      let allocated = 0;
+
+      servicePayers.forEach((participantId, index) => {
+        const participant = participantsMap[participantId];
+        const amount =
+          index === servicePayers.length - 1
+            ? round2(serviceTotal - allocated)
+            : round2(participant.subtotal * (Number(fee.value) / 100));
+
+        allocated = round2(allocated + amount);
+        participant.fees.push({
+          id: fee.id,
+          type: fee.type,
+          label: "Taxa de serviço",
+          amount,
+        });
+        participant.total = round2(participant.total + amount);
+      });
+
+      continue;
+    }
 
     if (totalFee <= 0) continue;
 
     feesTotal = round2(feesTotal + totalFee);
-    const baseShare = round2(totalFee / selectedParticipantIds.length);
 
-    selectedParticipantIds.forEach((participantId, index) => {
+    const selectedParticipantIds = parseFeeParticipantIds(fee.description).filter(
+      (participantId) => participantsMap[participantId],
+    );
+    const feePayers =
+      selectedParticipantIds.length > 0 ? selectedParticipantIds : participantIds;
+    const baseShare = round2(totalFee / feePayers.length);
+
+    feePayers.forEach((participantId, index) => {
       const participant = participantsMap[participantId];
       if (!participant) return;
 
       const amount =
-        index === selectedParticipantIds.length - 1
-          ? round2(totalFee - baseShare * (selectedParticipantIds.length - 1))
+        index === feePayers.length - 1
+          ? round2(totalFee - baseShare * (feePayers.length - 1))
           : baseShare;
 
       participant.fees.push({
         id: fee.id,
         type: fee.type,
-        label:
-          fee.type === "SERVICE_PERCENTAGE"
-            ? "Taxa de servico"
-            : fee.type === "COVER_CHARGE"
-              ? "Couvert artistico"
-              : "Taxa",
+        label: fee.type === "COVER_CHARGE" ? "Couvert artístico" : "Taxa",
         amount,
       });
       participant.total = round2(participant.total + amount);

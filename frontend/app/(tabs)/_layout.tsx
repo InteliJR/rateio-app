@@ -27,7 +27,7 @@ export default function TabsLayout() {
               color={color}
             />
           ),
-          tabBarLabel: "Historico",
+          tabBarLabel: "Histórico",
         }}
       />
       <Tabs.Screen
@@ -42,7 +42,7 @@ export default function TabsLayout() {
               color={color}
             />
           ),
-          tabBarLabel: "Camera",
+          tabBarLabel: "Escanear conta",
         }}
       />
       <Tabs.Screen

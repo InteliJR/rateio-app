@@ -61,6 +61,53 @@ export interface RateioDraftState {
   clearDraft: () => void;
 }
 
+const reconcileItemAllocations = (
+  items: DraftItem[],
+  participants: DraftParticipant[],
+  existingAllocations: Record<string, DraftItemAllocation>,
+): Record<string, DraftItemAllocation> => {
+  const validParticipantIds = new Set(
+    participants.map((participant) => participant.id),
+  );
+
+  return items.reduce<Record<string, DraftItemAllocation>>((acc, item) => {
+    const existingAllocation = existingAllocations[item.id];
+    const existingQuantities =
+      (existingAllocation as unknown as {
+        quantities?: Record<string, number>;
+        shares?: Record<string, number>;
+      })?.quantities ??
+      (existingAllocation as unknown as {
+        quantities?: Record<string, number>;
+        shares?: Record<string, number>;
+      })?.shares ??
+      {};
+
+    if (!existingAllocation) {
+      acc[item.id] = {
+        selectedParticipantIds: participants.map((participant) => participant.id),
+        quantities: participants.reduce<Record<string, number>>((quantityAcc, participant) => {
+          quantityAcc[participant.id] = 0;
+          return quantityAcc;
+        }, {}),
+      };
+      return acc;
+    }
+
+    acc[item.id] = {
+      selectedParticipantIds: existingAllocation.selectedParticipantIds.filter(
+        (participantId) => validParticipantIds.has(participantId),
+      ),
+      quantities: participants.reduce<Record<string, number>>((quantityAcc, participant) => {
+        quantityAcc[participant.id] = existingQuantities[participant.id] ?? 0;
+        return quantityAcc;
+      }, {}),
+    };
+
+    return acc;
+  }, {});
+};
+
 const buildDefaultAllocations = (
   items: DraftItem[],
   participants: DraftParticipant[],
@@ -68,9 +115,9 @@ const buildDefaultAllocations = (
   return items.reduce<Record<string, DraftItemAllocation>>((acc, item) => {
     const selectedParticipantIds = participants.map((participant) => participant.id);
     const quantities = participants.reduce<Record<string, number>>(
-      (qtyAcc, participant) => {
-        qtyAcc[participant.id] = 0;
-        return qtyAcc;
+      (quantityAcc, participant) => {
+        quantityAcc[participant.id] = 0;
+        return quantityAcc;
       },
       {},
     );
@@ -125,8 +172,9 @@ export const useRateioDraftStore = create<RateioDraftState>((set) => ({
         value: couvertValue,
         selectedParticipantIds: couvertSelectedParticipantIds,
       },
-      itemAllocations:
-        itemAllocations ?? buildDefaultAllocations(items, participants),
+      itemAllocations: itemAllocations
+        ? reconcileItemAllocations(items, participants, itemAllocations)
+        : buildDefaultAllocations(items, participants),
     })),
 
   setBillMeta: ({
@@ -145,14 +193,20 @@ export const useRateioDraftStore = create<RateioDraftState>((set) => ({
       serviceFeeConfig: {
         ...state.serviceFeeConfig,
         value: serviceFeePercentage,
+        selectedParticipantIds: state.serviceFeeConfig.selectedParticipantIds.filter(
+          (participantId) => participants.some((participant) => participant.id === participantId),
+        ),
       },
       couvertConfig: {
         ...state.couvertConfig,
         value: couvertValue,
+        selectedParticipantIds: state.couvertConfig.selectedParticipantIds.filter(
+          (participantId) => participants.some((participant) => participant.id === participantId),
+        ),
       },
       itemAllocations:
         Object.keys(state.itemAllocations).length > 0
-          ? state.itemAllocations
+          ? reconcileItemAllocations(items, participants, state.itemAllocations)
           : buildDefaultAllocations(items, participants),
     })),
 

@@ -85,6 +85,7 @@ export default function CameraScreen() {
         const photo = await cameraRef.current.takePictureAsync({
           quality: 0.8,
           base64: false,
+          shutterSound: false
         });
 
         if (photo?.uri) {
