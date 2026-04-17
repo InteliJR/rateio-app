@@ -149,7 +149,7 @@ export default function BillDetailScreen() {
             } catch (error: any) {
               Alert.alert(
                 "Erro",
-                error.message || "Nao foi possivel excluir a conta.",
+                error.message || "Não foi possivel excluir a conta.",
               );
             } finally {
               setDeleting(false);

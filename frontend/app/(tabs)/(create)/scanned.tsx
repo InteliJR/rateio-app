@@ -258,7 +258,7 @@ export default function ScannedBillScreen() {
     if (!id) return;
 
     if (participants.length === 0) {
-      Alert.alert("Atencao", "Adicione pelo menos um participante.");
+      Alert.alert("Atenção", "Adicione pelo menos um participante.");
       return;
     }
 
@@ -396,7 +396,7 @@ export default function ScannedBillScreen() {
 
   const handleDeleteParticipant = async (participantId: string) => {
     if (participants.length <= 1) {
-      Alert.alert("Atencao", "A conta precisa ter pelo menos um participante.");
+      Alert.alert("Atenção", "A conta precisa ter pelo menos um participante.");
       return;
     }
 
