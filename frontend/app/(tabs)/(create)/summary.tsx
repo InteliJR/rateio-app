@@ -128,7 +128,7 @@ export default function SummaryScreen() {
       if (couvertValue > 0 && couvertPayers.length > 0) {
         fees.push({
           type: "COVER_CHARGE",
-          value: couvertValue,
+          value: couvertValue * couvertPayers.length,
           description: serializeFeeParticipantIds(couvertPayers),
         });
       }

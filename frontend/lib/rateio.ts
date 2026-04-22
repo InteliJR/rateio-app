@@ -431,16 +431,12 @@ export const buildRateioSummary = ({
           .map((participant) => participant.id)
           .filter((participantId) => validParticipantIds.has(participantId))
       : [];
-  const coveredCouvertTotal =
+  const coveredCouvertAmount =
     couvertPayers.length > 0 && couvertValue > 0 ? couvertValue : 0;
 
-  if (coveredCouvertTotal > 0) {
-    const couvertDistribution = distributeEvenly(
-      coveredCouvertTotal,
-      couvertPayers,
-    );
-
-    Object.entries(couvertDistribution).forEach(([participantId, amount]) => {
+  if (coveredCouvertAmount > 0) {
+    couvertPayers.forEach((participantId) => {
+      const amount = coveredCouvertAmount;
       participantMap[participantId].feeTotal = round2(
         participantMap[participantId].feeTotal + amount,
       );

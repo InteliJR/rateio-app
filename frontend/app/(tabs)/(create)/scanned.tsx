@@ -77,6 +77,20 @@ export default function ScannedBillScreen() {
     [fees],
   );
 
+  const getCouvertValuePerParticipant = useCallback(
+    (fee?: Fee) => {
+      if (!fee) return 0;
+
+      const participantCount = participants.length;
+      if (participantCount <= 0) {
+        return Number(fee.value) || 0;
+      }
+
+      return Number(fee.value) / participantCount;
+    },
+    [participants.length],
+  );
+
   const loadBillData = useCallback(async () => {
     if (!id) return;
 
@@ -124,7 +138,12 @@ export default function ScannedBillScreen() {
       );
       setCouvertInput(
         loadedCouvert
-          ? formatEditableNumber(Number(loadedCouvert.value), 2)
+          ? formatEditableNumber(
+              loadedParticipants.length > 0
+                ? Number(loadedCouvert.value) / loadedParticipants.length
+                : Number(loadedCouvert.value),
+              2,
+            )
           : "",
       );
     } catch (error: any) {
@@ -300,7 +319,11 @@ export default function ScannedBillScreen() {
       const couvertValue = parsePtBrNumber(couvertInput);
 
       await syncFee(serviceFee, FeeType.SERVICE_PERCENTAGE, serviceFeeValue);
-      await syncFee(couvertFee, FeeType.COVER_CHARGE, couvertValue);
+      await syncFee(
+        couvertFee,
+        FeeType.COVER_CHARGE,
+        couvertValue > 0 ? couvertValue * participants.length : 0,
+      );
 
       const refreshedFees = await feesService.findAllByBill(id).catch(() => []);
       const normalizedFees = Array.isArray(refreshedFees)
@@ -339,7 +362,7 @@ export default function ScannedBillScreen() {
           price: item.price,
         })),
         serviceFeePercentage: refreshedService ? Number(refreshedService.value) : 0,
-        couvertValue: refreshedCouvert ? Number(refreshedCouvert.value) : 0,
+        couvertValue: getCouvertValuePerParticipant(refreshedCouvert),
         serviceFeeSelectedParticipantIds,
         couvertSelectedParticipantIds,
         itemAllocations: mapAllocationsToPersistedItems(sourceItems, persistedItems),

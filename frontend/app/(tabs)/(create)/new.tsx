@@ -126,7 +126,7 @@ export default function NewBillScreen() {
             : undefined,
         coverChargeValue:
           data.couvertValue && data.couvertValue.trim() !== ""
-            ? Number(data.couvertValue)
+            ? Number(data.couvertValue) * participants.length
             : undefined,
         coverChargeType:
           data.couvertValue && data.couvertValue.trim() !== ""
@@ -247,7 +247,7 @@ export default function NewBillScreen() {
               name="couvertValue"
               render={({ field: { onChange, value, onBlur } }) => (
                 <NumericInput
-                  label="Valor total do couvert"
+                  label="Valor do couvert por participante"
                   placeholder="Ex: 20.00"
                   value={value ?? ""}
                   onChange={onChange}
