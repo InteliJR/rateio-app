@@ -52,9 +52,6 @@ export default function ScannedBillScreen() {
   const draftServiceFeeSelectedParticipantIds = useRateioDraftStore(
     (state) => state.serviceFeeConfig.selectedParticipantIds,
   );
-  const draftCouvertSelectedParticipantIds = useRateioDraftStore(
-    (state) => state.couvertConfig.selectedParticipantIds,
-  );
   const draftAllocations = useRateioDraftStore((state) => state.itemAllocations);
 
   const [loading, setLoading] = useState(true);
@@ -324,11 +321,9 @@ export default function ScannedBillScreen() {
             currentParticipantIds.has(participantId),
           )
         : parseFeeParticipantIds(refreshedService?.description);
-      const couvertSelectedParticipantIds = hasDraftForCurrentBill
-        ? draftCouvertSelectedParticipantIds.filter((participantId) =>
-            currentParticipantIds.has(participantId),
-          )
-        : parseFeeParticipantIds(refreshedCouvert?.description);
+      const couvertSelectedParticipantIds = refreshedCouvert
+        ? Array.from(currentParticipantIds)
+        : [];
 
       initializeDraft({
         billId: id,

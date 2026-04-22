@@ -329,7 +329,6 @@ export const buildRateioSummary = ({
   serviceFeePercentage,
   serviceFeeConfig,
   couvertValue,
-  couvertConfig,
 }: {
   participants: DraftParticipant[];
   items: DraftItem[];
@@ -426,9 +425,12 @@ export const buildRateioSummary = ({
     });
   }
 
-  const couvertPayers = couvertConfig.selectedParticipantIds.filter((participantId) =>
-    validParticipantIds.has(participantId),
-  );
+  const couvertPayers =
+    couvertValue > 0
+      ? participants
+          .map((participant) => participant.id)
+          .filter((participantId) => validParticipantIds.has(participantId))
+      : [];
   const coveredCouvertTotal =
     couvertPayers.length > 0 && couvertValue > 0 ? couvertValue : 0;
 

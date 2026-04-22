@@ -113,9 +113,9 @@ export default function SummaryScreen() {
       const servicePayers = serviceFeeConfig.selectedParticipantIds.filter(
         (participantId) => validParticipantIds.has(participantId),
       );
-      const couvertPayers = couvertConfig.selectedParticipantIds.filter(
-        (participantId) => validParticipantIds.has(participantId),
-      );
+      const couvertPayers = participants
+        .map((participant) => participant.id)
+        .filter((participantId) => validParticipantIds.has(participantId));
 
       if (serviceFeePercentage > 0 && servicePayers.length > 0) {
         fees.push({

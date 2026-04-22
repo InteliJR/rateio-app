@@ -14,7 +14,6 @@ import { BillItem, ItemCard } from "../../../components/items/ItemCard";
 import { useTheme } from "../../../contexts/ThemeContext";
 import {
   buildDefaultAllocation,
-  buildItemParticipantAmounts,
   getAssignedQuantity,
   getSharedQuantity,
   validateItemAllocations,
@@ -35,7 +34,6 @@ export default function SplitScreen() {
     serviceFeeConfig,
     couvertValue,
     itemAllocations,
-    couvertConfig,
     setBillMeta,
     setItemAllocation,
     setFeeSelection,
@@ -155,19 +153,13 @@ export default function SplitScreen() {
     });
   };
 
-  const toggleFeeParticipant = (
-    feeType: "service" | "couvert",
-    participantId: string,
-  ) => {
-    const selectedParticipantIds =
-      feeType === "service"
-        ? serviceFeeConfig.selectedParticipantIds
-        : couvertConfig.selectedParticipantIds;
+  const toggleServiceFeeParticipant = (participantId: string) => {
+    const selectedParticipantIds = serviceFeeConfig.selectedParticipantIds;
     const nextSelected = selectedParticipantIds.includes(participantId)
       ? selectedParticipantIds.filter((id) => id !== participantId)
       : [...selectedParticipantIds, participantId];
 
-    setFeeSelection(feeType, nextSelected);
+    setFeeSelection("service", nextSelected);
   };
 
   const handleAddItem = async (
@@ -332,11 +324,6 @@ export default function SplitScreen() {
           allocation,
           validParticipantIds,
         );
-        const participantAmounts = buildItemParticipantAmounts(
-          item,
-          allocation,
-          validParticipantIds,
-        );
 
         return (
           <View
@@ -388,7 +375,6 @@ export default function SplitScreen() {
                   participant.id,
                 );
                 const quantityValue = allocation.quantities[participant.id] ?? 0;
-                const participantAmount = participantAmounts[participant.id] ?? 0;
 
                 return (
                   <View key={participant.id} style={styles.participantBlock}>
@@ -487,24 +473,20 @@ export default function SplitScreen() {
               description="Selecione quem vai pagar a taxa sobre o próprio subtotal."
               participants={participants}
               selectedParticipantIds={serviceFeeConfig.selectedParticipantIds}
-              onToggle={(participantId) =>
-                toggleFeeParticipant("service", participantId)
-              }
+              onToggle={toggleServiceFeeParticipant}
               colors={colors}
             />
           )}
 
           {couvertValue > 0 && (
-            <FeeSelector
-              title={`Couvert artístico (${formatCurrency(couvertValue)})`}
-              description="Selecione quem vai pagar o couvert."
-              participants={participants}
-              selectedParticipantIds={couvertConfig.selectedParticipantIds}
-              onToggle={(participantId) =>
-                toggleFeeParticipant("couvert", participantId)
-              }
-              colors={colors}
-            />
+            <View style={styles.feeBlock}>
+              <Text style={[styles.feeTitle, { color: colors.text }]}>
+                {`Couvert artístico (${formatCurrency(couvertValue)})`}
+              </Text>
+              <Text style={[styles.feeInfoText, { color: colors.textSecondary }]}>
+                O couvert é obrigatório e pago por todos os participantes da conta.
+              </Text>
+            </View>
           )}
         </View>
       )}
@@ -765,10 +747,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 15,
     fontWeight: "600",
-  },
-  participantAmount: {
-    fontSize: 13,
-    paddingLeft: 32,
   },
   feeBlock: {
     gap: 10,

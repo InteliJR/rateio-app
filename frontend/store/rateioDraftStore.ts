@@ -61,6 +61,14 @@ export interface RateioDraftState {
   clearDraft: () => void;
 }
 
+const getMandatoryCouvertParticipantIds = (
+  participants: DraftParticipant[],
+  couvertValue: number,
+) =>
+  couvertValue > 0
+    ? participants.map((participant) => participant.id)
+    : [];
+
 const reconcileItemAllocations = (
   items: DraftItem[],
   participants: DraftParticipant[],
@@ -170,7 +178,10 @@ export const useRateioDraftStore = create<RateioDraftState>((set) => ({
       },
       couvertConfig: {
         value: couvertValue,
-        selectedParticipantIds: couvertSelectedParticipantIds,
+        selectedParticipantIds: getMandatoryCouvertParticipantIds(
+          participants,
+          couvertValue,
+        ),
       },
       itemAllocations: itemAllocations
         ? reconcileItemAllocations(items, participants, itemAllocations)
@@ -200,8 +211,9 @@ export const useRateioDraftStore = create<RateioDraftState>((set) => ({
       couvertConfig: {
         ...state.couvertConfig,
         value: couvertValue,
-        selectedParticipantIds: state.couvertConfig.selectedParticipantIds.filter(
-          (participantId) => participants.some((participant) => participant.id === participantId),
+        selectedParticipantIds: getMandatoryCouvertParticipantIds(
+          participants,
+          couvertValue,
         ),
       },
       itemAllocations:
@@ -226,7 +238,13 @@ export const useRateioDraftStore = create<RateioDraftState>((set) => ({
           : state.serviceFeeConfig,
       couvertConfig:
         feeType === "couvert"
-          ? { ...state.couvertConfig, selectedParticipantIds }
+          ? {
+              ...state.couvertConfig,
+              selectedParticipantIds: getMandatoryCouvertParticipantIds(
+                state.participants,
+                state.couvertValue,
+              ),
+            }
           : state.couvertConfig,
     })),
 
