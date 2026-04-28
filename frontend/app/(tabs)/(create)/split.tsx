@@ -135,20 +135,33 @@ export default function SplitScreen() {
   };
 
   const toggleParticipantForItem = (itemId: string, participantId: string) => {
+    const item = items.find((currentItem) => currentItem.id === itemId);
     const allocation = getAllocationForItem(itemId);
-    if (!allocation) return;
+    if (!item || !allocation) return;
 
-    const isSelected = allocation.selectedParticipantIds.includes(participantId);
+    const currentQuantity = allocation.quantities[participantId] ?? 0;
+    const isParticipantIncluded =
+      allocation.selectedParticipantIds.includes(participantId);
+    const isSelected =
+      item.quantity === 1
+        ? currentQuantity > 0
+        : isParticipantIncluded;
     const nextSelectedParticipantIds = isSelected
       ? allocation.selectedParticipantIds.filter((id) => id !== participantId)
-      : [...allocation.selectedParticipantIds, participantId];
-    const currentQuantity = allocation.quantities[participantId] ?? 0;
+      : isParticipantIncluded
+        ? allocation.selectedParticipantIds
+        : [...allocation.selectedParticipantIds, participantId];
 
     setItemAllocation(itemId, {
       selectedParticipantIds: nextSelectedParticipantIds,
       quantities: {
         ...allocation.quantities,
-        [participantId]: isSelected ? 0 : Math.max(1, currentQuantity),
+        [participantId]:
+          item.quantity === 1
+            ? Number(!isSelected)
+            : isSelected
+              ? 0
+              : Math.max(1, currentQuantity),
       },
     });
   };
@@ -371,10 +384,11 @@ export default function SplitScreen() {
 
             <View style={styles.participantsList}>
               {participants.map((participant) => {
-                const isSelected = allocation.selectedParticipantIds.includes(
-                  participant.id,
-                );
                 const quantityValue = allocation.quantities[participant.id] ?? 0;
+                const isSelected =
+                  item.quantity === 1
+                    ? quantityValue > 0
+                    : allocation.selectedParticipantIds.includes(participant.id);
 
                 return (
                   <View key={participant.id} style={styles.participantBlock}>
@@ -409,41 +423,43 @@ export default function SplitScreen() {
                         </Text>
                       </TouchableOpacity>
 
-                      <View style={styles.quantityControl}>
-                        <TouchableOpacity
-                          style={[
-                            styles.quantityButton,
-                            {
-                              borderColor: colors.cardBorder,
-                              opacity: quantityValue === 0 ? 0.5 : 1,
-                            },
-                          ]}
-                          onPress={() =>
-                            changeParticipantQuantity(item.id, participant.id, -1)
-                          }
-                          disabled={quantityValue === 0}
-                        >
-                          <Ionicons name="remove" size={16} color={colors.text} />
-                        </TouchableOpacity>
-                        <Text style={[styles.quantityText, { color: colors.text }]}>
-                          {quantityValue}
-                        </Text>
-                        <TouchableOpacity
-                          style={[
-                            styles.quantityButton,
-                            {
-                              borderColor: colors.cardBorder,
-                              opacity: quantityValue >= item.quantity ? 0.5 : 1,
-                            },
-                          ]}
-                          onPress={() =>
-                            changeParticipantQuantity(item.id, participant.id, 1)
-                          }
-                          disabled={quantityValue >= item.quantity}
-                        >
-                          <Ionicons name="add" size={16} color={colors.text} />
-                        </TouchableOpacity>
-                      </View>
+                      {item.quantity > 1 && (
+                        <View style={styles.quantityControl}>
+                          <TouchableOpacity
+                            style={[
+                              styles.quantityButton,
+                              {
+                                borderColor: colors.cardBorder,
+                                opacity: quantityValue === 0 ? 0.5 : 1,
+                              },
+                            ]}
+                            onPress={() =>
+                              changeParticipantQuantity(item.id, participant.id, -1)
+                            }
+                            disabled={quantityValue === 0}
+                          >
+                            <Ionicons name="remove" size={16} color={colors.text} />
+                          </TouchableOpacity>
+                          <Text style={[styles.quantityText, { color: colors.text }]}>
+                            {quantityValue}
+                          </Text>
+                          <TouchableOpacity
+                            style={[
+                              styles.quantityButton,
+                              {
+                                borderColor: colors.cardBorder,
+                                opacity: quantityValue >= item.quantity ? 0.5 : 1,
+                              },
+                            ]}
+                            onPress={() =>
+                              changeParticipantQuantity(item.id, participant.id, 1)
+                            }
+                            disabled={quantityValue >= item.quantity}
+                          >
+                            <Ionicons name="add" size={16} color={colors.text} />
+                          </TouchableOpacity>
+                        </View>
+                      )}
                     </View>
                   </View>
                 );
