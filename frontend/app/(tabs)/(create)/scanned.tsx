@@ -57,6 +57,7 @@ export default function ScannedBillScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [addingParticipant, setAddingParticipant] = useState(false);
   const [billStatus, setBillStatus] = useState<BillStatus | null>(null);
 
   const [billName, setBillName] = useState("");
@@ -383,11 +384,12 @@ export default function ScannedBillScreen() {
   };
 
   const handleAddParticipant = async () => {
-    if (!id) return;
+    if (!id || addingParticipant) return;
     const trimmedName = newParticipantName.trim();
     const participantName = trimmedName || `Pessoa ${participants.length + 1}`;
 
     try {
+      setAddingParticipant(true);
       const participant = await participantsService.createParticipant(
         id,
         participantName,
@@ -396,6 +398,8 @@ export default function ScannedBillScreen() {
       setNewParticipantName("");
     } catch (error: any) {
       Alert.alert("Erro", error.message || "Não foi possível adicionar participante.");
+    } finally {
+      setAddingParticipant(false);
     }
   };
 
@@ -590,10 +594,19 @@ export default function ScannedBillScreen() {
                 onChangeText={setNewParticipantName}
               />
               <TouchableOpacity
-                style={[styles.smallButton, { backgroundColor: colors.primary }]}
+                style={[
+                  styles.smallButton,
+                  { backgroundColor: colors.primary },
+                  addingParticipant && styles.buttonDisabled,
+                ]}
                 onPress={handleAddParticipant}
+                disabled={addingParticipant}
               >
-                <Ionicons name="add" size={18} color={colors.accent} />
+                {addingParticipant ? (
+                  <ActivityIndicator size="small" color={colors.accent} />
+                ) : (
+                  <Ionicons name="add" size={18} color={colors.accent} />
+                )}
               </TouchableOpacity>
             </View>
 
