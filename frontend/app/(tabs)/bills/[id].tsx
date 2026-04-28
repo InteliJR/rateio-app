@@ -48,6 +48,8 @@ interface DetailData {
   participants: DetailParticipant[];
   summary: {
     subtotal: number;
+    serviceFeeTotal: number;
+    couvertTotal: number;
     feesTotal: number;
     total: number;
   };
@@ -344,10 +346,18 @@ export default function BillDetailScreen() {
           </View>
           <View style={styles.row}>
             <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>
-              Taxas e couvert
+              Taxa de serviço
             </Text>
             <Text style={[styles.rowValue, { color: colors.text }]}>
-              {formatCurrency(detail.summary.feesTotal)}
+              {formatCurrency(detail.summary.serviceFeeTotal)}
+            </Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>
+              Couvert artístico
+            </Text>
+            <Text style={[styles.rowValue, { color: colors.text }]}>
+              {formatCurrency(detail.summary.couvertTotal)}
             </Text>
           </View>
           <View style={[styles.divider, { backgroundColor: colors.divider }]} />
@@ -428,7 +438,8 @@ function buildDetailData(bill: any): DetailData {
     {} as Record<string, DetailParticipant>,
   );
 
-  let feesTotal = 0;
+  let serviceFeeTotal = 0;
+  let couvertTotal = 0;
   const participantIds = Object.keys(participantsMap);
 
   for (const fee of bill.fees || []) {
@@ -457,7 +468,7 @@ function buildDetailData(bill: any): DetailData {
 
       if (serviceTotal <= 0) continue;
 
-      feesTotal = round2(feesTotal + serviceTotal);
+      serviceFeeTotal = round2(serviceFeeTotal + serviceTotal);
       let allocated = 0;
 
       servicePayers.forEach((participantId, index) => {
@@ -482,7 +493,11 @@ function buildDetailData(bill: any): DetailData {
 
     if (totalFee <= 0) continue;
 
-    feesTotal = round2(feesTotal + totalFee);
+    if (fee.type === "COVER_CHARGE") {
+      couvertTotal = round2(couvertTotal + totalFee);
+    } else {
+      serviceFeeTotal = round2(serviceFeeTotal + totalFee);
+    }
 
     const selectedParticipantIds = parseFeeParticipantIds(fee.description).filter(
       (participantId) => participantsMap[participantId],
@@ -521,6 +536,7 @@ function buildDetailData(bill: any): DetailData {
   const subtotal = round2(
     items.reduce((sum: number, item: any) => sum + item.totalPrice, 0),
   );
+  const feesTotal = round2(serviceFeeTotal + couvertTotal);
 
   return {
     bill,
@@ -528,6 +544,8 @@ function buildDetailData(bill: any): DetailData {
     participants: Object.values(participantsMap),
     summary: {
       subtotal,
+      serviceFeeTotal,
+      couvertTotal,
       feesTotal,
       total: round2(subtotal + feesTotal),
     },
