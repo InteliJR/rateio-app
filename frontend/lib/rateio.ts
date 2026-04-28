@@ -15,6 +15,7 @@ export interface ParticipantBreakdown {
   items: Array<{
     itemId: string;
     name: string;
+    quantity: number;
     amount: number;
   }>;
   fees: Array<{
@@ -32,6 +33,8 @@ export interface ValidationIssue {
 export interface RateioSummary {
   participants: ParticipantBreakdown[];
   subtotal: number;
+  serviceFeeTotal: number;
+  couvertTotal: number;
   feesTotal: number;
   grandTotal: number;
 }
@@ -232,6 +235,23 @@ export const buildItemParticipantAmounts = (
   return amounts;
 };
 
+const buildItemParticipantQuantities = (
+  item: DraftItem,
+  allocation: DraftItemAllocation | undefined,
+  validParticipantIds: Set<string>,
+) => {
+  const units = buildItemUnitAssignments(item, allocation, validParticipantIds);
+  const quantities: Record<string, number> = {};
+
+  units.forEach((unit) => {
+    unit.participantIds.forEach((participantId) => {
+      quantities[participantId] = (quantities[participantId] ?? 0) + 1;
+    });
+  });
+
+  return quantities;
+};
+
 const distributeEvenly = (total: number, participantIds: string[]) => {
   if (participantIds.length === 0 || total <= 0) {
     return {} as Record<string, number>;
@@ -363,6 +383,11 @@ export const buildRateioSummary = ({
       allocation,
       validParticipantIds,
     );
+    const participantQuantities = buildItemParticipantQuantities(
+      item,
+      allocation,
+      validParticipantIds,
+    );
 
     Object.entries(participantAmounts).forEach(([participantId, amount]) => {
       if (amount <= 0) return;
@@ -373,6 +398,7 @@ export const buildRateioSummary = ({
       participantMap[participantId].items.push({
         itemId: item.id,
         name: item.name,
+        quantity: participantQuantities[participantId] ?? 0,
         amount,
       });
     });
@@ -456,14 +482,34 @@ export const buildRateioSummary = ({
     };
   });
 
-  const feesTotal = round2(
-    participantSummaries.reduce((acc, participant) => acc + participant.feeTotal, 0),
+  const serviceFeeTotal = round2(
+    participantSummaries.reduce(
+      (acc, participant) =>
+        acc +
+        participant.fees
+          .filter((fee) => fee.type === "SERVICE_PERCENTAGE")
+          .reduce((feeAcc, fee) => feeAcc + fee.amount, 0),
+      0,
+    ),
   );
+  const couvertTotal = round2(
+    participantSummaries.reduce(
+      (acc, participant) =>
+        acc +
+        participant.fees
+          .filter((fee) => fee.type === "COVER_CHARGE")
+          .reduce((feeAcc, fee) => feeAcc + fee.amount, 0),
+      0,
+    ),
+  );
+  const feesTotal = round2(serviceFeeTotal + couvertTotal);
   const grandTotal = round2(subtotal + feesTotal);
 
   return {
     participants: participantSummaries,
     subtotal,
+    serviceFeeTotal,
+    couvertTotal,
     feesTotal,
     grandTotal,
   };

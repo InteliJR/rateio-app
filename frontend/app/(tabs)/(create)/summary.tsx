@@ -189,7 +189,7 @@ export default function SummaryScreen() {
           {participant.items.map((item) => (
             <View key={`${participant.id}-${item.itemId}-${item.name}`} style={styles.row}>
               <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>
-                {item.name}
+                {item.name} ({item.quantity}x)
               </Text>
               <Text style={[styles.rowValue, { color: colors.textSecondary }]}>
                 {formatCurrency(item.amount)}
@@ -234,10 +234,18 @@ export default function SummaryScreen() {
         </View>
         <View style={styles.row}>
           <Text style={[styles.totalLabel, { color: colors.textSecondary }]}>
-            Taxas e couvert
+            Taxa de serviço
           </Text>
           <Text style={[styles.totalValue, { color: colors.text }]}>
-            {formatCurrency(summary.feesTotal)}
+            {formatCurrency(summary.serviceFeeTotal)}
+          </Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={[styles.totalLabel, { color: colors.textSecondary }]}>
+            Couvert artístico
+          </Text>
+          <Text style={[styles.totalValue, { color: colors.text }]}>
+            {formatCurrency(summary.couvertTotal)}
           </Text>
         </View>
         <View style={[styles.divider, { backgroundColor: colors.divider }]} />
