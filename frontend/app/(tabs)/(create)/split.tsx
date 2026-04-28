@@ -142,10 +142,7 @@ export default function SplitScreen() {
     const currentQuantity = allocation.quantities[participantId] ?? 0;
     const isParticipantIncluded =
       allocation.selectedParticipantIds.includes(participantId);
-    const isSelected =
-      item.quantity === 1
-        ? currentQuantity > 0
-        : isParticipantIncluded;
+    const isSelected = currentQuantity > 0;
     const nextSelectedParticipantIds = isSelected
       ? allocation.selectedParticipantIds.filter((id) => id !== participantId)
       : isParticipantIncluded
@@ -161,7 +158,7 @@ export default function SplitScreen() {
             ? Number(!isSelected)
             : isSelected
               ? 0
-              : Math.max(1, currentQuantity),
+              : item.quantity,
       },
     });
   };
@@ -315,7 +312,7 @@ export default function SplitScreen() {
       <View style={styles.header}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Rateio dos itens</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Todos começam selecionados.
+          Selecione quem vai pagar cada item.
         </Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
           Informe quantas unidades cada pessoa pagou.
@@ -385,10 +382,7 @@ export default function SplitScreen() {
             <View style={styles.participantsList}>
               {participants.map((participant) => {
                 const quantityValue = allocation.quantities[participant.id] ?? 0;
-                const isSelected =
-                  item.quantity === 1
-                    ? quantityValue > 0
-                    : allocation.selectedParticipantIds.includes(participant.id);
+                const isSelected = quantityValue > 0;
 
                 return (
                   <View key={participant.id} style={styles.participantBlock}>
