@@ -370,13 +370,6 @@ export default function SplitScreen() {
                   {item.quantity - assignedQuantity !== 1 ? "s" : ""} para cobrir.
                 </Text>
               )}
-              {sharedQuantity > 0 && (
-                <Text style={[styles.helperText, { color: colors.textSecondary }]}>
-                  {sharedQuantity} unidade
-                  {sharedQuantity !== 1 ? "s serão" : " será"} paga
-                  {sharedQuantity !== 1 ? "s" : ""} em conjunto.
-                </Text>
-              )}
             </View>
 
             <View style={styles.participantsList}>
