@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -68,15 +68,6 @@ export default function ScannedBillScreen() {
   const [couvertInput, setCouvertInput] = useState("");
 
   const [newParticipantName, setNewParticipantName] = useState("");
-
-  const serviceFee = useMemo(
-    () => fees.find((fee) => fee.type === FeeType.SERVICE_PERCENTAGE),
-    [fees],
-  );
-  const couvertFee = useMemo(
-    () => fees.find((fee) => fee.type === FeeType.COVER_CHARGE),
-    [fees],
-  );
 
   const getCouvertValuePerParticipant = useCallback(
     (fee?: Fee) => {
@@ -213,22 +204,26 @@ export default function ScannedBillScreen() {
     id,
   ]);
 
-  const syncFee = async (
-    existingFee: Fee | undefined,
+  const syncFeeByType = async (
+    currentFees: Fee[],
     type: FeeType,
     value: number,
   ) => {
     if (!id) return;
 
+    const matchingFees = currentFees.filter((fee) => fee.type === type);
+    const [existingFee, ...duplicateFees] = matchingFees;
+
     if (value <= 0) {
-      if (existingFee) {
-        await feesService.remove(existingFee.id);
-      }
+      await Promise.all(matchingFees.map((fee) => feesService.remove(fee.id)));
       return;
     }
 
     if (existingFee) {
       await feesService.update(existingFee.id, { value });
+      await Promise.all(
+        duplicateFees.map((fee) => feesService.remove(fee.id)),
+      );
       return;
     }
 
@@ -319,9 +314,18 @@ export default function ScannedBillScreen() {
       const serviceFeeValue = parsePtBrNumber(serviceFeeInput);
       const couvertValue = parsePtBrNumber(couvertInput);
 
-      await syncFee(serviceFee, FeeType.SERVICE_PERCENTAGE, serviceFeeValue);
-      await syncFee(
-        couvertFee,
+      const latestFees = await feesService.findAllByBill(id).catch(() => fees);
+      const normalizedLatestFees = Array.isArray(latestFees)
+        ? latestFees
+        : (latestFees as any)?.fees || [];
+
+      await syncFeeByType(
+        normalizedLatestFees,
+        FeeType.SERVICE_PERCENTAGE,
+        serviceFeeValue,
+      );
+      await syncFeeByType(
+        normalizedLatestFees,
         FeeType.COVER_CHARGE,
         couvertValue > 0 ? couvertValue * participants.length : 0,
       );
@@ -330,6 +334,7 @@ export default function ScannedBillScreen() {
       const normalizedFees = Array.isArray(refreshedFees)
         ? refreshedFees
         : (refreshedFees as any)?.fees || [];
+      setFees(normalizedFees);
 
       const refreshedService = normalizedFees.find(
         (fee: Fee) => fee.type === FeeType.SERVICE_PERCENTAGE,

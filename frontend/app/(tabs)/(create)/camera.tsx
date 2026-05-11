@@ -732,8 +732,17 @@ export default function CameraScreen() {
         {/* Controles da Câmera */}
         <View style={styles.controls}>
           {/* Botão Galeria */}
-          <TouchableOpacity style={styles.iconButton} onPress={pickFromGallery}>
-            <Ionicons name="images-outline" size={28} color={colors.text} />
+          <TouchableOpacity
+            style={[
+              styles.iconButton,
+              {
+                backgroundColor: "rgba(0, 0, 0, 0.6)",
+                borderColor: "rgba(255, 255, 255, 0.45)",
+              },
+            ]}
+            onPress={pickFromGallery}
+          >
+            <Ionicons name="images-outline" size={28} color="#FFFFFF" />
           </TouchableOpacity>
 
           {/* Botão Capturar */}
@@ -756,13 +765,19 @@ export default function CameraScreen() {
 
           {/* Botão Alternar Câmera */}
           <TouchableOpacity
-            style={styles.iconButton}
+            style={[
+              styles.iconButton,
+              {
+                backgroundColor: "rgba(0, 0, 0, 0.6)",
+                borderColor: "rgba(255, 255, 255, 0.45)",
+              },
+            ]}
             onPress={toggleCameraFacing}
           >
             <Ionicons
               name="camera-reverse-outline"
               size={28}
-              color={colors.text}
+              color="#FFFFFF"
             />
           </TouchableOpacity>
         </View>
