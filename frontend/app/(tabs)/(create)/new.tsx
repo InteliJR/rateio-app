@@ -1,5 +1,5 @@
-import React, { useState, useRef } from "react";
-import { useRouter } from "expo-router";
+import React, { useEffect, useState, useRef } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   View,
   Text,
@@ -18,7 +18,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Ionicons } from "@expo/vector-icons";
 import billService from "../../../services/bill.service";
+import feesService, { Fee, FeeType } from "../../../services/fees.service";
+import participantsService from "../../../services/participants.service";
 import { useBillStore } from "../../../store/billStore";
+import { useRateioDraftStore } from "../../../store/rateioDraftStore";
 import { NumericInput } from "../../../components/common/NumericInput";
 import { useTheme } from "../../../contexts/ThemeContext";
 
@@ -59,6 +62,7 @@ const newBillSchema = z.object({
 export default function NewBillScreen() {
   const { colors, getFontSize } = useTheme();
   const router = useRouter();
+  const { mode } = useLocalSearchParams<{ mode?: string }>();
   const scrollViewRef = useRef<ScrollView>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [participants, setParticipants] = useState<ParticipantInput[]>([
@@ -68,11 +72,28 @@ export default function NewBillScreen() {
 
   // Get store actions
   const { addBill } = useBillStore();
+  const initializeDraft = useRateioDraftStore((state) => state.initializeDraft);
+  const draftBillId = useRateioDraftStore((state) => state.billId);
+  const draftBillName = useRateioDraftStore((state) => state.billName);
+  const draftParticipants = useRateioDraftStore((state) => state.participants);
+  const draftItems = useRateioDraftStore((state) => state.items);
+  const draftServiceFeePercentage = useRateioDraftStore(
+    (state) => state.serviceFeePercentage,
+  );
+  const draftCouvertValue = useRateioDraftStore((state) => state.couvertValue);
+  const draftServiceFeeSelectedParticipantIds = useRateioDraftStore(
+    (state) => state.serviceFeeConfig.selectedParticipantIds,
+  );
+  const setBillMeta = useRateioDraftStore((state) => state.setBillMeta);
+  const setFeeSelection = useRateioDraftStore((state) => state.setFeeSelection);
+  const isManualMode = mode === "manual";
+  const isEditingManualDraft = isManualMode && Boolean(draftBillId);
 
   const {
     control,
     handleSubmit,
     formState: { errors, isValid },
+    setValue,
   } = useForm<INewBillFormData>({
     resolver: zodResolver(newBillSchema),
     defaultValues: {
@@ -82,6 +103,38 @@ export default function NewBillScreen() {
     },
     mode: "onChange",
   });
+
+  useEffect(() => {
+    if (!isEditingManualDraft) return;
+
+    setValue("billName", draftBillName);
+    setValue(
+      "serviceRate",
+      draftServiceFeePercentage > 0 ? String(draftServiceFeePercentage) : "",
+      { shouldValidate: true },
+    );
+    setValue(
+      "couvertValue",
+      draftCouvertValue > 0 ? String(draftCouvertValue) : "",
+      { shouldValidate: true },
+    );
+
+    if (draftParticipants.length > 0) {
+      setParticipants(
+        draftParticipants.map((participant, index) => ({
+          id: index + 1,
+          name: participant.name,
+        })),
+      );
+    }
+  }, [
+    draftBillName,
+    draftCouvertValue,
+    draftParticipants,
+    draftServiceFeePercentage,
+    isEditingManualDraft,
+    setValue,
+  ]);
 
   const addParticipant = () => {
     const nextId = participants.length + 1;
@@ -116,17 +169,64 @@ export default function NewBillScreen() {
       const participantNames = participants.map(
         (p) => p.name.trim() || `Pessoa ${p.id}`,
       );
+      const serviceFeePercentage =
+        data.serviceRate && data.serviceRate.trim() !== ""
+          ? Number(data.serviceRate)
+          : 0;
+      const couvertValue =
+        data.couvertValue && data.couvertValue.trim() !== ""
+          ? Number(data.couvertValue)
+          : 0;
+
+      if (isEditingManualDraft && draftBillId) {
+        const nextParticipants =
+          draftParticipants.length > 0
+            ? draftParticipants.map((participant, index) => ({
+                ...participant,
+                name: participantNames[index] || participant.name,
+              }))
+            : [];
+        const participantIds = nextParticipants.map((participant) => participant.id);
+
+        setBillMeta({
+          billName: data.billName?.trim() || draftBillName,
+          participants: nextParticipants,
+          items: draftItems,
+          serviceFeePercentage,
+          couvertValue,
+        });
+
+        if (serviceFeePercentage > 0) {
+          const selectedParticipantIds = draftServiceFeeSelectedParticipantIds.filter(
+            (participantId) => participantIds.includes(participantId),
+          );
+          setFeeSelection(
+            "service",
+            selectedParticipantIds.length > 0
+              ? selectedParticipantIds
+              : participantIds,
+          );
+        } else {
+          setFeeSelection("service", []);
+        }
+
+        router.push({
+          pathname: "/(tabs)/(create)/split",
+          params: { id: draftBillId },
+        });
+        return;
+      }
 
       const newBill = await billService.createBillSetup({
         participantCount: participants.length,
         billName: data.billName?.trim() || undefined,
         serviceFeePercentage:
           data.serviceRate && data.serviceRate.trim() !== ""
-            ? Number(data.serviceRate)
+            ? serviceFeePercentage
             : undefined,
         coverChargeValue:
           data.couvertValue && data.couvertValue.trim() !== ""
-            ? Number(data.couvertValue) * participants.length
+            ? couvertValue * participants.length
             : undefined,
         coverChargeType:
           data.couvertValue && data.couvertValue.trim() !== ""
@@ -137,6 +237,48 @@ export default function NewBillScreen() {
 
       // Add to global store
       addBill(newBill);
+
+      if (isManualMode) {
+        const [createdParticipants, loadedFees] = await Promise.all([
+          participantsService.getParticipantsByBill(newBill.id),
+          feesService.findAllByBill(newBill.id).catch(() => []),
+        ]);
+        const normalizedFees = Array.isArray(loadedFees)
+          ? loadedFees
+          : (loadedFees as any)?.fees || [];
+        const serviceFee = normalizedFees.find(
+          (fee: Fee) => fee.type === FeeType.SERVICE_PERCENTAGE,
+        );
+        const couvertFee = normalizedFees.find(
+          (fee: Fee) => fee.type === FeeType.COVER_CHARGE,
+        );
+        const draftParticipants = createdParticipants.map((participant) => ({
+          id: participant.id,
+          name: participant.name,
+        }));
+        const participantIds = draftParticipants.map((participant) => participant.id);
+
+        initializeDraft({
+          billId: newBill.id,
+          billName: data.billName?.trim() || newBill.establishmentName || "",
+          participants: draftParticipants,
+          items: [],
+          serviceFeePercentage: serviceFee ? Number(serviceFee.value) : 0,
+          couvertValue:
+            couvertFee && draftParticipants.length > 0
+              ? Number(couvertFee.value) / draftParticipants.length
+              : 0,
+          serviceFeeSelectedParticipantIds: serviceFee ? participantIds : [],
+          couvertSelectedParticipantIds: couvertFee ? participantIds : [],
+          itemAllocations: {},
+        });
+
+        router.push({
+          pathname: "/(tabs)/(create)/split",
+          params: { id: newBill.id },
+        });
+        return;
+      }
 
       // Ir direto para a câmera
       router.push({
@@ -385,7 +527,7 @@ export default function NewBillScreen() {
                   { color: colors.accent, fontSize: getFontSize(18) },
                 ]}
               >
-                Escanear conta
+                {isManualMode ? "Continuar para itens" : "Escanear conta"}
               </Text>
             )}
           </TouchableOpacity>

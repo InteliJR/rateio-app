@@ -33,7 +33,6 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="(create)"
         options={{
-          href: "/(tabs)/(create)/camera",
           popToTopOnBlur: true,
           tabBarIcon: ({ color }) => (
             <MaterialCommunityIcons

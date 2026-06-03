@@ -2,7 +2,8 @@ import { Stack } from 'expo-router';
 
 export default function CreateLayout() {
   return (
-    <Stack initialRouteName='camera' screenOptions={{ headerShown: false }}>
+    <Stack initialRouteName='index' screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="index" />
       <Stack.Screen name="camera" />
       <Stack.Screen name="new" />
       <Stack.Screen name="participants" />
