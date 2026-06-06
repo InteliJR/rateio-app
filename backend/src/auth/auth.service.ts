@@ -2,6 +2,7 @@ import {
   Injectable,
   UnauthorizedException,
   ForbiddenException,
+  ConflictException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
@@ -9,6 +10,7 @@ import { TokenRevocationService } from '../token-revocation/token-revocation.ser
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserRole } from '@prisma/client';
+import { GoogleTokenService } from './google-token.service';
 
 @Injectable()
 export class AuthService {
@@ -18,6 +20,7 @@ export class AuthService {
     private tokenRevocationService: TokenRevocationService,
     private mailService: MailService,
     private prisma: PrismaService,
+    private googleTokenService: GoogleTokenService,
   ) { }
 
   /**
@@ -99,6 +102,41 @@ export class AuthService {
     };
   }
 
+  async loginWithGoogle(idToken: string) {
+    const googleUser = await this.googleTokenService.verifyIdToken(idToken);
+
+    const userByGoogleId = await this.usersService.findByGoogleId(
+      googleUser.googleId,
+    );
+
+    if (userByGoogleId) {
+      if (!userByGoogleId.isActive) {
+        throw new UnauthorizedException(
+          'Usuario inativo. Entre em contato com o administrador.',
+        );
+      }
+
+      return this.createAuthResponse(userByGoogleId);
+    }
+
+    const userByEmail = await this.usersService.findByEmail(googleUser.email);
+
+    if (userByEmail) {
+      throw new ConflictException(
+        'este email já possui conta com senha',
+      );
+    }
+
+    const newUser = await this.usersService.createGoogleUser({
+      email: googleUser.email,
+      name: googleUser.name,
+      googleId: googleUser.googleId,
+      avatarUrl: googleUser.picture,
+    });
+
+    return this.createAuthResponse(newUser);
+  }
+
   async validateUser(userId: string) {
     const user = await this.usersService.findById(userId);
 
@@ -123,6 +161,27 @@ export class AuthService {
     return {
       accessToken,
       refreshToken,
+    };
+  }
+
+  private async createAuthResponse(user: {
+    id: string;
+    email: string;
+    name: string;
+    role: UserRole;
+    createdAt: Date;
+  }) {
+    const tokens = await this.generateTokens(user.id, user.email, user.role);
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        createdAt: user.createdAt,
+      },
+      ...tokens,
     };
   }
 
@@ -180,7 +239,7 @@ export class AuthService {
       'Se este email estiver cadastrado, você receberá um código de recuperação em breve.';
 
     const user = await this.usersService.findByEmail(email);
-    if (!user || !user.isActive) {
+    if (!user || !user.isActive || !user.password) {
       // Resposta genérica para não revelar se o email existe
       return { message: genericMessage };
     }
@@ -234,7 +293,7 @@ export class AuthService {
 
     // Atualizar senha do usuário
     const user = await this.usersService.findByEmail(email);
-    if (!user) {
+    if (!user || !user.password) {
       throw new UnauthorizedException('Usuário não encontrado.');
     }
 

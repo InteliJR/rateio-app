@@ -8,6 +8,7 @@ import { TokenRevocationModule } from '../token-revocation/token-revocation.modu
 import { MailModule } from '../mail/mail.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { GoogleTokenService } from './google-token.service';
 
 @Module({
   imports: [
@@ -25,7 +26,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, GoogleTokenService],
   exports: [AuthService],
 })
 export class AuthModule {}
