@@ -134,7 +134,10 @@ class ApiService {
         // Verificar se é endpoint público
         const isPublicEndpoint =
           config.url?.includes("/auth/login") ||
-          config.url?.includes("/auth/register");
+          config.url?.includes("/auth/google") ||
+          config.url?.includes("/auth/register") ||
+          config.url?.includes("/auth/forgot-password") ||
+          config.url?.includes("/auth/reset-password");
 
         // Apenas tentar recuperar token se for um endpoint privado
         if (!isPublicEndpoint) {

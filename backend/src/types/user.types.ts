@@ -7,7 +7,7 @@ export interface User {
 }
 
 export interface UserWithPassword extends User {
-  password: string;
+  password: string | null;
 }
 
 export interface JwtPayload {

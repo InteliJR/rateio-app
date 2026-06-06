@@ -400,6 +400,7 @@ npx expo run:android
 npx expo run:ios
 
 # Build de desenvolvimento
+cd frontend
 eas build --profile development --platform android
 
 # Build de preview (para testar localmente)
@@ -407,6 +408,9 @@ eas build --profile preview --platform android
 
 # Build de produção
 eas build --profile production --platform android
+
+# Alternativa a partir da raiz do repositÃ³rio
+powershell -ExecutionPolicy Bypass -File .\scripts\eas-build-frontend.ps1 --profile preview --platform android
 
 # Submit para Play Store
 eas submit --platform android
@@ -641,6 +645,7 @@ DATABASE_URL="postgresql://user:senha@seu-db.provider.com:5432/rateio_prod?sslmo
 
 1. **Build de produção (AAB para Play Store):**
    ```bash
+   cd frontend
    eas build --platform android --profile production
    ```
 

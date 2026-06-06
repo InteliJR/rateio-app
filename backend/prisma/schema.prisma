@@ -22,10 +22,13 @@ model User {
   id        String   @id @default(uuid())
   email     String   @unique
   name      String
-  password  String
+  password  String?
   role      UserRole @default(USER)
   isActive  Boolean  @default(true)
   avatarUrl String?
+  googleId  String?  @unique
+  googleAvatarUrl String?
+  emailVerifiedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
