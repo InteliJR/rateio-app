@@ -35,7 +35,11 @@ export default function LoginScreen() {
   const isBusy = isSubmitting || isGoogleSubmitting;
 
   const googleRedirectUri = useMemo(
-    () => AuthSession.makeRedirectUri({ scheme: "rateio", path: "auth" }),
+    () =>
+      AuthSession.makeRedirectUri({
+        scheme: "com.intelijunior.porpartes",
+        path: "auth",
+      }),
     []
   );
 

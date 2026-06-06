@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "rateio",
+    "scheme": "com.intelijunior.porpartes",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
