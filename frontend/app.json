@@ -27,7 +27,7 @@
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
       ],
-      "package": "com.ijteste.rateio"
+      "package": "com.intelijunior.porpartes"
     },
     "web": {
       "bundler": "metro",
@@ -58,9 +58,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "055cfa1c-fbb5-4a16-bca6-11f7ceac9a32"
+        "projectId": "1e806c83-0f30-4376-83d2-19673ab62f7d"
       }
     },
-    "owner": "m4rcusml"
+    "owner": "porpartes"
   }
 }

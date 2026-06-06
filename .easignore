@@ -64,14 +64,3 @@ logs/
 .dockerignore
 Dockerfile.prod
 google-vision-key.json
-
-# Envia apenas o frontend para o builder remoto.
-*
-!frontend/
-!frontend/**
-
-# Garante os arquivos-raiz do app Expo, mesmo se forem ignorados em outro lugar.
-!frontend/package.json
-!frontend/package-lock.json
-!frontend/app.json
-!frontend/eas.json
