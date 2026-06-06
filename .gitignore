@@ -16,6 +16,10 @@ Desktop.ini
 # ======================
 # Ambientes de Desenvolvimento e Ferramentas
 # ======================
+.agents/
+skill-lock.json
+skills-lock.json
+
 # Node.js
 node_modules/
 npm-debug.log*
@@ -132,4 +136,3 @@ Dockerfile.prod
 
 
 google-vision-key.json
-frontend/package.json

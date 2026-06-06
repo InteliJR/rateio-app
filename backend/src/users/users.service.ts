@@ -64,9 +64,56 @@ export class UsersService {
     return user;
   }
 
+  async createGoogleUser(data: {
+    email: string;
+    name: string;
+    googleId: string;
+    avatarUrl?: string;
+  }) {
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: data.email },
+    });
+
+    if (existingUser) {
+      throw new ConflictException('Email ja cadastrado');
+    }
+
+    return this.prisma.user.create({
+      data: {
+        email: data.email,
+        name: data.name,
+        password: null,
+        role: UserRole.USER,
+        isActive: true,
+        avatarUrl: data.avatarUrl,
+        googleAvatarUrl: data.avatarUrl,
+        googleId: data.googleId,
+        emailVerifiedAt: new Date(),
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        isActive: true,
+        avatarUrl: true,
+        googleId: true,
+        googleAvatarUrl: true,
+        emailVerifiedAt: true,
+        createdAt: true,
+      },
+    });
+  }
+
   async findByEmail(email: string) {
     return this.prisma.user.findUnique({
       where: { email },
+    });
+  }
+
+  async findByGoogleId(googleId: string) {
+    return this.prisma.user.findUnique({
+      where: { googleId },
     });
   }
 
@@ -211,6 +258,10 @@ export class UsersService {
   }
 
   async validatePassword(user: any, password: string): Promise<boolean> {
+    if (!user?.password) {
+      return false;
+    }
+
     const passwordWithPepper = password + this.pepper;
     return argon2.verify(user.password, passwordWithPepper);
   }

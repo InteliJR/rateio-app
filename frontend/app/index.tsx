@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "expo-router";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
-import { useAuthStore } from "../../frontend/store/authStore";
+import { useAuthStore } from "../store/authStore";
 import { useTheme } from "../contexts/ThemeContext";
 
 export default function Index() {
@@ -23,7 +23,7 @@ export default function Index() {
     // Só redireciona quando terminar de carregar
     if (!isLoading) {
       if (isAuthenticated) {
-        router.replace("/(tabs)/(create)/new");
+        router.replace("/(tabs)/bills");
       } else {
         router.replace("/(auth)/login");
       }

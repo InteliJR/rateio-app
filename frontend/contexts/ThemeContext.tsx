@@ -37,6 +37,12 @@ export const lightColors = {
   dropdownBackground: "#F8F8F8",
   checkboxActive: "#E8D4E9",
   menuItem: "#F0F0F0",
+  selectionChipActiveBackground: "#8B2E8F",
+  selectionChipActiveBorder: "#8B2E8F",
+  selectionChipActiveText: "#FFFFFF",
+  selectionChipInactiveBackground: "#F3EBF4",
+  selectionChipInactiveBorder: "#D8BFDA",
+  selectionChipInactiveText: "#6F4B72",
 };
 
 export const darkColors = {
@@ -74,6 +80,12 @@ export const darkColors = {
   dropdownBackground: "#2A2A2A",
   checkboxActive: "#3A2A3A",
   menuItem: "#2A2A2A",
+  selectionChipActiveBackground: "#D785DB",
+  selectionChipActiveBorder: "#D785DB",
+  selectionChipActiveText: "#121212",
+  selectionChipInactiveBackground: "#2A2230",
+  selectionChipInactiveBorder: "#5B4660",
+  selectionChipInactiveText: "#D4C2D6",
 };
 
 export type ThemeColors = typeof lightColors;

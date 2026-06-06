@@ -1,13 +1,18 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  View,
   Text,
+  TextInput,
   StyleSheet,
   TouchableOpacity,
-  TextInput,
+  View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../contexts/ThemeContext";
+import {
+  formatEditableNumber,
+  parsePtBrNumber,
+  sanitizePtBrNumberInput,
+} from "../../lib/formatters";
 
 export interface BillItem {
   id: string;
@@ -35,50 +40,60 @@ export const ItemCard: React.FC<ItemCardProps> = ({
   const { colors, getFontSize } = useTheme();
   const [name, setName] = useState(item.name);
   const [quantity, setQuantity] = useState(item.quantity.toString());
-  const [price, setPrice] = useState(item.price.toFixed(2));
+  const [price, setPrice] = useState(formatEditableNumber(item.price));
+  const [isEditingName, setIsEditingName] = useState(false);
 
-  // Update local state when props change
   useEffect(() => {
     setName(item.name);
     setQuantity(item.quantity.toString());
-    setPrice(item.price.toFixed(2));
+    setPrice(formatEditableNumber(item.price));
   }, [item]);
 
   const handleBlur = (field: "name" | "quantity" | "price") => {
     if (!onUpdate) return;
 
-    let newItem = { ...item };
+    let nextItem = { ...item };
     let hasChanges = false;
 
     if (field === "name") {
       const trimmed = name.trim();
       if (trimmed && trimmed !== item.name) {
-        newItem.name = trimmed;
-        hasChanges = true;
-      }
-    } else if (field === "quantity") {
-      const qty = parseInt(quantity, 10);
-      if (!isNaN(qty) && qty >= 1 && qty !== item.quantity) {
-        newItem.quantity = qty;
+        nextItem.name = trimmed;
         hasChanges = true;
       } else {
-        // Revert invalid
+        setName(item.name);
+      }
+
+      setIsEditingName(false);
+    }
+
+    if (field === "quantity") {
+      const parsedQuantity = parseInt(quantity, 10);
+      if (!Number.isNaN(parsedQuantity) && parsedQuantity >= 1) {
+        if (parsedQuantity !== item.quantity) {
+          nextItem.quantity = parsedQuantity;
+          hasChanges = true;
+        }
+      } else {
         setQuantity(item.quantity.toString());
       }
-    } else if (field === "price") {
-      const normalized = price.replace(",", ".");
-      const val = parseFloat(normalized);
-      if (!isNaN(val) && val >= 0 && val !== item.price) {
-        newItem.price = val;
-        hasChanges = true;
+    }
+
+    if (field === "price") {
+      const parsedPrice = parsePtBrNumber(price);
+      if (!Number.isNaN(parsedPrice) && parsedPrice >= 0) {
+        if (parsedPrice !== item.price) {
+          nextItem.price = parsedPrice;
+          hasChanges = true;
+        }
+        setPrice(formatEditableNumber(parsedPrice));
       } else {
-        // Revert invalid
-        setPrice(item.price.toFixed(2));
+        setPrice(formatEditableNumber(item.price));
       }
     }
 
     if (hasChanges) {
-      onUpdate(newItem);
+      onUpdate(nextItem);
     }
   };
 
@@ -98,29 +113,41 @@ export const ItemCard: React.FC<ItemCardProps> = ({
       </TouchableOpacity>
 
       <View style={styles.contentContainer}>
-        {/* Espaço clicável para expandir participants, exceto nos inputs */}
-        <TouchableOpacity
-          style={styles.expandArea}
-          onPress={onPress}
-          activeOpacity={0.7}
-        >
-          {/* Nome */}
-          <TextInput
-            style={[
-              styles.input,
-              styles.nameInput,
-              { color: colors.text, borderBottomColor: colors.divider },
-            ]}
-            value={name}
-            onChangeText={setName}
-            onBlur={() => handleBlur("name")}
-            placeholder="Nome do item"
-            placeholderTextColor={colors.placeholderText}
-          />
-        </TouchableOpacity>
+        <View style={styles.nameArea}>
+          {isEditingName ? (
+            <TextInput
+              style={[
+                styles.input,
+                styles.nameInput,
+                { color: colors.text, borderBottomColor: colors.divider },
+              ]}
+              value={name}
+              onChangeText={setName}
+              onBlur={() => handleBlur("name")}
+              autoFocus
+              selectTextOnFocus
+              placeholder="Nome do item"
+              placeholderTextColor={colors.placeholderText}
+            />
+          ) : (
+            <TouchableOpacity
+              style={styles.nameButton}
+              onPress={() => setIsEditingName(true)}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.nameText,
+                  { color: colors.text, fontSize: getFontSize(16) },
+                ]}
+              >
+                {name}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         <View style={styles.detailsContainer}>
-          {/* Quantidade */}
           <View style={styles.inputWrapper}>
             <TextInput
               style={[
@@ -144,7 +171,6 @@ export const ItemCard: React.FC<ItemCardProps> = ({
             </Text>
           </View>
 
-          {/* Preço */}
           <View style={styles.inputWrapper}>
             <Text
               style={[
@@ -161,24 +187,27 @@ export const ItemCard: React.FC<ItemCardProps> = ({
                 { color: colors.text, borderBottomColor: colors.divider },
               ]}
               value={price}
-              onChangeText={(text) => setPrice(text.replace(/[^0-9,.]/g, ""))}
+              onChangeText={(text) => setPrice(sanitizePtBrNumberInput(text))}
               onBlur={() => handleBlur("price")}
-              keyboardType="numeric"
+              keyboardType="decimal-pad"
+              placeholder="0,00"
+              placeholderTextColor={colors.placeholderText}
             />
           </View>
 
-          {/* Botão de Expandir */}
-          <TouchableOpacity
-            style={styles.expandButton}
-            onPress={onPress}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons
-              name={isActive ? "caret-down" : "caret-forward"}
-              size={20}
-              color={colors.iconColor}
-            />
-          </TouchableOpacity>
+          {onPress && (
+            <TouchableOpacity
+              style={styles.expandButton}
+              onPress={onPress}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons
+                name={isActive ? "caret-down" : "caret-forward"}
+                size={20}
+                color={colors.iconColor}
+              />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </View>
@@ -191,7 +220,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
     marginBottom: 8,
   },
@@ -201,24 +230,31 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "center",
+    gap: 12,
   },
-  expandArea: {
+  nameArea: {
     flex: 1,
-    marginRight: 8,
+  },
+  nameButton: {
+    minHeight: 24,
+    justifyContent: "center",
+  },
+  nameText: {
+    fontWeight: "500",
+    lineHeight: 22,
   },
   detailsContainer: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+    marginTop: 2,
   },
   input: {
     fontSize: 16,
     padding: 0,
     borderBottomWidth: 1,
-    borderBottomColor: "transparent", // Looks cleaner, can add color on focus if needed
+    borderBottomColor: "transparent",
   },
   nameInput: {
     width: "100%",
@@ -226,23 +262,19 @@ const styles = StyleSheet.create({
   quantityInput: {
     textAlign: "center",
     width: 30,
-    borderBottomWidth: 1,
   },
   priceInput: {
     textAlign: "right",
     minWidth: 60,
-    borderBottomWidth: 1,
   },
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
   },
   suffix: {
-    fontSize: 16,
     marginLeft: 2,
   },
   prefix: {
-    fontSize: 14,
     marginRight: 2,
   },
   expandButton: {

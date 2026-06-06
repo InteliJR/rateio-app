@@ -150,7 +150,7 @@ export class FeesService {
       }
       if (fee.type === FeeType.COVER_CHARGE) {
         // fee.value é por pessoa; total = valor × nº participantes
-        return acc + Number(fee.value) * feeParticipantCount;
+        return acc + Number(fee.value);
       }
       return acc + Number(fee.value);
     }, 0);

@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "rateio",
-    "slug": "rateio",
+    "slug": "rateio-frontend",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -27,7 +27,7 @@
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
       ],
-      "package": "com.ijteste.rateio"
+      "package": "com.intelijunior.porpartes"
     },
     "web": {
       "bundler": "metro",
@@ -58,9 +58,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "57119aff-18fe-4ce1-9038-df41d75950ee"
+        "projectId": "1e806c83-0f30-4376-83d2-19673ab62f7d"
       }
     },
-    "owner": "m4rcusml"
+    "owner": "porpartes"
   }
 }

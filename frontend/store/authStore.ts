@@ -51,6 +51,38 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
+  loginWithGoogle: async (idToken: string) => {
+    set({ isLoading: true });
+    try {
+      queryClient.cancelQueries();
+      queryClient.removeQueries();
+      queryClient.clear();
+
+      useBillStore.getState().clearBills();
+
+      await storageService.deleteItem("userName");
+      await storageService.deleteItem("userEmail");
+
+      const response = await authService.loginWithGoogle({ idToken });
+
+      console.log('[AuthStore] Saving Google login tokens to storage...');
+      await storageService.setItem("accessToken", response.accessToken);
+      await storageService.setItem("refreshToken", response.refreshToken);
+      console.log('[AuthStore] Google login tokens saved successfully');
+
+      set({
+        user: response.user,
+        accessToken: response.accessToken,
+        refreshToken: response.refreshToken,
+        isAuthenticated: true,
+        isLoading: false,
+      });
+    } catch (error) {
+      set({ isLoading: false });
+      throw error;
+    }
+  },
+
   register: async (name: string, email: string, password: string) => {
     set({ isLoading: true });
     try {
@@ -99,6 +131,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: async () => {
     try {
+      const refreshToken = get().refreshToken || await storageService.getItem("refreshToken");
+
       // Limpar COMPLETAMENTE o cache do React Query ao fazer logout
       queryClient.cancelQueries(); // Cancela queries pendentes
       queryClient.removeQueries(); // Remove todas as queries do cache
@@ -107,7 +141,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Limpar o store de contas
       useBillStore.getState().clearBills();
 
-      await authService.logout();
+      await authService.logout(refreshToken || undefined);
       await storageService.deleteItem("accessToken");
       await storageService.deleteItem("refreshToken");
 

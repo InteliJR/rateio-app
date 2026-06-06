@@ -19,6 +19,10 @@ export interface LoginResponse {
   refreshToken: string;
 }
 
+export interface GoogleLoginRequest {
+  idToken: string;
+}
+
 export interface RegisterRequest {
   name: string;
   email: string;
@@ -39,6 +43,7 @@ export interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: (idToken: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<RegisterResponse>;
   logout: () => Promise<void>;
   loadTokens: () => Promise<void>;
