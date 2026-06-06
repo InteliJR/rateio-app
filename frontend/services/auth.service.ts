@@ -4,6 +4,7 @@ import { api } from "./api.service";
 import {
   LoginRequest,
   LoginResponse,
+  GoogleLoginRequest,
   RegisterRequest,
   RegisterResponse,
   ForgotPasswordRequest,
@@ -15,6 +16,11 @@ import {
 export const authService = {
   async login(data: LoginRequest): Promise<LoginResponse> {
     const response = await api.post<LoginResponse>("/auth/login", data);
+    return response.data;
+  },
+
+  async loginWithGoogle(data: GoogleLoginRequest): Promise<LoginResponse> {
+    const response = await api.post<LoginResponse>("/auth/google", data);
     return response.data;
   },
 
@@ -38,10 +44,13 @@ export const authService = {
     }
   },
 
-  async logout() {
-    // Apenas limpa tokens localmente
-    // Se tiver endpoint de logout no backend, chame aqui
-    return Promise.resolve();
+  async logout(refreshToken?: string) {
+    if (!refreshToken) {
+      return Promise.resolve();
+    }
+
+    const response = await api.post("/auth/logout", { refreshToken });
+    return response.data;
   },
 
   async forgotPassword(

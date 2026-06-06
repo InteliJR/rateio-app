@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "expo-router";
 import {
   View,
@@ -10,6 +10,9 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import * as AuthSession from "expo-auth-session";
+import * as Google from "expo-auth-session/providers/google";
+import * as WebBrowser from "expo-web-browser";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -19,13 +22,50 @@ import { z } from "zod";
 import { storageService } from "@/services/storage.service";
 import { useTheme } from "@/contexts/ThemeContext";
 
+WebBrowser.maybeCompleteAuthSession();
+
 export default function LoginScreen() {
   const { colors, getFontSize } = useTheme();
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { login } = useAuthStore();
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
+  const { login, loginWithGoogle } = useAuthStore();
   const router = useRouter();
+  const isBusy = isSubmitting || isGoogleSubmitting;
+
+  const googleRedirectUri = useMemo(
+    () => AuthSession.makeRedirectUri({ scheme: "rateio", path: "auth" }),
+    []
+  );
+
+  const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || "";
+  const googleAndroidClientId =
+    process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || "";
+  const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || "";
+  const googleFallbackClientId =
+    "missing-google-client-id.apps.googleusercontent.com";
+  const isGoogleConfigured =
+    Platform.select({
+      android: Boolean(googleAndroidClientId),
+      ios: Boolean(googleIosClientId),
+      default: Boolean(googleWebClientId),
+    }) || Boolean(googleWebClientId);
+
+  const [googleRequest, , promptGoogleSignIn] = Google.useIdTokenAuthRequest({
+    webClientId: googleWebClientId || googleFallbackClientId,
+    androidClientId:
+      googleAndroidClientId || googleWebClientId || googleFallbackClientId,
+    iosClientId: googleIosClientId || googleWebClientId || googleFallbackClientId,
+    redirectUri: googleRedirectUri,
+    selectAccount: true,
+  });
+
+  useEffect(() => {
+    if (__DEV__) {
+      console.log("[GoogleAuth] Redirect URI:", googleRedirectUri);
+    }
+  }, [googleRedirectUri]);
 
   const loginSchema = z.object({
     email: z
@@ -61,6 +101,45 @@ export default function LoginScreen() {
       setServerError(message);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setServerError(null);
+
+    if (!isGoogleConfigured) {
+      setServerError(
+        "Login com Google nao configurado. Defina os client IDs no .env do app."
+      );
+      return;
+    }
+
+    setIsGoogleSubmitting(true);
+    try {
+      const result = await promptGoogleSignIn();
+
+      if (result.type === "success") {
+        const idToken =
+          result.params?.id_token || result.authentication?.idToken;
+
+        if (!idToken) {
+          throw new Error("Token Google nao retornado.");
+        }
+
+        await loginWithGoogle(idToken);
+        router.replace("/(tabs)/bills");
+        return;
+      }
+
+      if (result.type === "error") {
+        setServerError(
+          result.error?.message || "Nao foi possivel fazer login com Google."
+        );
+      }
+    } catch (error: any) {
+      setServerError(getApiErrorMessage(error));
+    } finally {
+      setIsGoogleSubmitting(false);
     }
   };
 
@@ -150,7 +229,7 @@ export default function LoginScreen() {
                 onChangeText={onChange}
                 autoCapitalize="none"
                 keyboardType="email-address"
-                editable={!isSubmitting}
+                editable={!isBusy}
               />
             )}
           />
@@ -184,14 +263,14 @@ export default function LoginScreen() {
                   value={value}
                   onChangeText={onChange}
                   secureTextEntry={!showPassword}
-                  editable={!isSubmitting}
+                  editable={!isBusy}
                 />
               )}
             />
             <TouchableOpacity
               style={styles.eyeButton}
               onPress={() => setShowPassword(!showPassword)}
-              disabled={isSubmitting}
+              disabled={isBusy}
             >
               <MaterialIcons
                 name={showPassword ? "visibility" : "visibility-off"}
@@ -209,7 +288,7 @@ export default function LoginScreen() {
           <TouchableOpacity
             style={styles.forgotLink}
             onPress={() => router.push("/(auth)/forgot-password")}
-            disabled={isSubmitting}
+            disabled={isBusy}
           >
             <Text style={styles.forgotLinkText}>Esqueci minha senha</Text>
           </TouchableOpacity>
@@ -218,10 +297,10 @@ export default function LoginScreen() {
             style={[
               styles.button,
               { backgroundColor: colors.primary },
-              (isSubmitting || !isValid) && styles.buttonDisabled,
+              (isBusy || !isValid) && styles.buttonDisabled,
             ]}
             onPress={handleSubmit(onSubmit)}
-            disabled={isSubmitting || !isValid}
+            disabled={isBusy || !isValid}
           >
             {isSubmitting ? (
               <ActivityIndicator color={colors.accent} />
@@ -236,6 +315,57 @@ export default function LoginScreen() {
               </Text>
             )}
           </TouchableOpacity>
+
+          <View style={styles.dividerRow}>
+            <View
+              style={[styles.dividerLine, { backgroundColor: colors.inputBorder }]}
+            />
+            <Text
+              style={[styles.dividerText, { color: colors.textSecondary }]}
+            >
+              ou
+            </Text>
+            <View
+              style={[styles.dividerLine, { backgroundColor: colors.inputBorder }]}
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.googleButton,
+              {
+                backgroundColor: colors.inputBackground,
+                borderColor: colors.inputBorder,
+              },
+              (isBusy || !googleRequest || !isGoogleConfigured) &&
+                styles.buttonDisabled,
+            ]}
+            onPress={handleGoogleLogin}
+            disabled={isBusy || !googleRequest || !isGoogleConfigured}
+          >
+            {isGoogleSubmitting ? (
+              <ActivityIndicator color={colors.primary} />
+            ) : (
+              <>
+                <Text
+                  style={[
+                    styles.googleIcon,
+                    { color: colors.text, fontSize: getFontSize(18) },
+                  ]}
+                >
+                  G
+                </Text>
+                <Text
+                  style={[
+                    styles.googleButtonText,
+                    { color: colors.text, fontSize: getFontSize(16) },
+                  ]}
+                >
+                  Entrar com Google
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
         </View>
 
         <View style={styles.linkRow}>
@@ -246,7 +376,7 @@ export default function LoginScreen() {
           </Text>
           <TouchableOpacity
             onPress={() => router.push("/(auth)/register")}
-            disabled={isSubmitting}
+            disabled={isBusy}
           >
             <Text
               style={{
@@ -354,6 +484,34 @@ const styles = StyleSheet.create({
   buttonText: {
     color: "#FFFF00",
     fontSize: 16,
+    fontWeight: "600",
+  },
+  dividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  googleButton: {
+    minHeight: 48,
+    borderRadius: 32,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 10,
+  },
+  googleIcon: {
+    fontWeight: "700",
+  },
+  googleButtonText: {
     fontWeight: "600",
   },
   linkRow: {
