@@ -28,6 +28,26 @@ Usar o fluxo abaixo:
 
 Essa abordagem reaproveita quase todo o fluxo atual de sessão e evita expor lógica de autorização do app diretamente ao Google após o login inicial.
 
+## Decisão técnica sobre biblioteca Google
+
+Existem duas opções viáveis no Expo:
+
+1. `expo-auth-session/providers/google`
+2. `@react-native-google-signin/google-signin`
+
+A documentação atual da Expo recomenda usar a biblioteca específica do provedor quando ela existir. Para Google, isso aponta para `@react-native-google-signin/google-signin`, principalmente em builds nativos.
+
+Para este plano, a primeira versão vai seguir com `expo-auth-session` porque:
+
+- o projeto já usa Expo Router e `expo-web-browser`;
+- o backend continuará validando o `idToken`, reduzindo acoplamento do app com a sessão Google;
+- a implementação fica mais próxima do fluxo OAuth/OpenID já descrito aqui.
+
+Importante:
+
+- Testar em development build ou build EAS. Não usar Expo Go como validação final de OAuth.
+- Se o fluxo com `expo-auth-session` apresentar bloqueios de redirect/client ID em Android real, migrar o frontend para `@react-native-google-signin/google-signin` mantendo o mesmo contrato com o backend: enviar `idToken` para `POST /auth/google`.
+
 ## Regras de negócio recomendadas
 
 Definir antes de codar:
@@ -49,10 +69,14 @@ Definir antes de codar:
 - Criar o projeto OAuth no Google Cloud Console.
 - Criar pelo menos um client OAuth Web e um client OAuth Android.
 - Se o app também for rodar em iOS, definir `ios.bundleIdentifier` em `frontend/app.json` e criar o client OAuth iOS.
+- O `ios.bundleIdentifier` foi definido em `frontend/app.json` como `com.ijteste.rateio`; usar esse valor ao criar o client OAuth iOS.
 - Registrar os redirect URIs necessários para Expo/AuthSession.
+- Gerar e logar o redirect URI real com `AuthSession.makeRedirectUri(...)` no ambiente de desenvolvimento e no build que será testado.
+- Usar um path estável para retorno, por exemplo `rateio://auth`, e registrar exatamente o URI gerado no Google Cloud quando aplicável.
 - Guardar os client IDs por plataforma.
 - No Android, usar o package já existente em `frontend/app.json`: `com.ijteste.rateio`.
 - Levantar o SHA-1/SHA-256 usado pelo build do app para o client Android.
+- Não validar o fluxo usando Expo Go como critério final; usar development build ou build EAS.
 
 ### 2. Ajustar dependências
 
@@ -62,8 +86,13 @@ Backend:
 
 Frontend:
 
-- Adicionar `expo-auth-session` em `frontend/package.json`.
+- Adicionar `expo-auth-session` e `expo-crypto` em `frontend/package.json`.
+- Instalação recomendada:
+  ```bash
+  npx expo install expo-auth-session expo-crypto
+  ```
 - Manter `expo-web-browser`, que já existe e será usado no fluxo.
+- Se optar por migrar para a biblioteca nativa do Google, substituir esta etapa por `@react-native-google-signin/google-signin` e configurar o plugin nativo correspondente.
 
 ### 3. Preparar variáveis de ambiente
 
@@ -72,6 +101,7 @@ Backend:
 - Atualizar `backend/.env.example` com algo como:
   - `GOOGLE_OAUTH_CLIENT_IDS="web-client-id,android-client-id,ios-client-id"`
 - O backend deve aceitar uma lista de audiences válidas porque cada plataforma pode emitir token com client ID diferente.
+- Em produção, o endpoint `POST /auth/google` deve ser chamado exclusivamente via HTTPS.
 
 Frontend:
 
@@ -133,6 +163,7 @@ Responsabilidades:
 - Serviço que usa `google-auth-library` para:
   - validar assinatura do token;
   - validar `aud`;
+  - validar `iss`, aceitando apenas `accounts.google.com` ou `https://accounts.google.com`;
   - validar expiração;
   - garantir `email_verified === true`.
 
@@ -246,6 +277,8 @@ Implementação recomendada:
 - Usar `expo-auth-session/providers/google`.
 - Chamar `WebBrowser.maybeCompleteAuthSession()` no bootstrap apropriado.
 - Configurar os client IDs por plataforma a partir das variáveis `EXPO_PUBLIC_*`.
+- Configurar o redirect com `AuthSession.makeRedirectUri`, usando o `scheme` já definido no `frontend/app.json`.
+- Logar o redirect URI em desenvolvimento para conferir com o Google Cloud Console.
 - Ao sucesso do Google:
   - extrair `idToken`;
   - enviar para `authStore.loginWithGoogle()`;
@@ -288,7 +321,10 @@ Pontos de atenção:
 
 - O `scheme: "rateio"` já existe, o que ajuda no retorno do AuthSession.
 - Validar se o redirect gerado pelo Expo está batendo com o cadastrado no Google Cloud.
+- Definir explicitamente o retorno esperado para development build e build EAS, por exemplo com `makeRedirectUri({ scheme: 'rateio', path: 'auth' })`.
+- Confirmar que o deep link `rateio://auth` abre o app no Android buildado.
 - Se houver suporte web, revisar também o comportamento no navegador e as URLs públicas.
+- Não usar Expo Go como validação final, porque OAuth com scheme customizado depende do binário real do app.
 
 ### 14. Validar a integração ponta a ponta
 
@@ -309,7 +345,10 @@ Checklist técnico:
 - Prisma Client regenerado.
 - Backend sobe sem erro com e sem as variáveis Google preenchidas.
 - App Expo compila em dev e build.
+- Fluxo testado em development build ou build EAS.
 - Fluxo testado em Android real, porque OAuth móvel costuma falhar por configuração de SHA/redirect.
+- Redirect URI conferido no log do app e no Google Cloud Console.
+- Endpoint `POST /auth/google` testado apenas via HTTPS em ambiente publicado.
 
 ## Arquivos que certamente devem mudar
 
@@ -357,6 +396,8 @@ Novos arquivos prováveis no frontend:
 - Não fazer vínculo automático por email na primeira versão reduz risco de segurança.
 - Tornar `password` opcional exige revisar cuidadosamente tudo que assume senha obrigatória.
 - Em Expo, diferenças entre dev build, Expo Go e build distribuído podem afetar redirect URI.
+- Expo Go não deve ser usado como validação final do fluxo OAuth.
+- Se `expo-auth-session` gerar atrito no Android real, trocar somente a camada de obtenção do `idToken` para `@react-native-google-signin/google-signin`; o backend e o contrato `POST /auth/google` permanecem iguais.
 - Se o time quiser suporte completo a "vincular conta Google a conta local", isso deve entrar como fase 2, com usuário autenticado e fluxo explícito.
 
 ## Entrega esperada da primeira versão
@@ -368,3 +409,10 @@ Ao fim desta implementação, o app deve permitir:
 - criação automática de conta nova a partir do Google;
 - emissão dos mesmos JWTs já usados pelo backend;
 - reaproveitamento total das rotas protegidas já existentes.
+
+## Referências oficiais para implementação
+
+- Expo Authentication guide: https://docs.expo.dev/guides/authentication/
+- Expo AuthSession SDK: https://docs.expo.dev/versions/latest/sdk/auth-session/
+- Expo Google authentication guide: https://docs.expo.dev/guides/google-authentication/
+- Google: Authenticate with a backend server: https://developers.google.com/identity/sign-in/web/backend-auth
