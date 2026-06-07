@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   Alert,
   ScrollView,
@@ -50,25 +50,8 @@ export default function SplitScreen() {
     [items, itemAllocations, participants],
   );
 
-  if (!billId) {
-    return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <Text style={[styles.emptyTitle, { color: colors.text }]}>
-          Nenhum rascunho de rateio disponível.
-        </Text>
-        <TouchableOpacity
-          style={[styles.primaryButton, { backgroundColor: colors.primary }]}
-          onPress={() => router.replace("/(tabs)/bills")}
-        >
-          <Text style={[styles.primaryButtonText, { color: colors.accent }]}>
-            Voltar ao histórico
-          </Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
 
-  const syncDraftItems = (nextItems: BillItem[]) => {
+  const syncDraftItems = useCallback((nextItems: BillItem[]) => {
     setBillMeta({
       billName,
       participants,
@@ -81,12 +64,20 @@ export default function SplitScreen() {
       serviceFeePercentage,
       couvertValue,
     });
-  };
+  }, [
+    billName,
+    participants,
+    serviceFeePercentage,
+    couvertValue,
+    setBillMeta,
+  ]);
 
-  const reloadItemsFromBackend = async () => {
+  const reloadItemsFromBackend = useCallback(async () => {
+    if (!billId) return;
+
     const refreshedItems = await itemsService.getItems(billId);
     syncDraftItems(refreshedItems);
-  };
+  }, [billId, syncDraftItems]);
 
   const getAllocationForItem = (itemId: string) => {
     const item = items.find((currentItem) => currentItem.id === itemId);
@@ -172,9 +163,11 @@ export default function SplitScreen() {
     setFeeSelection("service", nextSelected);
   };
 
-  const handleAddItem = async (
+  const handleAddItem = useCallback(async (
     item: Omit<BillItem, "id" | "assignedParticipants">,
   ) => {
+    if (!billId) return;
+
     try {
       const created = await itemsService.createItem(billId, item);
       syncDraftItems([
@@ -187,9 +180,11 @@ export default function SplitScreen() {
     } catch (error: any) {
       Alert.alert("Erro", error.message || "Não foi possível adicionar item.");
     }
-  };
+  }, [billId, items, syncDraftItems]);
 
-  const handleDeleteItem = async (itemId: string) => {
+  const handleDeleteItem = useCallback(async (itemId: string) => {
+    if (!billId) return;
+
     try {
       await itemsService.deleteItem(billId, itemId);
       syncDraftItems(
@@ -200,11 +195,25 @@ export default function SplitScreen() {
     } catch (error: any) {
       Alert.alert("Erro", error.message || "Não foi possível remover item.");
     }
-  };
+  }, [billId, items, syncDraftItems]);
 
-  const handleUpdateItem = async (updatedItem: BillItem) => {
+  const handleUpdateItem = useCallback(async (updatedItem: BillItem) => {
+    if (!billId) return;
+
     const currentItem = items.find((item) => item.id === updatedItem.id);
     if (!currentItem) return;
+
+    const previousItems = items.map((item) => ({
+      ...item,
+      assignedParticipants: [],
+    }));
+    const optimisticItems = items.map((item) =>
+      item.id === updatedItem.id
+        ? { ...updatedItem, assignedParticipants: [] }
+        : { ...item, assignedParticipants: [] },
+    );
+
+    syncDraftItems(optimisticItems);
 
     try {
       if (currentItem.name !== updatedItem.name) {
@@ -222,21 +231,18 @@ export default function SplitScreen() {
       if (currentItem.price !== updatedItem.price) {
         await itemsService.updateItemPrice(billId, updatedItem.id, updatedItem.price);
       }
-
-      syncDraftItems(
-        items.map((item) =>
-          item.id === updatedItem.id
-            ? { ...updatedItem, assignedParticipants: [] }
-            : { ...item, assignedParticipants: [] },
-        ),
-      );
     } catch (error: any) {
+      syncDraftItems(previousItems);
       Alert.alert("Erro", error.message || "Não foi possível atualizar item.");
       await reloadItemsFromBackend();
     }
-  };
+  }, [billId, items, reloadItemsFromBackend, syncDraftItems]);
 
   const handleContinue = () => {
+    if (!billId) {
+      return;
+    }
+
     if (items.length === 0) {
       Alert.alert("Atenção", "Adicione pelo menos um item para continuar.");
       return;
@@ -252,6 +258,24 @@ export default function SplitScreen() {
       params: { id: billId },
     });
   };
+
+  if (!billId) {
+    return (
+      <View style={[styles.centered, { backgroundColor: colors.background }]}>
+        <Text style={[styles.emptyTitle, { color: colors.text }]}>
+          Nenhum rascunho de rateio disponível.
+        </Text>
+        <TouchableOpacity
+          style={[styles.primaryButton, { backgroundColor: colors.primary }]}
+          onPress={() => router.replace("/(tabs)/bills")}
+        >
+          <Text style={[styles.primaryButtonText, { color: colors.accent }]}>
+            Voltar ao histórico
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <ScrollView
@@ -299,7 +323,7 @@ export default function SplitScreen() {
           items.map((item) => (
             <ItemCard
               key={item.id}
-              item={{ ...item, assignedParticipants: [] }}
+              item={item}
               onDelete={handleDeleteItem}
               onUpdate={handleUpdateItem}
             />
