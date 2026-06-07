@@ -48,9 +48,9 @@
           "photosPermission": "Permitir que o $(PRODUCT_NAME) acesse suas fotos"
         }
       ],
-      "expo-web-browser",
       "expo-secure-store",
-      "expo-font"
+      "expo-font",
+      "@react-native-google-signin/google-signin"
     ],
     "experiments": {
       "typedRoutes": true
