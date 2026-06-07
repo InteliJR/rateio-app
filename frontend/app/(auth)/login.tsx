@@ -37,9 +37,9 @@ export default function LoginScreen() {
   const googleRedirectUri = useMemo(
     () =>
       AuthSession.makeRedirectUri({
-        native: "com.intelijunior.porpartes:/oauthredirect",
+        native: "com.intelijunior.porpartes:/login",
         scheme: "com.intelijunior.porpartes",
-        path: "oauthredirect",
+        path: "login",
       }),
     []
   );
