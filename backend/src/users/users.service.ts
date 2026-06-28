@@ -5,12 +5,16 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 import { UserRole } from '@prisma/client';
 import * as argon2 from 'argon2';
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private storageService: StorageService,
+  ) {}
 
   private readonly pepper = process.env.PASSWORD_PEPPER || '';
 
@@ -61,7 +65,7 @@ export class UsersService {
       },
     });
 
-    return user;
+    return this.withFreshAvatarUrl(user);
   }
 
   async createGoogleUser(data: {
@@ -105,6 +109,25 @@ export class UsersService {
     });
   }
 
+  private async withFreshAvatarUrl<T extends { avatarUrl?: string | null }>(
+    user: T,
+  ): Promise<T> {
+    const key = this.storageService.extractStorageKeyFromUrl(user.avatarUrl);
+
+    if (!key?.startsWith('avatars/')) {
+      return user;
+    }
+
+    try {
+      return {
+        ...user,
+        avatarUrl: await this.storageService.getSignedUrl(key),
+      };
+    } catch {
+      return user;
+    }
+  }
+
   async findByEmail(email: string) {
     return this.prisma.user.findUnique({
       where: { email },
@@ -136,7 +159,7 @@ export class UsersService {
       throw new NotFoundException('Usuário não encontrado');
     }
 
-    return user;
+    return this.withFreshAvatarUrl(user);
   }
 
   async findAll() {
@@ -238,7 +261,7 @@ export class UsersService {
       hashedPassword = await this.hashPassword(data.password);
     }
 
-    return this.prisma.user.update({
+    const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
         name: data.name,
@@ -255,6 +278,8 @@ export class UsersService {
         updatedAt: true,
       },
     });
+
+    return this.withFreshAvatarUrl(user);
   }
 
   async validatePassword(user: any, password: string): Promise<boolean> {
@@ -292,7 +317,7 @@ export class UsersService {
       throw new NotFoundException('Usuário não encontrado');
     }
 
-    return this.prisma.user.update({
+    const updatedUser = await this.prisma.user.update({
       where: { id: userId },
       data: { avatarUrl },
       select: {
@@ -305,6 +330,30 @@ export class UsersService {
         createdAt: true,
       },
     });
+
+    await this.deletePreviousAvatar(user.avatarUrl, avatarUrl);
+
+    return this.withFreshAvatarUrl(updatedUser);
+  }
+
+  private async deletePreviousAvatar(
+    previousAvatarUrl: string | null,
+    nextAvatarUrl: string | null,
+  ) {
+    if (!previousAvatarUrl || previousAvatarUrl === nextAvatarUrl) {
+      return;
+    }
+
+    const previousKey = this.storageService.extractStorageKeyFromUrl(previousAvatarUrl);
+    const nextKey = this.storageService.extractStorageKeyFromUrl(nextAvatarUrl);
+
+    if (
+      previousKey &&
+      previousKey !== nextKey &&
+      previousKey.startsWith('avatars/')
+    ) {
+      await this.storageService.deleteFile(previousKey);
+    }
   }
 
   /**

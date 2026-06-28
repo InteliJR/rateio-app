@@ -13,9 +13,9 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { authService } from "../../services/auth.service";
 import { userService } from "../../services/user.service";
-import { API_URL } from "../../services/api.service";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../../contexts/ThemeContext";
+import { buildAvatarUrl } from "../../lib/avatar";
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -39,19 +39,6 @@ export default function ProfileScreen() {
       }
     }, []),
   );
-
-  const buildAvatarUrl = (rawUrl: string | null | undefined): string | null => {
-    if (!rawUrl) return null;
-
-    if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
-      // Adicionar timestamp para evitar cache
-      const separator = rawUrl.includes("?") ? "&" : "?";
-      return `${rawUrl}${separator}t=${Date.now()}`;
-    }
-
-    // Adicionar timestamp para evitar cache
-    return `${API_URL}${rawUrl}?t=${Date.now()}`;
-  };
 
   const loadUserData = async () => {
     try {

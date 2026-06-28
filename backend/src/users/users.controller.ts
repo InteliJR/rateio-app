@@ -20,7 +20,15 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '@prisma/client';
-import { IsEmail, IsString, MinLength, IsEnum, IsBoolean, IsOptional } from 'class-validator';
+import {
+  IsEmail,
+  IsString,
+  Matches,
+  MinLength,
+  IsEnum,
+  IsBoolean,
+  IsOptional,
+} from 'class-validator';
 
 // DTOs
 class CreateUserDto {
@@ -67,6 +75,20 @@ class UpdateOwnProfileDto {
   @MinLength(8)
   @IsOptional()
   password?: string;
+}
+
+class PresignedAvatarUploadDto {
+  @IsString()
+  filename: string;
+
+  @IsString()
+  @Matches(/^image\/(jpeg|jpg|png|webp|gif)$/)
+  mimeType: string;
+}
+
+class AttachAvatarDto {
+  @IsString()
+  imageKey: string;
 }
 
 @Controller('users')
@@ -135,6 +157,34 @@ export class UsersController {
     @Body(ValidationPipe) updateProfileDto: UpdateOwnProfileDto,
   ) {
     return this.usersService.updateOwnProfile(req.user.id, updateProfileDto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('me/avatar/upload-url')
+  createAvatarUploadUrl(
+    @Request() req: any,
+    @Body(ValidationPipe) dto: PresignedAvatarUploadDto,
+  ) {
+    return this.storageService.createPresignedUploadUrl(
+      'avatars',
+      req.user.id,
+      dto.filename,
+      dto.mimeType,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('me/avatar/attach')
+  async attachAvatar(
+    @Request() req: any,
+    @Body(ValidationPipe) dto: AttachAvatarDto,
+  ) {
+    if (!this.storageService.isOwnedObjectKey(dto.imageKey, 'avatars', req.user.id)) {
+      throw new BadRequestException('Chave de avatar invalida para este usuario');
+    }
+
+    const avatarUrl = await this.storageService.getFileUrl(dto.imageKey);
+    return this.usersService.updateAvatarUrl(req.user.id, avatarUrl);
   }
 
   @UseGuards(JwtAuthGuard)

@@ -15,11 +15,11 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { userService } from "../../services/user.service";
-import { API_URL } from "../../services/api.service";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import * as ImagePicker from "expo-image-picker";
 import { useTheme } from "../../contexts/ThemeContext";
+import { buildAvatarUrl } from "../../lib/avatar";
 
 type EditField = "name" | "email" | null;
 
@@ -39,21 +39,6 @@ export default function EditProfileScreen() {
   useEffect(() => {
     loadUserData();
   }, []);
-
-  const buildAvatarUrl = (rawUrl: string | null | undefined): string | null => {
-    if (!rawUrl) return null;
-
-    // Se o backend já devolve uma URL absoluta (ex: S3), usamos como está
-    if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
-      // Adicionar timestamp para evitar cache
-      const separator = rawUrl.includes("?") ? "&" : "?";
-      return `${rawUrl}${separator}t=${Date.now()}`;
-    }
-
-    // Caso seja uma URL relativa (ex: /uploads/avatars/...), prefixar com a base da API
-    // Adicionar timestamp para evitar cache
-    return `${API_URL}${rawUrl}?t=${Date.now()}`;
-  };
 
   const loadUserData = async () => {
     try {

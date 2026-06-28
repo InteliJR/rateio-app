@@ -1,4 +1,8 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import {
   S3Client,
   PutObjectCommand,
@@ -56,8 +60,69 @@ export class StorageService {
     return this.useS3;
   }
 
+  createObjectKey(folder: string, userId: string, filename: string, mimetype: string): string {
+    const extension = this.resolveFileExtension(filename, mimetype);
+    return `${folder}/${userId}/${randomUUID()}.${extension}`;
+  }
+
+  isOwnedObjectKey(key: string, folder: string, userId: string): boolean {
+    return key.startsWith(`${folder}/${userId}/`) && !key.includes('..');
+  }
+
   shouldServeLocalUploads(): boolean {
     return !this.useS3 && !this.isServerlessEnv;
+  }
+
+  async createPresignedUploadUrl(
+    folder: string,
+    userId: string,
+    filename: string,
+    mimetype: string,
+  ): Promise<{
+    key: string;
+    uploadUrl: string;
+    fileUrl: string;
+    headers: Record<string, string>;
+    expiresIn: number;
+  }> {
+    if (!this.useS3) {
+      throw new InternalServerErrorException(
+        'Upload direto exige storage S3 configurado.',
+      );
+    }
+
+    if (!this.validateFileType(mimetype)) {
+      throw new BadRequestException(
+        'Tipo de arquivo nao suportado para upload.',
+      );
+    }
+
+    const key = this.createObjectKey(folder, userId, filename, mimetype);
+    const command = new PutObjectCommand({
+      Bucket: this.bucketName,
+      Key: key,
+      ContentType: mimetype,
+    });
+    const expiresIn = 600;
+
+    return {
+      key,
+      uploadUrl: await getSignedUrl(this.s3Client, command, { expiresIn }),
+      fileUrl: await this.resolveS3Url(key),
+      headers: {
+        'Content-Type': mimetype,
+      },
+      expiresIn,
+    };
+  }
+
+  async getFileUrl(key: string): Promise<string> {
+    if (this.useS3) {
+      return this.resolveS3Url(key);
+    }
+
+    const relativeUrl = `/uploads/${key}`;
+    return this.publicBaseUrl ? `${this.publicBaseUrl}${relativeUrl}` : relativeUrl;
   }
 
   /**
@@ -275,5 +340,21 @@ export class StorageService {
   validateFileSize(size: number): boolean {
     const maxSize = 10 * 1024 * 1024; // 10MB
     return size <= maxSize;
+  }
+
+  private resolveFileExtension(filename: string, mimetype: string): string {
+    const extensionFromName = filename.split('.').pop()?.toLowerCase();
+
+    if (extensionFromName && /^[a-z0-9]+$/.test(extensionFromName)) {
+      return extensionFromName === 'jpeg' ? 'jpg' : extensionFromName;
+    }
+
+    const extensionFromMime = mimetype.split('/').pop()?.toLowerCase();
+
+    if (extensionFromMime && /^[a-z0-9]+$/.test(extensionFromMime)) {
+      return extensionFromMime === 'jpeg' ? 'jpg' : extensionFromMime;
+    }
+
+    return 'jpg';
   }
 }

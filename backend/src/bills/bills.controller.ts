@@ -25,6 +25,10 @@ import { UpdateBillItemDto } from '../bill-items/dto/update-bill-item.dto';
 import { BatchUpdateBillItemsDto } from './dto/update-bill.dto';
 import { CreateFeeDto } from '../fees/dto/create-fee.dto';
 import { BillStatus } from '@prisma/client';
+import {
+  AttachUploadedImageDto,
+  PresignedUploadDto,
+} from './dto/presigned-upload.dto';
 
 @Controller('bills')
 @UseGuards(JwtAuthGuard)
@@ -109,6 +113,14 @@ export class BillsController {
   /**
    * Upload de foto da conta + OCR automático
    */
+  @Post('upload-url')
+  createUploadUrl(
+    @Body() presignedUploadDto: PresignedUploadDto,
+    @Request() req: any,
+  ) {
+    return this.billsService.createImageUploadUrl(req.user.id, presignedUploadDto);
+  }
+
   @Throttle({ default: { limit: 2, ttl: 60000 } })
   @Post()
   @UseInterceptors(FileInterceptor('image'))
@@ -150,6 +162,19 @@ export class BillsController {
   /**
    * Criar item individual
    */
+  @Post(':id/image/attach')
+  async attachUploadedImage(
+    @Param('id') id: string,
+    @Body() attachUploadedImageDto: AttachUploadedImageDto,
+    @Request() req: any,
+  ) {
+    return this.billsService.attachUploadedImage(
+      id,
+      attachUploadedImageDto,
+      req.user.id,
+    );
+  }
+
   @Post(':id/items')
   createItem(
     @Param('id') billId: string,
