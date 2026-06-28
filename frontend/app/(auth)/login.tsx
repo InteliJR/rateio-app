@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "expo-router";
 import {
   View,
@@ -10,9 +10,12 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import * as AuthSession from "expo-auth-session";
-import * as Google from "expo-auth-session/providers/google";
-import * as WebBrowser from "expo-web-browser";
+import {
+  GoogleSignin,
+  isErrorWithCode,
+  isSuccessResponse,
+  statusCodes,
+} from "@react-native-google-signin/google-signin";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -21,8 +24,6 @@ import Logo from "@/assets/images/logo.svg";
 import { z } from "zod";
 import { storageService } from "@/services/storage.service";
 import { useTheme } from "@/contexts/ThemeContext";
-
-WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const { colors, getFontSize } = useTheme();
@@ -34,38 +35,17 @@ export default function LoginScreen() {
   const router = useRouter();
   const isBusy = isSubmitting || isGoogleSubmitting;
 
-  const googleRedirectUri = useMemo(
-    () => AuthSession.makeRedirectUri({ scheme: "rateio", path: "auth" }),
-    []
-  );
-
   const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || "";
-  const googleAndroidClientId =
-    process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || "";
-  const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || "";
-  const googleFallbackClientId =
-    "missing-google-client-id.apps.googleusercontent.com";
-  const isGoogleConfigured =
-    Platform.select({
-      android: Boolean(googleAndroidClientId),
-      ios: Boolean(googleIosClientId),
-      default: Boolean(googleWebClientId),
-    }) || Boolean(googleWebClientId);
-
-  const [googleRequest, , promptGoogleSignIn] = Google.useIdTokenAuthRequest({
-    webClientId: googleWebClientId || googleFallbackClientId,
-    androidClientId:
-      googleAndroidClientId || googleWebClientId || googleFallbackClientId,
-    iosClientId: googleIosClientId || googleWebClientId || googleFallbackClientId,
-    redirectUri: googleRedirectUri,
-    selectAccount: true,
-  });
+  const isGoogleConfigured = Boolean(googleWebClientId);
 
   useEffect(() => {
-    if (__DEV__) {
-      console.log("[GoogleAuth] Redirect URI:", googleRedirectUri);
-    }
-  }, [googleRedirectUri]);
+    if (!googleWebClientId) return;
+
+    GoogleSignin.configure({
+      webClientId: googleWebClientId,
+      scopes: ["profile", "email"],
+    });
+  }, [googleWebClientId]);
 
   const loginSchema = z.object({
     email: z
@@ -109,34 +89,45 @@ export default function LoginScreen() {
 
     if (!isGoogleConfigured) {
       setServerError(
-        "Login com Google nao configurado. Defina os client IDs no .env do app."
+        "Login com Google nao configurado. Defina o Web Client ID no .env do app."
       );
       return;
     }
 
     setIsGoogleSubmitting(true);
     try {
-      const result = await promptGoogleSignIn();
+      await GoogleSignin.hasPlayServices({
+        showPlayServicesUpdateDialog: true,
+      });
 
-      if (result.type === "success") {
-        const idToken =
-          result.params?.id_token || result.authentication?.idToken;
+      const result = await GoogleSignin.signIn();
 
-        if (!idToken) {
-          throw new Error("Token Google nao retornado.");
-        }
-
-        await loginWithGoogle(idToken);
-        router.replace("/(tabs)/bills");
+      if (!isSuccessResponse(result)) {
         return;
       }
 
-      if (result.type === "error") {
-        setServerError(
-          result.error?.message || "Nao foi possivel fazer login com Google."
-        );
+      const idToken = result.data.idToken;
+
+      if (!idToken) {
+        throw new Error("Token Google nao retornado.");
       }
+
+      await loginWithGoogle(idToken);
+      router.replace("/(tabs)/bills");
     } catch (error: any) {
+      if (isErrorWithCode(error)) {
+        switch (error.code) {
+          case statusCodes.SIGN_IN_CANCELLED:
+            return;
+          case statusCodes.IN_PROGRESS:
+            setServerError("Login com Google ja esta em andamento.");
+            return;
+          case statusCodes.PLAY_SERVICES_NOT_AVAILABLE:
+            setServerError("Google Play Services indisponivel ou desatualizado.");
+            return;
+        }
+      }
+
       setServerError(getApiErrorMessage(error));
     } finally {
       setIsGoogleSubmitting(false);
@@ -337,11 +328,10 @@ export default function LoginScreen() {
                 backgroundColor: colors.inputBackground,
                 borderColor: colors.inputBorder,
               },
-              (isBusy || !googleRequest || !isGoogleConfigured) &&
-                styles.buttonDisabled,
+              (isBusy || !isGoogleConfigured) && styles.buttonDisabled,
             ]}
             onPress={handleGoogleLogin}
-            disabled={isBusy || !googleRequest || !isGoogleConfigured}
+            disabled={isBusy || !isGoogleConfigured}
           >
             {isGoogleSubmitting ? (
               <ActivityIndicator color={colors.primary} />

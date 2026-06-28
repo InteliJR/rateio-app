@@ -80,10 +80,10 @@ export default function SummaryScreen() {
         </Text>
         <TouchableOpacity
           style={[styles.primaryButton, { backgroundColor: colors.primary }]}
-          onPress={() => router.replace("/(tabs)/bills")}
+          onPress={() => router.replace("/(tabs)/(create)")}
         >
           <Text style={[styles.primaryButtonText, { color: colors.accent }]}>
-            Voltar ao histórico
+            Voltar ao início
           </Text>
         </TouchableOpacity>
       </View>

@@ -11,8 +11,8 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { userService } from "../../services/user.service";
-import { API_URL } from "../../services/api.service";
 import { useTheme } from "../../contexts/ThemeContext";
+import { buildAvatarUrl } from "../../lib/avatar";
 
 export default function ConfigScreen() {
   const { colors, getFontSize } = useTheme();
@@ -23,16 +23,6 @@ export default function ConfigScreen() {
   React.useEffect(() => {
     loadUserData();
   }, []);
-
-  const buildAvatarUrl = (rawUrl: string | null | undefined): string | null => {
-    if (!rawUrl) return null;
-
-    if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
-      return rawUrl;
-    }
-
-    return `${API_URL}${rawUrl}`;
-  };
 
   const loadUserData = async () => {
     try {

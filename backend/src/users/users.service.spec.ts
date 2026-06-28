@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UsersService } from './users.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -20,6 +21,13 @@ describe('UsersService', () => {
               findFirst: jest.fn(),
               count: jest.fn(),
             },
+          },
+        },
+        {
+          provide: StorageService,
+          useValue: {
+            extractStorageKeyFromUrl: jest.fn(),
+            getSignedUrl: jest.fn(),
           },
         },
       ],

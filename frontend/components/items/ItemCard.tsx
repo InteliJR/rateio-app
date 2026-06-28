@@ -19,7 +19,7 @@ export interface BillItem {
   name: string;
   quantity: number;
   price: number;
-  assignedParticipants: string[];
+  assignedParticipants?: string[];
 }
 
 interface ItemCardProps {
@@ -30,13 +30,13 @@ interface ItemCardProps {
   onPress?: () => void;
 }
 
-export const ItemCard: React.FC<ItemCardProps> = ({
+export const ItemCard = React.memo(function ItemCard({
   item,
   onDelete,
   onUpdate,
   isActive = false,
   onPress,
-}) => {
+}: ItemCardProps) {
   const { colors, getFontSize } = useTheme();
   const [name, setName] = useState(item.name);
   const [quantity, setQuantity] = useState(item.quantity.toString());
@@ -47,7 +47,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({
     setName(item.name);
     setQuantity(item.quantity.toString());
     setPrice(formatEditableNumber(item.price));
-  }, [item]);
+  }, [item.id, item.name, item.quantity, item.price]);
 
   const handleBlur = (field: "name" | "quantity" | "price") => {
     if (!onUpdate) return;
@@ -212,7 +212,23 @@ export const ItemCard: React.FC<ItemCardProps> = ({
       </View>
     </View>
   );
-};
+}, areItemCardPropsEqual);
+
+function areItemCardPropsEqual(
+  previous: ItemCardProps,
+  next: ItemCardProps,
+) {
+  return (
+    previous.item.id === next.item.id &&
+    previous.item.name === next.item.name &&
+    previous.item.quantity === next.item.quantity &&
+    previous.item.price === next.item.price &&
+    previous.isActive === next.isActive &&
+    previous.onDelete === next.onDelete &&
+    previous.onUpdate === next.onUpdate &&
+    previous.onPress === next.onPress
+  );
+}
 
 const styles = StyleSheet.create({
   container: {

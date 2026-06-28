@@ -16,6 +16,10 @@ export class CreateBillDto {
   billName?: string;
 
   @IsOptional()
+  @IsString()
+  imageKey?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)

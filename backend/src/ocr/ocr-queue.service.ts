@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MetricsService } from '../observability/metrics.service';
 import { OcrResultDto } from './dto/ocr-result.dto';
 import { OcrService } from './ocr.service';
+import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class OcrQueueService {
@@ -13,12 +14,16 @@ export class OcrQueueService {
   private readonly maxAttempts = Number(process.env.OCR_QUEUE_MAX_ATTEMPTS ?? 3);
   private readonly retryDelayMs = Number(process.env.OCR_QUEUE_RETRY_DELAY_MS ?? 30000);
   private readonly lockTimeoutMs = Number(process.env.OCR_QUEUE_LOCK_TIMEOUT_MS ?? 120000);
+  private readonly maxJobsPerRun = Number(
+    process.env.OCR_QUEUE_MAX_JOBS_PER_RUN ?? (process.env.VERCEL ? 1 : this.maxConcurrency),
+  );
   private activeWorkers = 0;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly ocrService: OcrService,
     private readonly metrics: MetricsService,
+    private readonly storage: StorageService,
   ) {}
 
   async enqueue(billId: string, userId: string) {
@@ -53,10 +58,13 @@ export class OcrQueueService {
     await this.processPendingJobs();
   }
 
-  async processPendingJobs() {
+  async processPendingJobs(maxJobs: number = this.maxJobsPerRun) {
     await this.releaseStaleLocks();
 
-    const availableSlots = Math.max(this.maxConcurrency - this.activeWorkers, 0);
+    const availableSlots = Math.min(
+      Math.max(this.maxConcurrency - this.activeWorkers, 0),
+      Math.max(1, maxJobs),
+    );
     if (availableSlots === 0) {
       return { processed: 0, activeWorkers: this.activeWorkers };
     }
@@ -115,6 +123,7 @@ export class OcrQueueService {
           select: {
             id: true,
             imageUrl: true,
+            imageKey: true,
           },
         },
       },
@@ -149,9 +158,11 @@ export class OcrQueueService {
     id: string;
     billId: string;
     attempts: number;
-    bill: { id: string; imageUrl: string | null };
+    bill: { id: string; imageUrl: string | null; imageKey: string | null };
   }) {
-    if (!job.bill.imageUrl) {
+    const imageUrl = await this.getProcessableImageUrl(job.bill);
+
+    if (!imageUrl) {
       await this.failJob(job.id, job.billId, 'Bill has no image URL for OCR.', false, 0);
       return;
     }
@@ -160,7 +171,7 @@ export class OcrQueueService {
     this.metrics.recordOcrStarted();
 
     try {
-      const ocrResult = await this.ocrService.processImage(job.bill.imageUrl);
+      const ocrResult = await this.ocrService.processImage(imageUrl);
       await this.persistOcrResult(job.billId, ocrResult);
 
       const durationMs = Date.now() - startedAt;
@@ -185,6 +196,17 @@ export class OcrQueueService {
 
       await this.failJob(job.id, job.billId, errorMessage, shouldRetry, durationMs);
     }
+  }
+
+  private async getProcessableImageUrl(bill: {
+    imageUrl: string | null;
+    imageKey: string | null;
+  }) {
+    if (bill.imageKey && this.storage.isUsingS3()) {
+      return this.storage.getSignedUrl(bill.imageKey);
+    }
+
+    return bill.imageUrl;
   }
 
   private async persistOcrResult(
@@ -294,6 +316,7 @@ export class OcrQueueService {
       completed,
       activeWorkers: this.activeWorkers,
       maxConcurrency: this.maxConcurrency,
+      maxJobsPerRun: this.maxJobsPerRun,
       maxAttempts: this.maxAttempts,
       retryDelayMs: this.retryDelayMs,
       lockTimeoutMs: this.lockTimeoutMs,
