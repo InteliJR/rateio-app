@@ -10,6 +10,10 @@ import { OcrQueueService } from '../ocr/ocr-queue.service';
 import { CreateBillDto } from './dto/create-bill.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
 import { FinalizeBillDto } from './dto/finalize-bill.dto';
+import {
+  AttachUploadedImageDto,
+  PresignedUploadDto,
+} from './dto/presigned-upload.dto';
 import { CreateBillItemDto } from '../bill-items/dto/create-bill-item.dto';
 import { UpdateBillItemDto } from '../bill-items/dto/update-bill-item.dto';
 import { BatchUpdateBillItemsDto } from './dto/update-bill.dto';
@@ -156,9 +160,51 @@ export class BillsService {
   ) { }
 
   private triggerOcrProcessing() {
+    if (process.env.VERCEL) {
+      return;
+    }
+
     void this.ocrQueue.processPendingJobs().catch((error) => {
       console.error('[BillsService] Falha ao disparar processamento OCR:', error);
     });
+  }
+
+  async createImageUploadUrl(userId: string, dto: PresignedUploadDto) {
+    return this.storage.createPresignedUploadUrl(
+      'bills',
+      userId,
+      dto.filename,
+      dto.mimeType,
+    );
+  }
+
+  private async enqueueUploadedImageBill(
+    userId: string,
+    imageKey: string,
+    establishmentName?: string,
+  ) {
+    if (!this.storage.isOwnedObjectKey(imageKey, 'bills', userId)) {
+      throw new BadRequestException('Chave de imagem invalida para este usuario.');
+    }
+
+    const imageUrl = await this.storage.getFileUrl(imageKey);
+    const bill = await this.prisma.bill.create({
+      data: {
+        userId,
+        imageUrl,
+        imageKey,
+        status: BillStatus.PENDING_OCR,
+        establishmentName,
+      },
+    });
+
+    await this.ocrQueue.enqueue(bill.id, userId);
+    this.triggerOcrProcessing();
+
+    return {
+      ...bill,
+      message: 'Conta criada. OCR enfileirado para processamento.',
+    };
   }
 
   /**
@@ -169,6 +215,14 @@ export class BillsService {
     userId: string,
     createBillDto: CreateBillDto,
   ) {
+    if (createBillDto.imageKey) {
+      return this.enqueueUploadedImageBill(
+        userId,
+        createBillDto.imageKey,
+        createBillDto.establishmentName,
+      );
+    }
+
     // Se tiver arquivo, fluxo normal de OCR
     if (file) {
       // 1. Validar arquivo
@@ -352,6 +406,42 @@ export class BillsService {
       data: {
         imageUrl: url,
         imageKey: key,
+        status: BillStatus.PENDING_OCR,
+      },
+    });
+
+    await this.ocrQueue.enqueue(updatedBill.id, userId);
+    this.triggerOcrProcessing();
+
+    return {
+      ...updatedBill,
+      message: 'Imagem enviada. OCR enfileirado para processamento.',
+    };
+  }
+
+  async attachUploadedImage(
+    billId: string,
+    dto: AttachUploadedImageDto,
+    userId: string,
+  ) {
+    const bill = await this.prisma.bill.findFirst({
+      where: { id: billId, userId },
+    });
+
+    if (!bill) {
+      throw new NotFoundException('Conta nao encontrada');
+    }
+
+    if (!this.storage.isOwnedObjectKey(dto.imageKey, 'bills', userId)) {
+      throw new BadRequestException('Chave de imagem invalida para este usuario.');
+    }
+
+    const imageUrl = await this.storage.getFileUrl(dto.imageKey);
+    const updatedBill = await this.prisma.bill.update({
+      where: { id: billId },
+      data: {
+        imageUrl,
+        imageKey: dto.imageKey,
         status: BillStatus.PENDING_OCR,
       },
     });

@@ -17,5 +17,11 @@
       "src": "/(.*)",
       "dest": "api/index.ts"
     }
+  ],
+  "crons": [
+    {
+      "path": "/internal/ocr/process-pending",
+      "schedule": "* * * * *"
+    }
   ]
 }
