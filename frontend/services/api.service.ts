@@ -1,11 +1,14 @@
 // mobile/services/api.service.ts
 
+import { logger } from '../lib/logger';
 import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
 import Constants from 'expo-constants';
 import { storageService } from './storage.service';
 
-export const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 const IS_DEV = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
+const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+
+export const API_URL = (configuredApiUrl || (IS_DEV ? 'http://localhost:3000' : '')).replace(/\/$/, '');
 
 // Configurações de retry
 const RETRY_CONFIG = {
@@ -46,7 +49,7 @@ class ApiService {
     }
 
     const expoHost = this.parseExpoHost();
-    if (expoHost) {
+    if (IS_DEV && expoHost) {
       urls.add(`http://${expoHost}:3000`);
     }
 
@@ -90,7 +93,7 @@ class ApiService {
 
       this.activeBaseURL = candidate;
       this.api.defaults.baseURL = candidate;
-      console.warn('[API] Base URL atualizada automaticamente após erro de rede:', {
+      logger.warn('[API] Base URL atualizada automaticamente após erro de rede:', {
         previous: API_URL,
         current: candidate,
         request: originalRequestUrl,
@@ -103,11 +106,8 @@ class ApiService {
 
   constructor() {
     this.activeBaseURL = API_URL;
-    console.log('[API] Using API_URL:', this.activeBaseURL);
-
-    if (!IS_DEV && (!this.activeBaseURL || this.activeBaseURL.includes('localhost'))) {
-      console.warn('[API] EXPO_PUBLIC_API_URL de producao nao configurada corretamente. Use uma URL HTTPS publica no build do APK.');
-    }
+    this.assertProductionApiUrl(this.activeBaseURL);
+    logger.debug('[API] Using API_URL:', this.activeBaseURL);
 
     this.api = axios.create({
       baseURL: this.activeBaseURL,
@@ -142,24 +142,20 @@ class ApiService {
         // Apenas tentar recuperar token se for um endpoint privado
         if (!isPublicEndpoint) {
           const token = await storageService.getItem("accessToken");
-          console.log(
-            "[API] Token from SecureStore:",
+          logger.debug(
+            "[API] Protected endpoint token:",
             token ? "Found" : "Missing"
-          );
-          console.log(
-            "[API] Token value:",
-            token ? `${token.substring(0, 20)}...` : "none"
           );
 
           if (token) {
             config.headers.Authorization = `Bearer ${token}`;
-            console.log("[API] Authorization header set with token");
+            logger.debug("[API] Authorization header set with token");
           } else {
-            console.log("[API] No token found for protected endpoint");
+            logger.debug("[API] No token found for protected endpoint");
             this.onUnauthorized();
           }
         } else {
-          console.log("[API] Public endpoint - skipping token retrieval");
+          logger.debug("[API] Public endpoint - skipping token retrieval");
         }
         return config;
       },
@@ -173,7 +169,7 @@ class ApiService {
         const originalRequest = error.config as any;
 
         // Log detalhado de erros
-        console.error("[API] Error occurred:", {
+        logger.error("[API] Error occurred:", {
           status: error.response?.status,
           url: originalRequest?.url,
           data: error.response?.data,
@@ -188,7 +184,7 @@ class ApiService {
 
             if (switched) {
               originalRequest.baseURL = this.activeBaseURL;
-              console.log('[API] Retrying request with recovered baseURL...');
+              logger.debug('[API] Retrying request with recovered baseURL...');
               return this.api(originalRequest);
             }
           }
@@ -200,12 +196,12 @@ class ApiService {
             
             // Backoff exponencial: 1s, 2s, 4s
             const waitTime = RETRY_CONFIG.retryDelay * Math.pow(2, retryCount);
-            console.log(`[API] Network error. Retrying in ${waitTime}ms... (attempt ${retryCount + 1}/${RETRY_CONFIG.maxRetries})`);
+            logger.debug(`[API] Network error. Retrying in ${waitTime}ms... (attempt ${retryCount + 1}/${RETRY_CONFIG.maxRetries})`);
             
             await delay(waitTime);
             return this.api(originalRequest);
           } else {
-            console.error("[API] Max retries reached for network error");
+            logger.error("[API] Max retries reached for network error");
           }
         }
 
@@ -218,12 +214,12 @@ class ApiService {
             
             // Backoff exponencial: 2s, 4s, 8s
             const waitTime = RETRY_CONFIG.retryDelay * Math.pow(2, retryCount);
-            console.log(`[API] Rate limited. Retrying in ${waitTime}ms... (attempt ${retryCount + 1}/${RETRY_CONFIG.maxRetries})`);
+            logger.debug(`[API] Rate limited. Retrying in ${waitTime}ms... (attempt ${retryCount + 1}/${RETRY_CONFIG.maxRetries})`);
             
             await delay(waitTime);
             return this.api(originalRequest);
           } else {
-            console.error("[API] Max retries reached for rate limit");
+            logger.error("[API] Max retries reached for rate limit");
           }
         }
 
@@ -231,14 +227,14 @@ class ApiService {
         if (error.response?.status === 401 && !originalRequest._retry) {
           // Se a requisição falhou no endpoint de refresh, fazer logout direto
           if (originalRequest.url?.includes("/auth/refresh")) {
-            console.log("[API] Refresh token endpoint failed, logging out");
+            logger.debug("[API] Refresh token endpoint failed, logging out");
             await this.handleLogout();
             return Promise.reject(error);
           }
 
           // Evitar múltiplas tentativas simultâneas de refresh
           if ((this as any)._isRefreshing) {
-            console.log("[API] Token refresh already in progress, waiting...");
+            logger.debug("[API] Token refresh already in progress, waiting...");
             // Aguardar o refresh atual terminar
             return new Promise(async (resolve, reject) => {
               const maxWait = 5000; // 5 segundos máximo
@@ -273,11 +269,11 @@ class ApiService {
               return Promise.reject(error);
             }
 
-            console.log("[API] Token refreshed successfully");
+            logger.debug("[API] Token refreshed successfully");
             originalRequest.headers.Authorization = `Bearer ${accessToken}`;
             return this.api(originalRequest);
           } catch (refreshError) {
-            console.error("[API] Token refresh failed:", refreshError);
+            logger.error("[API] Token refresh failed:", refreshError);
             await this.handleLogout();
             return Promise.reject(refreshError);
           } finally {
@@ -288,6 +284,35 @@ class ApiService {
         return Promise.reject(error);
       }
     );
+  }
+
+  private assertProductionApiUrl(baseUrl: string) {
+    if (IS_DEV) {
+      return;
+    }
+
+    if (!baseUrl) {
+      throw new Error('EXPO_PUBLIC_API_URL deve ser configurada no build de produção.');
+    }
+
+    let parsed: URL;
+    try {
+      parsed = new URL(baseUrl);
+    } catch {
+      throw new Error('EXPO_PUBLIC_API_URL deve ser uma URL válida.');
+    }
+
+    const hostname = parsed.hostname.toLowerCase();
+    const isLocalHost =
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '10.0.2.2' ||
+      hostname.startsWith('192.168.') ||
+      hostname.endsWith('.local');
+
+    if (parsed.protocol !== 'https:' || isLocalHost) {
+      throw new Error('EXPO_PUBLIC_API_URL deve apontar para uma URL HTTPS pública no build de produção.');
+    }
   }
 
   private async handleLogout() {
@@ -388,14 +413,14 @@ class ApiService {
       try {
         if (attempt > 0) {
           const backoffDelay = RETRY_CONFIG.retryDelay * Math.pow(2, attempt - 1);
-          console.log(`[API] Retry attempt ${attempt}/${maxRetries} after ${backoffDelay}ms...`);
+          logger.debug(`[API] Retry attempt ${attempt}/${maxRetries} after ${backoffDelay}ms...`);
           await delay(backoffDelay);
         }
 
         const response = await this.api.request<T>(config);
 
         if (attempt > 0) {
-          console.log(`[API] Request succeeded on retry attempt ${attempt}`);
+          logger.debug(`[API] Request succeeded on retry attempt ${attempt}`);
         }
 
         return response.data;
@@ -405,12 +430,12 @@ class ApiService {
         // Se não é retentável ou é a última tentativa, lança o erro
         if (!this.isRetryableError(lastError) || attempt === maxRetries) {
           if (attempt > 0) {
-            console.error(`[API] All ${maxRetries} retry attempts failed`);
+            logger.error(`[API] All ${maxRetries} retry attempts failed`);
           }
           throw error;
         }
 
-        console.warn(`[API] Request failed (attempt ${attempt + 1}/${maxRetries + 1}):`, {
+        logger.warn(`[API] Request failed (attempt ${attempt + 1}/${maxRetries + 1}):`, {
           url: config.url,
           error: lastError.message,
           code: (lastError as any).code,

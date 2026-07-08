@@ -1,11 +1,24 @@
 // mobile/store/authStore.ts
 
+import { logger } from '../lib/logger';
 import { create } from "zustand";
 import { storageService } from "../services/storage.service";
 import { AuthState } from "../types/auth.types";
 import { authService } from "../services/auth.service";
+import { userService } from "../services/user.service";
 import { queryClient } from "../lib/queryClient";
 import { useBillStore } from "./billStore";
+
+const clearLocalSession = async () => {
+  await queryClient.cancelQueries();
+  queryClient.removeQueries();
+  queryClient.clear();
+  useBillStore.getState().clearBills();
+  await storageService.deleteItem("accessToken");
+  await storageService.deleteItem("refreshToken");
+  await storageService.deleteItem("userName");
+  await storageService.deleteItem("userEmail");
+};
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
@@ -33,10 +46,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const response = await authService.login({ email, password });
 
       // Salvar tokens no storage
-      console.log('[AuthStore] Saving tokens to storage...');
+      logger.debug('[AuthStore] Saving tokens to storage...');
       await storageService.setItem("accessToken", response.accessToken);
       await storageService.setItem("refreshToken", response.refreshToken);
-      console.log('[AuthStore] Tokens saved successfully');
+      logger.debug('[AuthStore] Tokens saved successfully');
 
       set({
         user: response.user,
@@ -65,10 +78,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       const response = await authService.loginWithGoogle({ idToken });
 
-      console.log('[AuthStore] Saving Google login tokens to storage...');
+      logger.debug('[AuthStore] Saving Google login tokens to storage...');
       await storageService.setItem("accessToken", response.accessToken);
       await storageService.setItem("refreshToken", response.refreshToken);
-      console.log('[AuthStore] Google login tokens saved successfully');
+      logger.debug('[AuthStore] Google login tokens saved successfully');
 
       set({
         user: response.user,
@@ -105,10 +118,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       // Backend retorna tokens no registro - salvar e autenticar
       if (response.accessToken && response.refreshToken) {
-        console.log('[AuthStore] Saving tokens from registration...');
+        logger.debug('[AuthStore] Saving tokens from registration...');
         await storageService.setItem("accessToken", response.accessToken);
         await storageService.setItem("refreshToken", response.refreshToken);
-        console.log('[AuthStore] Registration tokens saved successfully');
+        logger.debug('[AuthStore] Registration tokens saved successfully');
 
         set({
           user: response.user,
@@ -157,7 +170,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isLoading: false,
       });
     } catch (error) {
-      console.error("Erro ao fazer logout:", error);
+      logger.error("Erro ao fazer logout:", error);
       // Mesmo com erro, garantir que os dados locais são limpos
       try {
         queryClient.cancelQueries();
@@ -180,20 +193,41 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
+  deleteAccount: async () => {
+    set({ isLoading: true });
+
+    try {
+      await userService.deleteAccount();
+      await clearLocalSession();
+
+      set({
+        user: null,
+        accessToken: null,
+        refreshToken: null,
+        isAuthenticated: false,
+        isLoading: false,
+      });
+    } catch (error) {
+      logger.error("Erro ao excluir conta:", error);
+      set({ isLoading: false });
+      throw error;
+    }
+  },
+
   loadTokens: async () => {
     try {
       const accessToken = await storageService.getItem("accessToken");
       const refreshToken = await storageService.getItem("refreshToken");
 
-      console.log('[AuthStore] loadTokens - accessToken:', accessToken ? "Found" : "Missing");
-      console.log('[AuthStore] loadTokens - refreshToken:', refreshToken ? "Found" : "Missing");
+      logger.debug('[AuthStore] loadTokens - accessToken:', accessToken ? "Found" : "Missing");
+      logger.debug('[AuthStore] loadTokens - refreshToken:', refreshToken ? "Found" : "Missing");
 
       if (accessToken && refreshToken) {
         // Tentar buscar dados do usuário
         try {
-          console.log('[AuthStore] Fetching user profile...');
+          logger.debug('[AuthStore] Fetching user profile...');
           const user = await authService.getProfile();
-          console.log('[AuthStore] User profile fetched successfully');
+          logger.debug('[AuthStore] User profile fetched successfully');
 
           set({
             user,
@@ -203,11 +237,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             isLoading: false,
           });
         } catch (profileError: any) {
-          console.error('[AuthStore] Failed to fetch profile:', profileError);
+          logger.error('[AuthStore] Failed to fetch profile:', profileError);
 
           // Se o erro for 401 (Unauthorized), significa que o token é inválido
           if (profileError.response?.status === 401 || profileError.message?.includes('401')) {
-            console.log('[AuthStore] Profile fetch returned 401, clearing tokens');
+            logger.debug('[AuthStore] Profile fetch returned 401, clearing tokens');
             await get().logout(); // Garante que limpamos tudo
             return; // Interrompe aqui, mantendo estado de deslogado
           }
@@ -220,7 +254,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             profileError.message?.includes('timeout');
 
           if (isNetworkError) {
-            console.log('[AuthStore] Network error while fetching profile, keeping tokens but not authenticating');
+            logger.debug('[AuthStore] Network error while fetching profile, keeping tokens but not authenticating');
             set({
               user: null,
               accessToken,
@@ -233,7 +267,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
           // Para outros erros (ex: 500), tentar novamente após um delay
           // ou manter tokens mas não autenticar
-          console.log('[AuthStore] Profile fetch failed with server error, keeping tokens but not authenticating');
+          logger.debug('[AuthStore] Profile fetch failed with server error, keeping tokens but not authenticating');
           set({
             user: null,
             accessToken,
@@ -243,11 +277,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           });
         }
       } else {
-        console.log('[AuthStore] No tokens found, user not authenticated');
+        logger.debug('[AuthStore] No tokens found, user not authenticated');
         set({ isLoading: false, isAuthenticated: false });
       }
     } catch (error) {
-      console.error("Erro ao carregar tokens:", error);
+      logger.error("Erro ao carregar tokens:", error);
       // Se falhar, limpar tokens
       try {
         await storageService.deleteItem("accessToken");

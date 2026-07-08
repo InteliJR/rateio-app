@@ -1,3 +1,4 @@
+import { logger } from '../lib/logger';
 import billService from './bill.service';
 import { BillItem } from '../components/items/ItemCard';
 import { apiService } from './api.service';
@@ -17,7 +18,7 @@ class ItemsService {
 
     try {
       const bill = await billService.getBill(billId);
-      console.log('[ItemsService] Bill items from backend:', bill.items?.length || 0);
+      logger.debug('[ItemsService] Bill items from backend:', bill.items?.length || 0);
 
       // Backend returns items as { id, name, quantity, unitPrice, totalPrice }
       // No frontend, usamos:
@@ -26,7 +27,7 @@ class ItemsService {
       // O valor total do item é sempre calculado como quantity × price quando necessário.
       const items: BillItem[] = (bill.items || []).map((item: any, index: number) => {
         if (!item.id) {
-          console.warn('[ItemsService] Item sem ID do backend, usando index:', index);
+          logger.warn('[ItemsService] Item sem ID do backend, usando index:', index);
         }
         return {
           id: item.id || `temp-${index}`, // Prefer ID from backend, fallback to temp
@@ -41,13 +42,13 @@ class ItemsService {
         };
       });
 
-      console.log('[ItemsService] Mapped items:', items.length);
+      logger.debug('[ItemsService] Mapped items:', items.length);
 
       // Atualizar cache
       this.cache.set(billId, items);
       return items;
     } catch (error: any) {
-      console.error('[ItemsService] Error fetching items:', error);
+      logger.error('[ItemsService] Error fetching items:', error);
       throw new Error(error.message || 'Failed to fetch items');
     }
   }
@@ -87,7 +88,7 @@ class ItemsService {
 
       return newItem;
     } catch (error: any) {
-      console.error('[ItemsService] Error creating item:', error);
+      logger.error('[ItemsService] Error creating item:', error);
       throw new Error(error.response?.data?.message || error.message || 'Erro ao criar item');
     }
   }
@@ -118,7 +119,7 @@ class ItemsService {
 
       return newItems;
     } catch (error: any) {
-      console.error('[ItemsService] Error deleting item:', error);
+      logger.error('[ItemsService] Error deleting item:', error);
 
       // Se o item não foi encontrado (404), limpar cache para forçar recarga
       if (error.response?.status === 404) {
@@ -161,7 +162,7 @@ class ItemsService {
 
       return updatedItem;
     } catch (error: any) {
-      console.error('[ItemsService] Error updating item name:', error);
+      logger.error('[ItemsService] Error updating item name:', error);
 
       // Se o item não foi encontrado (404), limpar cache para forçar recarga
       if (error.response?.status === 404) {
@@ -220,7 +221,7 @@ class ItemsService {
 
       return updatedItem;
     } catch (error: any) {
-      console.error('[ItemsService] Error updating item price:', error);
+      logger.error('[ItemsService] Error updating item price:', error);
 
       // Se o item não foi encontrado (404), limpar cache para forçar recarga
       if (error.response?.status === 404) {
@@ -284,7 +285,7 @@ class ItemsService {
 
       return updatedItem;
     } catch (error: any) {
-      console.error('[ItemsService] Error updating item quantity:', error);
+      logger.error('[ItemsService] Error updating item quantity:', error);
 
       // Se o item não foi encontrado (404), limpar cache para forçar recarga
       if (error.response?.status === 404) {
@@ -312,15 +313,15 @@ class ItemsService {
       };
     });
 
-    console.log('[ItemsService] Sending payload to updateBill:', JSON.stringify(payloadItems, null, 2));
+    logger.debug('[ItemsService] Sending payload to updateBill:', JSON.stringify(payloadItems, null, 2));
 
     try {
       await billService.updateBill(billId, {
         items: payloadItems
       });
-      console.log('[ItemsService] updateBill success');
+      logger.debug('[ItemsService] updateBill success');
     } catch (error) {
-      console.error('Sync failed:', error);
+      logger.error('Sync failed:', error);
       // Revert cache logic could go here
       throw error;
     }

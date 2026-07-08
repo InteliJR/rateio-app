@@ -17,6 +17,7 @@ describe('UsersController', () => {
             findById: jest.fn(),
             update: jest.fn(),
             updateOwnProfile: jest.fn(),
+            deleteOwnAccount: jest.fn(),
             updateAvatarUrl: jest.fn(),
             removeAvatar: jest.fn(),
           },

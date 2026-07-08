@@ -282,6 +282,87 @@ export class UsersService {
     return this.withFreshAvatarUrl(user);
   }
 
+  async deleteOwnAccount(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        isActive: true,
+        avatarUrl: true,
+        bills: {
+          select: {
+            imageKey: true,
+            imageUrl: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Usuário não encontrado');
+    }
+
+    if (user.role === UserRole.ADMIN && user.isActive) {
+      const activeAdminCount = await this.prisma.user.count({
+        where: {
+          role: UserRole.ADMIN,
+          isActive: true,
+          id: { not: userId },
+        },
+      });
+
+      if (activeAdminCount === 0) {
+        throw new BadRequestException(
+          'Não é possível excluir o último administrador ativo do sistema',
+        );
+      }
+    }
+
+    const storageKeys = this.collectOwnedStorageKeys(user);
+
+    await Promise.all(
+      Array.from(storageKeys).map((key) =>
+        this.storageService.deleteFile(key).catch(() => undefined),
+      ),
+    );
+
+    await this.prisma.passwordResetToken.deleteMany({
+      where: { email: user.email },
+    });
+
+    await this.prisma.user.delete({
+      where: { id: userId },
+    });
+
+    return { message: 'Conta excluída com sucesso' };
+  }
+
+  private collectOwnedStorageKeys(user: {
+    avatarUrl: string | null;
+    bills: Array<{ imageKey: string | null; imageUrl: string | null }>;
+  }) {
+    const keys = new Set<string>();
+    const avatarKey = this.storageService.extractStorageKeyFromUrl(user.avatarUrl);
+
+    if (avatarKey?.startsWith('avatars/')) {
+      keys.add(avatarKey);
+    }
+
+    for (const bill of user.bills) {
+      const imageKey =
+        bill.imageKey ||
+        this.storageService.extractStorageKeyFromUrl(bill.imageUrl);
+
+      if (imageKey?.startsWith('bills/')) {
+        keys.add(imageKey);
+      }
+    }
+
+    return keys;
+  }
+
   async validatePassword(user: any, password: string): Promise<boolean> {
     if (!user?.password) {
       return false;

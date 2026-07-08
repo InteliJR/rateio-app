@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "rateio",
+    "name": "Por Partes",
     "slug": "rateio-frontend",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -24,8 +24,7 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.CAMERA"
       ],
       "package": "com.intelijunior.porpartes"
     },

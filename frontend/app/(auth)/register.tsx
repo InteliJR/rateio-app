@@ -1,3 +1,4 @@
+import { logger } from '../../lib/logger';
 import React, { useState, useEffect } from "react";
 import { useRouter } from "expo-router";
 import {
@@ -70,7 +71,7 @@ export default function RegisterScreen() {
     setServerError(null);
     try {
       const response = await registerUser(data.name, data.email, data.password);
-      console.log(
+      logger.debug(
         "[RegisterPage] Registration successful, tokens should be saved",
       );
 
@@ -88,16 +89,16 @@ export default function RegisterScreen() {
         ],
       );
     } catch (error: any) {
-      console.error("[RegisterPage] Registration error:", error);
+      logger.error("[RegisterPage] Registration error:", error);
       setServerError(getApiErrorMessage(error));
     }
   };
 
   function getApiErrorMessage(err: any): string {
-    console.log("[RegisterPage] Error details:", { err });
+    logger.debug("[RegisterPage] Error details:", { err });
     const data = err?.response?.data;
     if (data) {
-      console.log("[RegisterPage] Response data:", data);
+      logger.debug("[RegisterPage] Response data:", data);
       if (Array.isArray(data.errors)) {
         const arr = data.errors
           .map((e: any) => e?.message || String(e))
@@ -126,7 +127,7 @@ export default function RegisterScreen() {
         return data.message;
       }
     }
-    console.log("[RegisterPage] Returning generic error message");
+    logger.debug("[RegisterPage] Returning generic error message");
     return "Não foi possível realizar o cadastro. Tente novamente.";
   }
 

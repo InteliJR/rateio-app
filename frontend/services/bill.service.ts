@@ -1,5 +1,6 @@
 // mobile/services/bill.service.ts
 
+import { logger } from '../lib/logger';
 import { apiService } from "./api.service";
 import { storageService } from "./storage.service";
 
@@ -243,7 +244,7 @@ class BillService {
           if (response.status === 401 && attempt < maxRetries) {
             const refreshedToken = await apiService.refreshAccessToken();
             if (refreshedToken) {
-              console.warn("[BillService] Token expirado no upload. Token renovado, repetindo requisicao...");
+              logger.warn("[BillService] Token expirado no upload. Token renovado, repetindo requisicao...");
               continue;
             }
           }
@@ -251,7 +252,7 @@ class BillService {
           const isRetryableHttp = response.status === 429 || response.status >= 500;
           if (isRetryableHttp && attempt < maxRetries) {
             const waitTime = 1000 * Math.pow(2, attempt);
-            console.warn(`[BillService] Upload HTTP ${response.status}. Retry em ${waitTime}ms... (${attempt + 1}/${maxRetries})`);
+            logger.warn(`[BillService] Upload HTTP ${response.status}. Retry em ${waitTime}ms... (${attempt + 1}/${maxRetries})`);
             await new Promise((resolve) => setTimeout(resolve, waitTime));
             continue;
           }
@@ -268,12 +269,12 @@ class BillService {
         if ((isAbortError || isNetworkError) && attempt < maxRetries) {
           const switchedBaseUrl = await apiService.recoverBaseUrlOnNetworkError(endpoint);
           if (switchedBaseUrl) {
-            console.warn("[BillService] Host da API recuperado. Repetindo upload com nova baseURL...");
+            logger.warn("[BillService] Host da API recuperado. Repetindo upload com nova baseURL...");
             continue;
           }
 
           const waitTime = 1000 * Math.pow(2, attempt);
-          console.warn(`[BillService] Upload network/timeout error. Retry em ${waitTime}ms... (${attempt + 1}/${maxRetries})`);
+          logger.warn(`[BillService] Upload network/timeout error. Retry em ${waitTime}ms... (${attempt + 1}/${maxRetries})`);
           await new Promise((resolve) => setTimeout(resolve, waitTime));
           continue;
         }
@@ -292,7 +293,7 @@ class BillService {
     establishmentName?: string
   ): Promise<UploadBillResponse> {
     try {
-      console.log("[BillService] Iniciando upload da conta:", {
+      logger.debug("[BillService] Iniciando upload da conta:", {
         imageUri: imageUri.substring(0, 50) + "...",
         establishmentName,
       });
@@ -303,19 +304,19 @@ class BillService {
 
       const { filename, mimeType } = this.getImageMetadata(imageUri);
 
-      console.log("[BillService] Preparando upload:", {
+      logger.debug("[BillService] Preparando upload:", {
         filename,
         mimeType,
       });
 
       if (establishmentName && establishmentName.trim().length > 0) {
-        console.log("[BillService] Nome do estabelecimento adicionado:", establishmentName);
+        logger.debug("[BillService] Nome do estabelecimento adicionado:", establishmentName);
       }
 
       let response: UploadBillResponse;
 
       try {
-        console.log("[BillService] Solicitando URL pre-assinada para upload...");
+        logger.debug("[BillService] Solicitando URL pre-assinada para upload...");
         const presigned = await this.requestUploadUrl(filename, mimeType);
         await this.uploadToPresignedUrl(imageUri, mimeType, presigned);
 
@@ -330,7 +331,7 @@ class BillService {
           throw directUploadError;
         }
 
-        console.warn(
+        logger.warn(
           "[BillService] Upload direto indisponivel neste ambiente. Usando multipart legado...",
           directUploadError?.message
         );
@@ -343,7 +344,7 @@ class BillService {
         );
       }
 
-      console.log("[BillService] Upload concluido com sucesso:", {
+      logger.debug("[BillService] Upload concluido com sucesso:", {
         billId: response.id,
         status: response.status,
         message: response.message,
@@ -351,7 +352,7 @@ class BillService {
 
       return response;
     } catch (error: any) {
-      console.error("[BillService] Erro ao fazer upload:", error);
+      logger.error("[BillService] Erro ao fazer upload:", error);
 
       const billError: UploadBillError = {
         message: "Erro ao fazer upload da conta",
@@ -375,7 +376,7 @@ class BillService {
         }
       }
 
-      console.error("[BillService] Erro processado:", billError);
+      logger.error("[BillService] Erro processado:", billError);
       throw billError;
     }
   }
@@ -385,7 +386,7 @@ class BillService {
     imageUri: string
   ): Promise<UploadBillResponse> {
     try {
-      console.log(`[BillService] Iniciando upload de imagem para conta ${billId}...`);
+      logger.debug(`[BillService] Iniciando upload de imagem para conta ${billId}...`);
 
       if (!imageUri || imageUri.trim().length === 0) {
         throw new Error("URI da imagem e obrigatoria");
@@ -417,10 +418,10 @@ class BillService {
         );
       }
 
-      console.log("[BillService] Upload de imagem concluido:", response);
+      logger.debug("[BillService] Upload de imagem concluido:", response);
       return response;
     } catch (error: any) {
-      console.error("[BillService] Erro ao fazer upload de imagem apos todas as tentativas:", error);
+      logger.error("[BillService] Erro ao fazer upload de imagem apos todas as tentativas:", error);
 
       let errorMessage = "Erro ao enviar imagem da conta";
 
@@ -441,17 +442,17 @@ class BillService {
 
   async createBillSetup(config: CreateBillSetupConfig): Promise<UploadBillResponse> {
     try {
-      console.log("[BillService] Creating bill setup with config:", config);
+      logger.debug("[BillService] Creating bill setup with config:", config);
       const api = apiService.getApi();
-      console.log("[BillService] API baseURL:", api.defaults.baseURL);
+      logger.debug("[BillService] API baseURL:", api.defaults.baseURL);
       const response = await api.post<UploadBillResponse>("/bills", config);
-      console.log("[BillService] Success:", response.data);
+      logger.debug("[BillService] Success:", response.data);
       return response.data;
     } catch (error: any) {
-      console.error("[BillService] Full error object:", error);
-      console.error("[BillService] Error message:", error.message);
-      console.error("[BillService] Error code:", error.code);
-      console.error("[BillService] Error response:", error.response?.status, error.response?.data);
+      logger.error("[BillService] Full error object:", error);
+      logger.error("[BillService] Error message:", error.message);
+      logger.error("[BillService] Error code:", error.code);
+      logger.error("[BillService] Error response:", error.response?.status, error.response?.data);
       const billError: UploadBillError = {
         message: "Erro ao criar configuracao da conta",
         statusCode: error.response?.status,
@@ -506,7 +507,7 @@ class BillService {
       });
       return response.data;
     } catch (error: any) {
-      console.error("[BillService] Erro ao listar contas:", error);
+      logger.error("[BillService] Erro ao listar contas:", error);
       throw {
         message: error.response?.data?.message || "Erro ao listar contas",
         statusCode: error.response?.status,
@@ -551,7 +552,7 @@ class BillService {
       const response = await api.get<BillSummaryResponse>(`/bills/${billId}/summary`);
       return response.data;
     } catch (error: any) {
-      console.error("[BillService] Erro ao buscar summary:", error);
+      logger.error("[BillService] Erro ao buscar summary:", error);
       throw {
         message: error.response?.data?.message || "Erro ao buscar resumo da conta",
         statusCode: error.response?.status,
@@ -561,17 +562,17 @@ class BillService {
 
   async finalizeBill(billId: string, data: FinalizeBillPayload): Promise<FinalizeBillResponse> {
     try {
-      console.log("[BillService] Finalizing bill:", billId, data);
+      logger.debug("[BillService] Finalizing bill:", billId, data);
       const api = apiService.getApi();
       const response = await api.post<FinalizeBillResponse>(
         `/bills/${billId}/finalize`,
         data
       );
-      console.log("[BillService] Bill finalized successfully:", response.data);
+      logger.debug("[BillService] Bill finalized successfully:", response.data);
       return response.data;
     } catch (error: any) {
-      console.error("[BillService] Error finalizing bill:", error);
-      console.error("[BillService] Finalize response payload:", error?.response?.data);
+      logger.error("[BillService] Error finalizing bill:", error);
+      logger.error("[BillService] Finalize response payload:", error?.response?.data);
 
       let errorMessage = "Erro ao finalizar conta";
 
@@ -614,13 +615,13 @@ class BillService {
 
   async duplicateBill(billId: string): Promise<UploadBillResponse> {
     try {
-      console.log("[BillService] Duplicating bill:", billId);
+      logger.debug("[BillService] Duplicating bill:", billId);
       const api = apiService.getApi();
       const response = await api.post<UploadBillResponse>(`/bills/${billId}/duplicate`);
-      console.log("[BillService] Bill duplicated successfully:", response.data);
+      logger.debug("[BillService] Bill duplicated successfully:", response.data);
       return response.data;
     } catch (error: any) {
-      console.error("[BillService] Error duplicating bill:", error);
+      logger.error("[BillService] Error duplicating bill:", error);
       throw {
         message: error.response?.data?.message || "Erro ao duplicar conta",
         statusCode: error.response?.status,

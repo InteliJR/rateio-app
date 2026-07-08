@@ -1,3 +1,4 @@
+import { logger } from '../lib/logger';
 import { apiService } from './api.service';
 
 export enum FeeType {
@@ -35,13 +36,13 @@ class FeesService {
    */
   async create(data: CreateFeeDto): Promise<Fee> {
     try {
-      console.log('[FeesService] Creating fee:', data);
+      logger.debug('[FeesService] Creating fee:', data);
       const api = apiService.getApi();
       const response = await api.post('/fees', data);
-      console.log('[FeesService] Fee created:', response.data);
+      logger.debug('[FeesService] Fee created:', response.data);
       return response.data;
     } catch (error: any) {
-      console.error('[FeesService] Error creating fee:', error.response?.data || error);
+      logger.error('[FeesService] Error creating fee:', error.response?.data || error);
       throw new Error(
         error.response?.data?.message || 'Erro ao criar taxa'
       );
@@ -53,15 +54,15 @@ class FeesService {
    */
   async findAllByBill(billId: string): Promise<Fee[]> {
     try {
-      console.log('[FeesService] Fetching fees for bill:', billId);
+      logger.debug('[FeesService] Fetching fees for bill:', billId);
       const api = apiService.getApi();
       const response = await api.get('/fees', {
         params: { billId },
       });
-      console.log('[FeesService] Fees fetched:', response.data);
+      logger.debug('[FeesService] Fees fetched:', response.data);
       return response.data;
     } catch (error: any) {
-      console.error('[FeesService] Error fetching fees:', error.response?.data || error);
+      logger.error('[FeesService] Error fetching fees:', error.response?.data || error);
       throw new Error(
         error.response?.data?.message || 'Erro ao buscar taxas'
       );
@@ -73,13 +74,13 @@ class FeesService {
    */
   async findOne(id: string): Promise<Fee> {
     try {
-      console.log('[FeesService] Fetching fee:', id);
+      logger.debug('[FeesService] Fetching fee:', id);
       const api = apiService.getApi();
       const response = await api.get(`/fees/${id}`);
-      console.log('[FeesService] Fee fetched:', response.data);
+      logger.debug('[FeesService] Fee fetched:', response.data);
       return response.data;
     } catch (error: any) {
-      console.error('[FeesService] Error fetching fee:', error.response?.data || error);
+      logger.error('[FeesService] Error fetching fee:', error.response?.data || error);
       throw new Error(
         error.response?.data?.message || 'Erro ao buscar taxa'
       );
@@ -91,13 +92,13 @@ class FeesService {
    */
   async update(id: string, data: UpdateFeeDto): Promise<Fee> {
     try {
-      console.log('[FeesService] Updating fee:', id, data);
+      logger.debug('[FeesService] Updating fee:', id, data);
       const api = apiService.getApi();
       const response = await api.patch(`/fees/${id}`, data);
-      console.log('[FeesService] Fee updated:', response.data);
+      logger.debug('[FeesService] Fee updated:', response.data);
       return response.data;
     } catch (error: any) {
-      console.error('[FeesService] Error updating fee:', error.response?.data || error);
+      logger.error('[FeesService] Error updating fee:', error.response?.data || error);
       throw new Error(
         error.response?.data?.message || 'Erro ao atualizar taxa'
       );
@@ -109,12 +110,12 @@ class FeesService {
    */
   async remove(id: string): Promise<void> {
     try {
-      console.log('[FeesService] Deleting fee:', id);
+      logger.debug('[FeesService] Deleting fee:', id);
       const api = apiService.getApi();
       await api.delete(`/fees/${id}`);
-      console.log('[FeesService] Fee deleted');
+      logger.debug('[FeesService] Fee deleted');
     } catch (error: any) {
-      console.error('[FeesService] Error deleting fee:', error.response?.data || error);
+      logger.error('[FeesService] Error deleting fee:', error.response?.data || error);
       throw new Error(
         error.response?.data?.message || 'Erro ao deletar taxa'
       );

@@ -1,3 +1,4 @@
+import { logger } from '../../lib/logger';
 import React, { useState } from "react";
 import {
   View,
@@ -15,12 +16,14 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { userService } from "../../services/user.service";
+import { useAuthStore } from "../../store/authStore";
 import { useTheme } from "../../contexts/ThemeContext";
 import { buildAvatarUrl } from "../../lib/avatar";
 
 export default function SecurityScreen() {
   const { colors, getFontSize } = useTheme();
   const router = useRouter();
+  const deleteAccount = useAuthStore((state) => state.deleteAccount);
   const [userName, setUserName] = React.useState("");
   const [avatarUrl, setAvatarUrl] = React.useState<string | null>(null);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -28,6 +31,7 @@ export default function SecurityScreen() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -46,14 +50,14 @@ export default function SecurityScreen() {
       // Atualizar AsyncStorage para fallback
       await AsyncStorage.setItem("userName", profile.name);
     } catch (error) {
-      console.error("Erro ao carregar dados do usuário:", error);
+      logger.error("Erro ao carregar dados do usuário:", error);
 
       // Fallback para AsyncStorage se API falhar
       try {
         const name = await AsyncStorage.getItem("userName");
         if (name) setUserName(name);
       } catch (storageError) {
-        console.error("Erro ao carregar nome do AsyncStorage:", storageError);
+        logger.error("Erro ao carregar nome do AsyncStorage:", storageError);
       }
     }
   };
@@ -95,13 +99,45 @@ export default function SecurityScreen() {
       Alert.alert("Sucesso", "Senha alterada com sucesso!");
       closePasswordModal();
     } catch (error: any) {
-      console.error("Erro ao alterar senha:", error);
+      logger.error("Erro ao alterar senha:", error);
       const errorMessage =
         error.response?.data?.message || "Não foi possível alterar a senha";
       Alert.alert("Erro", errorMessage);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Excluir conta",
+      "Essa ação apaga sua conta, notas fiscais, divisões, participantes e imagens enviadas. Ela não pode ser desfeita.",
+      [
+        {
+          text: "Cancelar",
+          style: "cancel",
+        },
+        {
+          text: "Excluir",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setDeletingAccount(true);
+              await deleteAccount();
+              setDeletingAccount(false);
+              router.replace("/(auth)/login");
+              Alert.alert("Conta excluída", "Sua conta e seus dados foram excluídos.");
+            } catch (error: any) {
+              logger.error("Erro ao excluir conta:", error);
+              const errorMessage =
+                error.response?.data?.message || "Não foi possível excluir a conta";
+              Alert.alert("Erro", errorMessage);
+              setDeletingAccount(false);
+            }
+          },
+        },
+      ],
+    );
   };
 
   return (
@@ -186,6 +222,38 @@ export default function SecurityScreen() {
               size={24}
               color={colors.secondaryText}
             />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.optionItem,
+              styles.dangerOptionItem,
+              {
+                backgroundColor: colors.cardBackground,
+                borderColor: colors.error,
+              },
+            ]}
+            onPress={handleDeleteAccount}
+            disabled={deletingAccount}
+          >
+            <Text
+              style={[
+                styles.optionText,
+                styles.dangerOptionText,
+                { color: colors.error, fontSize: getFontSize(16) },
+              ]}
+            >
+              Excluir conta
+            </Text>
+            {deletingAccount ? (
+              <ActivityIndicator size="small" color={colors.error} />
+            ) : (
+              <Ionicons
+                name="trash-outline"
+                size={22}
+                color={colors.error}
+              />
+            )}
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -457,6 +525,12 @@ const styles = StyleSheet.create({
   optionText: {
     fontSize: 16,
     color: "#333",
+  },
+  dangerOptionItem: {
+    marginTop: 12,
+  },
+  dangerOptionText: {
+    fontWeight: "600",
   },
   modalOverlay: {
     flex: 1,
