@@ -127,7 +127,7 @@ Ao excluir a conta pelo app, apagamos os dados associados à conta, incluindo pe
 
 Se o usuário não conseguir acessar o app, também pode iniciar uma solicitação de exclusão pela página:
 
-[URL PÚBLICA DA PÁGINA DE EXCLUSÃO DE CONTA]
+https://intelijr.github.io/rateio-app/excluir-conta
 
 ou pelo e-mail:
 
