@@ -80,7 +80,7 @@ Responderemos solicitações de exclusão em até 15 DIAS, salvo quando for nece
 
 Para mais detalhes sobre coleta, uso, compartilhamento, retenção e segurança dos dados, consulte a Política de Privacidade:
 
-[URL PÚBLICA DA POLÍTICA DE PRIVACIDADE]
+https://intelijr.github.io/rateio-app/politica-de-privacidade
 
 ## Contato
 
