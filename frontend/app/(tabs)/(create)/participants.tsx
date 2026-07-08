@@ -1,3 +1,4 @@
+import { logger } from '../../../lib/logger';
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -42,7 +43,7 @@ export default function ParticipantsScreen() {
       const data = await participantsService.getParticipantsByBill(id);
       setParticipants(data);
     } catch (error: any) {
-      console.error("Erro ao carregar participantes:", error);
+      logger.error("Erro ao carregar participantes:", error);
       Alert.alert("Erro", "Não foi possível carregar os participantes.");
     } finally {
       setIsLoading(false);

@@ -17,9 +17,13 @@ describe('UsersService', () => {
               findUnique: jest.fn(),
               create: jest.fn(),
               update: jest.fn(),
+              delete: jest.fn(),
               findMany: jest.fn(),
               findFirst: jest.fn(),
               count: jest.fn(),
+            },
+            passwordResetToken: {
+              deleteMany: jest.fn(),
             },
           },
         },
@@ -28,6 +32,7 @@ describe('UsersService', () => {
           useValue: {
             extractStorageKeyFromUrl: jest.fn(),
             getSignedUrl: jest.fn(),
+            deleteFile: jest.fn(),
           },
         },
       ],

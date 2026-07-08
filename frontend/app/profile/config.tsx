@@ -1,3 +1,4 @@
+import { logger } from '../../lib/logger';
 import React from "react";
 import {
   View,
@@ -31,12 +32,12 @@ export default function ConfigScreen() {
       setAvatarUrl(buildAvatarUrl(profile.avatarUrl));
       await AsyncStorage.setItem("userName", profile.name);
     } catch (error) {
-      console.error("Erro ao carregar dados do usuário:", error);
+      logger.error("Erro ao carregar dados do usuário:", error);
       try {
         const name = await AsyncStorage.getItem("userName");
         if (name) setUserName(name);
       } catch (storageError) {
-        console.error("Erro ao carregar nome do AsyncStorage:", storageError);
+        logger.error("Erro ao carregar nome do AsyncStorage:", storageError);
       }
     }
   };

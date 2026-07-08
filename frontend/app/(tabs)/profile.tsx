@@ -1,3 +1,4 @@
+import { logger } from '../../lib/logger';
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -11,8 +12,8 @@ import {
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { authService } from "../../services/auth.service";
 import { userService } from "../../services/user.service";
+import { useAuthStore } from "../../store/authStore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../../contexts/ThemeContext";
 import { buildAvatarUrl } from "../../lib/avatar";
@@ -20,6 +21,7 @@ import { buildAvatarUrl } from "../../lib/avatar";
 export default function ProfileScreen() {
   const router = useRouter();
   const { colors, getFontSize } = useTheme();
+  const logout = useAuthStore((state) => state.logout);
   const [userName, setUserName] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
@@ -54,7 +56,7 @@ export default function ProfileScreen() {
       await AsyncStorage.setItem("userName", profile.name);
       await AsyncStorage.setItem("userEmail", profile.email);
     } catch (error) {
-      console.error("Erro ao carregar dados do usuário:", error);
+      logger.error("Erro ao carregar dados do usuário:", error);
       Alert.alert("Erro", "Não foi possível carregar os dados do perfil");
 
       // Fallback para AsyncStorage
@@ -78,10 +80,10 @@ export default function ProfileScreen() {
         style: "destructive",
         onPress: async () => {
           try {
-            await authService.logout();
+            await logout();
             router.replace("/(auth)/login");
           } catch (error) {
-            console.error("Erro ao fazer logout:", error);
+            logger.error("Erro ao fazer logout:", error);
             Alert.alert("Erro", "Não foi possível sair. Tente novamente.");
           }
         },

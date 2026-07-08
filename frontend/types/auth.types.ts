@@ -46,6 +46,7 @@ export interface AuthState {
   loginWithGoogle: (idToken: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<RegisterResponse>;
   logout: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
   loadTokens: () => Promise<void>;
 }
 

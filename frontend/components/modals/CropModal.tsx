@@ -1,3 +1,4 @@
+import { logger } from '../../lib/logger';
 import React, { useState, useRef, useEffect } from "react";
 import {
   View,
@@ -79,7 +80,7 @@ export function CropModal({
   useEffect(() => {
     if (!areaSize || !imageDims) return;
     const info = buildDisplayInfo(imageDims.w, imageDims.h, areaSize.w, areaSize.h);
-    console.log('[CropModal] displayInfo computed', { imageDims, areaSize, info });
+    logger.debug('[CropModal] displayInfo computed', { imageDims, areaSize, info });
     const initial: CropRect = {
       left: info.offsetX,
       top: info.offsetY,
@@ -253,7 +254,7 @@ export function CropModal({
 
       if (cropW <= 0 || cropH <= 0) return;
 
-      console.log('[CropModal] applyCrop', { offsetX, offsetY, displayW, displayH,
+      logger.debug('[CropModal] applyCrop', { offsetX, offsetY, displayW, displayH,
         cropRect, targetW, targetH, cropX, cropY, cropW, cropH });
 
       const result = await ImageManipulator.manipulateAsync(
@@ -268,7 +269,7 @@ export function CropModal({
       );
       onCrop(result.uri);
     } catch (err) {
-      console.error("[CropModal] Crop failed:", err);
+      logger.error("[CropModal] Crop failed:", err);
     } finally {
       setApplying(false);
     }

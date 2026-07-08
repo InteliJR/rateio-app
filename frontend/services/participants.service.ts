@@ -1,5 +1,6 @@
 // mobile/services/participants.service.ts
 
+import { logger } from '../lib/logger';
 import { apiService } from "./api.service";
 
 export interface Participant {
@@ -85,7 +86,7 @@ class ParticipantsService {
         params: { billId },
       });
       
-      console.log('[ParticipantsService] Response:', JSON.stringify(response.data, null, 2));
+      logger.debug('[ParticipantsService] Response:', JSON.stringify(response.data, null, 2));
       
       // Backend retorna array de participantes, mas pode incluir divisions
       // Extrair apenas os dados do participante
@@ -101,10 +102,10 @@ class ParticipantsService {
       
       return [];
     } catch (error: any) {
-      console.error('[ParticipantsService] Error:', error);
+      logger.error('[ParticipantsService] Error:', error);
       // Se não houver participantes, retornar array vazio em vez de erro
       if (error.response?.status === 404 || error.response?.status === 400) {
-        console.log('[ParticipantsService] No participants found for bill:', billId);
+        logger.debug('[ParticipantsService] No participants found for bill:', billId);
         return [];
       }
       throw {

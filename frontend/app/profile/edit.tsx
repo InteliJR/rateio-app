@@ -1,3 +1,4 @@
+import { logger } from '../../lib/logger';
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -51,7 +52,7 @@ export default function EditProfileScreen() {
       // Construir URL completa do avatar (S3 ou local)
       setAvatarUrl(buildAvatarUrl(profile.avatarUrl));
     } catch (error) {
-      console.error("Erro ao carregar dados:", error);
+      logger.error("Erro ao carregar dados:", error);
       Alert.alert("Erro", "Não foi possível carregar seus dados");
     } finally {
       setInitialLoading(false);
@@ -83,17 +84,17 @@ export default function EditProfileScreen() {
     setUploadingAvatar(true);
     try {
       const updatedProfile = await userService.uploadAvatar(uri);
-      console.log("[EDIT] Upload response:", updatedProfile);
-      console.log("[EDIT] Avatar URL from backend:", updatedProfile.avatarUrl);
+      logger.debug("[EDIT] Upload response:", updatedProfile);
+      logger.debug("[EDIT] Avatar URL from backend:", updatedProfile.avatarUrl);
 
       // Construir URL completa do avatar (S3 ou local)
       const fullAvatarUrl = buildAvatarUrl(updatedProfile.avatarUrl);
-      console.log("[EDIT] Full avatar URL:", fullAvatarUrl);
+      logger.debug("[EDIT] Full avatar URL:", fullAvatarUrl);
       setAvatarUrl(fullAvatarUrl);
 
       Alert.alert("Sucesso", "Foto de perfil atualizada com sucesso!");
     } catch (error) {
-      console.error("Erro ao fazer upload da imagem:", error);
+      logger.error("Erro ao fazer upload da imagem:", error);
       Alert.alert("Erro", "Não foi possível atualizar a foto de perfil.");
     } finally {
       setUploadingAvatar(false);
@@ -135,7 +136,7 @@ export default function EditProfileScreen() {
       closeEditModal();
       Alert.alert("Sucesso", "Alteração salva com sucesso!");
     } catch (error) {
-      console.error("Erro ao salvar:", error);
+      logger.error("Erro ao salvar:", error);
       Alert.alert("Erro", "Não foi possível salvar as alterações");
     } finally {
       setLoading(false);
@@ -201,13 +202,13 @@ export default function EditProfileScreen() {
                     { backgroundColor: colors.backgroundTertiary },
                   ]}
                   onError={(e) =>
-                    console.error(
+                    logger.error(
                       "[EDIT] Image load error:",
                       e.nativeEvent.error,
                     )
                   }
                   onLoad={() =>
-                    console.log("[EDIT] Image loaded successfully:", avatarUrl)
+                    logger.debug("[EDIT] Image loaded successfully:", avatarUrl)
                   }
                 />
               </>

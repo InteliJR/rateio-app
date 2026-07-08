@@ -1,5 +1,6 @@
 // mobile/services/auth.service.ts
 
+import { logger } from '../lib/logger';
 import { api } from "./api.service";
 import {
   LoginRequest,
@@ -31,15 +32,15 @@ export const authService = {
 
   async register(data: RegisterRequest): Promise<RegisterResponse> {
     try {
-      console.log("[AuthService] Attempting registration with:", {
+      logger.debug("[AuthService] Attempting registration with:", {
         email: data.email,
         name: data.name,
       });
       const response = await api.post<RegisterResponse>("/auth/register", data);
-      console.log("[AuthService] Registration successful:", response.data);
+      logger.debug("[AuthService] Registration successful");
       return response.data;
     } catch (error) {
-      console.error("[AuthService] Registration failed:", error);
+      logger.error("[AuthService] Registration failed:", error);
       throw error;
     }
   },
