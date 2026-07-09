@@ -4,7 +4,7 @@ import type * as Preset from "@docusaurus/preset-classic";
 
 const config: Config = {
   title: "Por Partes",
-  tagline: "Informações legais e suporte do aplicativo Por Partes",
+  tagline: "Divida contas com leitura automática de itens",
   favicon: "img/favicon.ico",
 
   url: "https://intelijr.github.io",
@@ -39,9 +39,19 @@ const config: Config = {
       title: "Por Partes",
       items: [
         {
+          to: "/",
+          position: "left",
+          label: "Início",
+        },
+        {
           to: "/politica-de-privacidade",
           position: "left",
           label: "Política de Privacidade",
+        },
+        {
+          to: "/termos-de-uso",
+          position: "left",
+          label: "Termos de Uso",
         },
         {
           to: "/excluir-conta",
@@ -59,6 +69,10 @@ const config: Config = {
             {
               label: "Política de Privacidade",
               to: "/politica-de-privacidade",
+            },
+            {
+              label: "Termos de Uso",
+              to: "/termos-de-uso",
             },
             {
               label: "Exclusão de Conta",
