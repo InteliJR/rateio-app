@@ -14,6 +14,12 @@
   max-width: 720px;
 }
 
+.summary {
+  margin-top: 1rem;
+  font-size: 1.125rem;
+  line-height: 1.6;
+}
+
 .buttons {
   display: flex;
   flex-wrap: wrap;
@@ -23,6 +29,42 @@
 
 .button {
   min-width: 220px;
+}
+
+.section {
+  padding: 4rem 0;
+}
+
+.section h2 {
+  margin-bottom: 1.5rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.card {
+  height: 100%;
+  padding: 1.5rem;
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: 8px;
+  background: var(--ifm-background-surface-color);
+}
+
+.card h3 {
+  font-size: 1.25rem;
+}
+
+.card p,
+.supportSection p {
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.supportSection {
+  background: var(--ifm-color-emphasis-100);
 }
 
 @media screen and (max-width: 996px) {
@@ -38,5 +80,9 @@
 
   .buttons {
     justify-content: center;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
   }
 }
