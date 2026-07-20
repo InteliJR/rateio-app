@@ -7,6 +7,7 @@ import {
 import OpenAI, { APIError, APIConnectionError, APIConnectionTimeoutError } from 'openai';
 import { ValidationError } from 'class-validator';
 import { OcrResultDto, OcrResult } from './dto/ocr-result.dto';
+import { parseOcrNumber, parseOcrQuantity, roundMoney } from './ocr-number.util';
 
 
 @Injectable()
@@ -305,19 +306,52 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
     // Tentar extrair itens do JSON
     if (jsonData.items && Array.isArray(jsonData.items)) {
       for (const item of jsonData.items) {
-        if (item && item.name) {
-          const name = String(item.name).trim();
-          const quantity = item.quantity ? Math.max(1, Math.floor(Number(item.quantity))) : 1;
-          const unitPrice = item.unitPrice ? Math.max(0, Number(item.unitPrice)) : 0;
-          const totalPrice = item.totalPrice ? Math.max(0, Number(item.totalPrice)) : 0;
+        if (item) {
+          const name = String(
+            item.name ??
+              item.nome ??
+              item.description ??
+              item.descricao ??
+              item.produto ??
+              '',
+          ).trim();
+          const quantity = parseOcrQuantity(
+            item.quantity ?? item.quantidade ?? item.qty ?? item.qtd ?? 1,
+          );
+          const unitPrice = Math.max(
+            0,
+            parseOcrNumber(
+              item.unitPrice ??
+                item.unit_price ??
+                item.precoUnitario ??
+                item.preco_unitario ??
+                item.valorUnitario ??
+                item.valor_unitario ??
+                item.price ??
+                item.preco ??
+                item.valor,
+            ) ?? 0,
+          );
+          const totalPrice = Math.max(
+            0,
+            parseOcrNumber(
+              item.totalPrice ??
+                item.total_price ??
+                item.precoTotal ??
+                item.preco_total ??
+                item.valorTotal ??
+                item.valor_total ??
+                item.total,
+            ) ?? 0,
+          );
           
           // Só adicionar se tiver nome válido e preço válido
           if (name.length > 0 && (unitPrice > 0 || totalPrice > 0)) {
             items.push({
               name,
               quantity,
-              unitPrice: unitPrice > 0 ? unitPrice : (totalPrice / quantity),
-              totalPrice: totalPrice > 0 ? totalPrice : (unitPrice * quantity),
+              unitPrice: roundMoney(unitPrice > 0 ? unitPrice : (totalPrice / quantity)),
+              totalPrice: roundMoney(totalPrice > 0 ? totalPrice : (unitPrice * quantity)),
             });
           }
         }
@@ -325,12 +359,19 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
     }
 
     // Extrair outros campos
-    const totalAmount = jsonData.totalAmount ? Number(jsonData.totalAmount) : undefined;
+    const totalAmount = parseOcrNumber(
+      jsonData.totalAmount ??
+        jsonData.total ??
+        jsonData.valorTotal ??
+        jsonData.valor_total ??
+        jsonData.totalGeral ??
+        jsonData.total_geral,
+    );
     const establishmentName = jsonData.establishmentName ? String(jsonData.establishmentName).trim() : undefined;
 
     return {
       items,
-      totalAmount: totalAmount && totalAmount > 0 ? totalAmount : undefined,
+      totalAmount: totalAmount && totalAmount > 0 ? roundMoney(totalAmount) : undefined,
       establishmentName: establishmentName && establishmentName.length > 0 ? establishmentName : undefined,
     };
   }
