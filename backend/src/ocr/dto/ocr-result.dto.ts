@@ -16,6 +16,7 @@ import { validate } from 'class-validator';
 import { OcrItemDto } from './ocr-item.dto';
 import { OcrTaxDto } from './ocr-tax.dto';
 import { OcrDiscountDto } from './ocr-discount.dto';
+import { parseOcrNumber, parseOcrQuantity, roundMoney } from '../ocr-number.util';
 
 export interface OcrResult {
   rawText: string;
@@ -156,9 +157,45 @@ export class OcrResultDto {
 
     // Aplicar defaults antes da conversão
     if (processedData.items && Array.isArray(processedData.items)) {
-      processedData.items = processedData.items.map((item: any) => ({
-        ...item,
-        quantity: item.quantity ?? 1,
+      processedData.items = processedData.items.map((item: any) =>
+        OcrResultDto.normalizeItem(item),
+      );
+    }
+
+    processedData.totalAmount = OcrResultDto.normalizePositiveMoney(
+      processedData.totalAmount ??
+        processedData.total ??
+        processedData.valorTotal ??
+        processedData.valor_total ??
+        processedData.totalGeral ??
+        processedData.total_geral,
+    );
+    processedData.subtotal = OcrResultDto.normalizePositiveMoney(
+      processedData.subtotal,
+      true,
+    );
+
+    if (processedData.taxes && Array.isArray(processedData.taxes)) {
+      processedData.taxes = processedData.taxes.map((tax: any) => ({
+        ...tax,
+        value: OcrResultDto.normalizePositiveMoney(
+          tax.value ?? tax.valor ?? tax.amount,
+          true,
+        ),
+        percentage: OcrResultDto.normalizePositiveMoney(
+          tax.percentage ?? tax.percentual ?? tax.percent,
+          true,
+        ),
+      }));
+    }
+
+    if (processedData.discounts && Array.isArray(processedData.discounts)) {
+      processedData.discounts = processedData.discounts.map((discount: any) => ({
+        ...discount,
+        value: OcrResultDto.normalizePositiveMoney(
+          discount.value ?? discount.valor ?? discount.amount,
+          true,
+        ),
       }));
     }
     if (!processedData.currency) {
@@ -181,6 +218,80 @@ export class OcrResultDto {
     }
 
     return ocrResultDto;
+  }
+
+  private static normalizeItem(item: any) {
+    const quantity = parseOcrQuantity(
+      item.quantity ?? item.quantidade ?? item.qty ?? item.qtd ?? 1,
+    );
+    const unitPrice = parseOcrNumber(
+      item.unitPrice ??
+        item.unit_price ??
+        item.precoUnitario ??
+        item.preco_unitario ??
+        item.valorUnitario ??
+        item.valor_unitario ??
+        item.price ??
+        item.preco ??
+        item.valor,
+    );
+    const totalPrice = parseOcrNumber(
+      item.totalPrice ??
+        item.total_price ??
+        item.precoTotal ??
+        item.preco_total ??
+        item.valorTotal ??
+        item.valor_total ??
+        item.total,
+    );
+    const normalizedUnitPrice =
+      unitPrice && unitPrice > 0
+        ? unitPrice
+        : totalPrice && totalPrice > 0
+          ? totalPrice / quantity
+          : undefined;
+    const normalizedTotalPrice =
+      totalPrice && totalPrice > 0
+        ? totalPrice
+        : normalizedUnitPrice && normalizedUnitPrice > 0
+          ? normalizedUnitPrice * quantity
+          : undefined;
+
+    return {
+      ...item,
+      name:
+        item.name ??
+        item.nome ??
+        item.description ??
+        item.descricao ??
+        item.produto,
+      quantity,
+      unitPrice:
+        normalizedUnitPrice === undefined
+          ? undefined
+          : roundMoney(normalizedUnitPrice),
+      totalPrice:
+        normalizedTotalPrice === undefined
+          ? undefined
+          : roundMoney(normalizedTotalPrice),
+    };
+  }
+
+  private static normalizePositiveMoney(
+    value: unknown,
+    allowZero = false,
+  ): number | undefined {
+    const parsed = parseOcrNumber(value);
+    if (parsed === undefined) {
+      return undefined;
+    }
+
+    const normalized = Math.abs(parsed);
+    if (normalized > 0 || allowZero) {
+      return roundMoney(normalized);
+    }
+
+    return undefined;
   }
 
   /**
