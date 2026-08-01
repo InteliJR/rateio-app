@@ -1,6 +1,7 @@
 import { logger } from '../lib/logger';
 import React, { createContext, useState, useContext, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SplashScreen from "expo-splash-screen";
 
 // Definição das cores para cada tema
 export const lightColors = {
@@ -114,6 +115,12 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     loadPreferences();
   }, []);
+
+  useEffect(() => {
+    if (!isLoading) {
+      void SplashScreen.hideAsync();
+    }
+  }, [isLoading]);
 
   const loadPreferences = async () => {
     try {
