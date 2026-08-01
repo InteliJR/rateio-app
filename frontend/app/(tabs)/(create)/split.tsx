@@ -49,7 +49,20 @@ export default function SplitScreen() {
     () => validateItemAllocations(items, itemAllocations, participants),
     [items, itemAllocations, participants],
   );
+  const serviceFeePayerCount = useMemo(
+    () =>
+      serviceFeeConfig.selectedParticipantIds.filter((participantId) =>
+        validParticipantIds.has(participantId),
+      ).length,
+    [serviceFeeConfig.selectedParticipantIds, validParticipantIds],
+  );
 
+  const serviceFeeDescription =
+    serviceFeePayerCount === 0
+      ? "Selecione quem vai pagar a taxa sobre o próprio subtotal."
+      : serviceFeePayerCount === 1
+        ? "A taxa de serviço será paga pela pessoa selecionada."
+        : `A taxa de serviço será dividida entre as ${serviceFeePayerCount} pessoas selecionadas.`;
 
   const syncDraftItems = useCallback((nextItems: BillItem[]) => {
     setBillMeta({
@@ -151,6 +164,36 @@ export default function SplitScreen() {
               ? 0
               : item.quantity,
       },
+    });
+  };
+
+  const toggleAllParticipantsForItem = (itemId: string) => {
+    const item = items.find((currentItem) => currentItem.id === itemId);
+    const allocation = getAllocationForItem(itemId);
+    if (!item || !allocation || participants.length === 0) return;
+
+    const areAllSelected = participants.every(
+      (participant) => (allocation.quantities[participant.id] ?? 0) > 0,
+    );
+
+    const quantities = participants.reduce<Record<string, number>>(
+      (nextQuantities, participant) => {
+        const currentQuantity = allocation.quantities[participant.id] ?? 0;
+        nextQuantities[participant.id] = areAllSelected
+          ? 0
+          : currentQuantity > 0
+            ? currentQuantity
+            : item.quantity;
+        return nextQuantities;
+      },
+      { ...allocation.quantities },
+    );
+
+    setItemAllocation(itemId, {
+      selectedParticipantIds: areAllSelected
+        ? []
+        : participants.map((participant) => participant.id),
+      quantities,
     });
   };
 
@@ -358,6 +401,11 @@ export default function SplitScreen() {
           allocation,
           validParticipantIds,
         );
+        const areAllParticipantsSelected =
+          participants.length > 0 &&
+          participants.every(
+            (participant) => (allocation.quantities[participant.id] ?? 0) > 0,
+          );
 
         return (
           <View
@@ -394,6 +442,37 @@ export default function SplitScreen() {
                   {item.quantity - assignedQuantity !== 1 ? "s" : ""} para cobrir.
                 </Text>
               )}
+            </View>
+
+            <View style={styles.selectionHeader}>
+              <Text style={[styles.selectionTitle, { color: colors.text }]}>
+                Pessoas
+              </Text>
+              <TouchableOpacity
+                style={styles.selectAllButton}
+                onPress={() => toggleAllParticipantsForItem(item.id)}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  areAllParticipantsSelected
+                    ? `Desmarcar todas as pessoas de ${item.name}`
+                    : `Selecionar todas as pessoas para ${item.name}`
+                }
+              >
+                <Ionicons
+                  name={
+                    areAllParticipantsSelected
+                      ? "checkbox-outline"
+                      : "square-outline"
+                  }
+                  size={18}
+                  color={colors.primary}
+                />
+                <Text style={[styles.selectAllText, { color: colors.primary }]}>
+                  {areAllParticipantsSelected
+                    ? "Desmarcar todos"
+                    : "Selecionar todos"}
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.participantsList}>
@@ -497,7 +576,7 @@ export default function SplitScreen() {
           {serviceFeePercentage > 0 && (
             <FeeSelector
               title={`Taxa de serviço (${serviceFeePercentage}%)`}
-              description="Selecione quem vai pagar a taxa sobre o próprio subtotal."
+              description={serviceFeeDescription}
               participants={participants}
               selectedParticipantIds={serviceFeeConfig.selectedParticipantIds}
               onToggle={toggleServiceFeeParticipant}
@@ -725,6 +804,26 @@ const styles = StyleSheet.create({
   },
   helperText: {
     fontSize: 13,
+  },
+  selectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  selectionTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  selectAllButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 4,
+  },
+  selectAllText: {
+    fontSize: 13,
+    fontWeight: "600",
   },
   participantsList: {
     gap: 10,
