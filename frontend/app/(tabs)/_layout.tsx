@@ -41,7 +41,7 @@ export default function TabsLayout() {
               color={color}
             />
           ),
-          tabBarLabel: "Escanear conta",
+          tabBarLabel: "Incluir conta",
         }}
       />
       <Tabs.Screen
