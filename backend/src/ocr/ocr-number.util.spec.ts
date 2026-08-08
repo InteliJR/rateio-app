@@ -16,6 +16,9 @@ describe('OCR number parsing', () => {
   it('normalizes quantities', () => {
     expect(parseOcrQuantity('2')).toBe(2);
     expect(parseOcrQuantity('2x')).toBe(2);
+    expect(parseOcrQuantity('0,750 kg')).toBe(0.75);
+    expect(parseOcrQuantity('0.750')).toBe(0.75);
+    expect(parseOcrQuantity('1,234 L')).toBe(1.234);
     expect(parseOcrQuantity(undefined)).toBe(1);
   });
 });

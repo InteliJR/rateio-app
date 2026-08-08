@@ -1,5 +1,18 @@
-import { IsOptional, IsString, IsNumber, Min, Max, IsInt, IsArray, ArrayMinSize, ValidateNested, IsIn, IsBoolean } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsNumber,
+  Min,
+  Max,
+  IsInt,
+  IsArray,
+  ArrayMinSize,
+  ValidateNested,
+  IsIn,
+  IsBoolean,
+} from 'class-validator';
 import { Transform, Type } from 'class-transformer';
+import { MAX_MONEY_VALUE } from '../../common/numeric-limits';
 
 class ParticipantNameDto {
   @IsString()
@@ -36,6 +49,7 @@ export class CreateBillDto {
   @Type(() => Number)
   @IsNumber()
   @Min(0)
+  @Max(MAX_MONEY_VALUE)
   coverChargeValue?: number;
 
   // Mantido para compatibilidade, mas ignorado (sempre per_person)

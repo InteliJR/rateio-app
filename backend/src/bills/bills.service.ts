@@ -19,7 +19,7 @@ import { UpdateBillItemDto } from '../bill-items/dto/update-bill-item.dto';
 import { BatchUpdateBillItemsDto } from './dto/update-bill.dto';
 import { FeesService } from '../fees/fees.service';
 import { CreateFeeDto } from '../fees/dto/create-fee.dto';
-import { BillStatus, Prisma } from '@prisma/client';
+import { BillStatus, MeasurementUnit, Prisma } from '@prisma/client';
 
 // Campos permitidos para ordenação
 export type BillSortField = 'createdAt' | 'totalAmount';
@@ -96,10 +96,14 @@ const distributeProportionally = (
     const amount =
       index === participantIds.length - 1
         ? round2(total - allocated)
-        : round2(participantSubtotal * (total / Object.values(participantTotals).reduce(
-            (acc, value) => acc + value,
-            0,
-          )));
+        : round2(
+            participantSubtotal *
+              (total /
+                Object.values(participantTotals).reduce(
+                  (acc, value) => acc + value,
+                  0,
+                )),
+          );
 
     distribution[participantId] = amount;
     allocated = round2(allocated + amount);
@@ -118,14 +122,19 @@ const buildFeeDistribution = (
   participantIds: string[],
 ) => {
   if (fee.type === 'SERVICE_PERCENTAGE') {
-    const selectedParticipantIds = parseSelectedParticipantIds(fee.description).filter(
+    const selectedParticipantIds = parseSelectedParticipantIds(
+      fee.description,
+    ).filter(
       (participantId) =>
-        participantIds.includes(participantId) && participantTotals[participantId] > 0,
+        participantIds.includes(participantId) &&
+        participantTotals[participantId] > 0,
     );
     const feePayers =
       selectedParticipantIds.length > 0
         ? selectedParticipantIds
-        : participantIds.filter((participantId) => participantTotals[participantId] > 0);
+        : participantIds.filter(
+            (participantId) => participantTotals[participantId] > 0,
+          );
     const selectedParticipantTotals = feePayers.reduce<Record<string, number>>(
       (acc, participantId) => {
         acc[participantId] = participantTotals[participantId] ?? 0;
@@ -141,9 +150,9 @@ const buildFeeDistribution = (
     return distributeProportionally(total, selectedParticipantTotals);
   }
 
-  const selectedParticipantIds = parseSelectedParticipantIds(fee.description).filter(
-    (participantId) => participantIds.includes(participantId),
-  );
+  const selectedParticipantIds = parseSelectedParticipantIds(
+    fee.description,
+  ).filter((participantId) => participantIds.includes(participantId));
   const feePayers =
     selectedParticipantIds.length > 0 ? selectedParticipantIds : participantIds;
 
@@ -157,7 +166,7 @@ export class BillsService {
     private storage: StorageService,
     private ocrQueue: OcrQueueService,
     private feesService: FeesService,
-  ) { }
+  ) {}
 
   private triggerOcrProcessing() {
     if (process.env.VERCEL) {
@@ -165,7 +174,10 @@ export class BillsService {
     }
 
     void this.ocrQueue.processPendingJobs().catch((error) => {
-      console.error('[BillsService] Falha ao disparar processamento OCR:', error);
+      console.error(
+        '[BillsService] Falha ao disparar processamento OCR:',
+        error,
+      );
     });
   }
 
@@ -184,7 +196,9 @@ export class BillsService {
     establishmentName?: string,
   ) {
     if (!this.storage.isOwnedObjectKey(imageKey, 'bills', userId)) {
-      throw new BadRequestException('Chave de imagem invalida para este usuario.');
+      throw new BadRequestException(
+        'Chave de imagem invalida para este usuario.',
+      );
     }
 
     const imageUrl = await this.storage.getFileUrl(imageKey);
@@ -261,7 +275,8 @@ export class BillsService {
 
     // Fluxo manual (sem imagem)
     try {
-      const establishmentName = createBillDto.billName || createBillDto.establishmentName;
+      const establishmentName =
+        createBillDto.billName || createBillDto.establishmentName;
 
       const bill = await this.prisma.bill.create({
         data: {
@@ -290,7 +305,10 @@ export class BillsService {
             },
           });
         } catch (feeError) {
-          console.error('[BillsService] Erro ao criar taxa de serviço:', feeError);
+          console.error(
+            '[BillsService] Erro ao criar taxa de serviço:',
+            feeError,
+          );
           // Se falhar ao criar a fee, deletar a bill criada para manter consistência
           await this.prisma.bill.delete({ where: { id: bill.id } });
           throw new BadRequestException(
@@ -318,7 +336,9 @@ export class BillsService {
         } catch (feeError) {
           console.error('[BillsService] Erro ao criar couvert:', feeError);
           // Se falhar ao criar couvert, deletar fees e bill criadas
-          await this.prisma.fee.deleteMany({ where: { billId: bill.id } }).catch(() => { });
+          await this.prisma.fee
+            .deleteMany({ where: { billId: bill.id } })
+            .catch(() => {});
           await this.prisma.bill.delete({ where: { id: bill.id } });
           throw new BadRequestException(
             `Erro ao criar couvert: ${feeError instanceof Error ? feeError.message : 'Erro desconhecido'}`,
@@ -337,16 +357,24 @@ export class BillsService {
           const participantCount = Number(createBillDto.participantCount);
           const participantNames = createBillDto.participantNames || [];
 
-          const participants = Array.from({ length: participantCount }, (_, i) => ({
-            billId: bill.id,
-            // Usar nome fornecido se existir, senão usar nome padrão
-            name: participantNames[i]?.trim() || `Pessoa ${i + 1}`,
-          }));
+          const participants = Array.from(
+            { length: participantCount },
+            (_, i) => ({
+              billId: bill.id,
+              // Usar nome fornecido se existir, senão usar nome padrão
+              name: participantNames[i]?.trim() || `Pessoa ${i + 1}`,
+            }),
+          );
           await this.prisma.participant.createMany({ data: participants });
         } catch (participantError) {
-          console.error('[BillsService] Erro ao criar participantes:', participantError);
+          console.error(
+            '[BillsService] Erro ao criar participantes:',
+            participantError,
+          );
           // Se falhar ao criar participantes, deletar a bill e fee criadas
-          await this.prisma.fee.deleteMany({ where: { billId: bill.id } }).catch(() => { });
+          await this.prisma.fee
+            .deleteMany({ where: { billId: bill.id } })
+            .catch(() => {});
           await this.prisma.bill.delete({ where: { id: bill.id } });
           throw new BadRequestException(
             `Erro ao criar participantes: ${participantError instanceof Error ? participantError.message : 'Erro desconhecido'}`,
@@ -369,11 +397,7 @@ export class BillsService {
   /**
    * Upload de imagem para conta existente + OCR
    */
-  async uploadImage(
-    billId: string,
-    file: Express.Multer.File,
-    userId: string,
-  ) {
+  async uploadImage(billId: string, file: Express.Multer.File, userId: string) {
     const bill = await this.prisma.bill.findFirst({
       where: { id: billId, userId },
     });
@@ -433,7 +457,9 @@ export class BillsService {
     }
 
     if (!this.storage.isOwnedObjectKey(dto.imageKey, 'bills', userId)) {
-      throw new BadRequestException('Chave de imagem invalida para este usuario.');
+      throw new BadRequestException(
+        'Chave de imagem invalida para este usuario.',
+      );
     }
 
     const imageUrl = await this.storage.getFileUrl(dto.imageKey);
@@ -474,9 +500,7 @@ export class BillsService {
     }
 
     if (!bill.imageUrl) {
-      throw new BadRequestException(
-        'Conta não possui imagem para reprocessar',
-      );
+      throw new BadRequestException('Conta não possui imagem para reprocessar');
     }
 
     // Remover itens existentes (pode haver itens parciais de tentativa anterior)
@@ -614,6 +638,7 @@ export class BillsService {
             id: true,
             name: true,
             quantity: true,
+            measurementUnit: true,
             unitPrice: true,
             totalPrice: true,
             divisions: {
@@ -724,7 +749,9 @@ export class BillsService {
       0,
     );
 
-    const participantIds = bill.participants.map((participant) => participant.id);
+    const participantIds = bill.participants.map(
+      (participant) => participant.id,
+    );
 
     // Calcular valor total real das taxas (por tipo)
     let totalFees = 0;
@@ -733,7 +760,8 @@ export class BillsService {
         fee,
         bill.participants.reduce<Record<string, number>>((acc, participant) => {
           acc[participant.id] = participant.divisions.reduce(
-            (divisionAcc, division) => divisionAcc + Number(division.shareAmount),
+            (divisionAcc, division) =>
+              divisionAcc + Number(division.shareAmount),
             0,
           );
           return acc;
@@ -756,7 +784,8 @@ export class BillsService {
       const items = participant.divisions.map((division) => ({
         id: division.billItem.id,
         name: division.billItem.name,
-        quantity: division.billItem.quantity,
+        quantity: Number(division.billItem.quantity),
+        measurementUnit: division.billItem.measurementUnit,
         unitPrice: Number(division.billItem.unitPrice),
         totalPrice: Number(division.billItem.totalPrice),
         shareAmount: Number(division.shareAmount),
@@ -796,7 +825,10 @@ export class BillsService {
     });
 
     // 3ª passagem: arredondar com correção de resto no último participante
-    const totalRawFees = participantFeeBreakdown.reduce((acc, d) => acc + d.rawFees, 0);
+    const totalRawFees = participantFeeBreakdown.reduce(
+      (acc, d) => acc + d.rawFees,
+      0,
+    );
     let runningFeesSum = 0;
     const participants = participantFeeBreakdown.map((data, idx) => {
       const isLast = idx === participantFeeBreakdown.length - 1;
@@ -804,7 +836,8 @@ export class BillsService {
       let participantFees: number;
       if (isLast) {
         // Último absorve o resto do arredondamento para garantir soma exata
-        participantFees = Math.round((totalRawFees - runningFeesSum) * 100) / 100;
+        participantFees =
+          Math.round((totalRawFees - runningFeesSum) * 100) / 100;
       } else {
         participantFees = Math.round(data.rawFees * 100) / 100;
         runningFeesSum += participantFees;
@@ -833,13 +866,16 @@ export class BillsService {
     });
 
     // Gerar nova URL pré-assinada (caso a antiga tenha expirado)
-    const freshUrl = bill.imageKey ? await this.storage.getSignedUrl(bill.imageKey) : null;
+    const freshUrl = bill.imageKey
+      ? await this.storage.getSignedUrl(bill.imageKey)
+      : null;
 
     // Mapear itens gerais da conta
     const billItems = bill.items.map((item) => ({
       id: item.id,
       name: item.name,
-      quantity: item.quantity,
+      quantity: Number(item.quantity),
+      measurementUnit: item.measurementUnit,
       unitPrice: Number(item.unitPrice),
       totalPrice: Number(item.totalPrice),
     }));
@@ -906,6 +942,7 @@ export class BillsService {
             id: true,
             name: true,
             quantity: true,
+            measurementUnit: true,
             unitPrice: true,
             totalPrice: true,
           },
@@ -1170,7 +1207,10 @@ export class BillsService {
   /**
    * Verificar se a conta é a mais recente do usuário
    */
-  private async isLatestBillForUser(billId: string, userId: string): Promise<boolean> {
+  private async isLatestBillForUser(
+    billId: string,
+    userId: string,
+  ): Promise<boolean> {
     const latestBill = await this.prisma.bill.findFirst({
       where: { userId },
       orderBy: { createdAt: 'desc' },
@@ -1204,7 +1244,7 @@ export class BillsService {
       const isLatest = await this.isLatestBillForUser(billId, bill.userId);
       if (!isLatest) {
         throw new BadRequestException(
-          'Não é possível modificar uma conta finalizada.'
+          'Não é possível modificar uma conta finalizada.',
         );
       }
     }
@@ -1261,7 +1301,8 @@ export class BillsService {
     await this.validateBillOwnership(billId, userId);
 
     // Validar que totalPrice = unitPrice * quantity (com tolerância)
-    const expectedTotal = createBillItemDto.unitPrice * createBillItemDto.quantity;
+    const expectedTotal =
+      createBillItemDto.unitPrice * createBillItemDto.quantity;
     const difference = Math.abs(createBillItemDto.totalPrice - expectedTotal);
     if (difference > 0.01) {
       throw new BadRequestException(
@@ -1275,6 +1316,7 @@ export class BillsService {
         billId,
         name: createBillItemDto.name,
         quantity: createBillItemDto.quantity,
+        measurementUnit: createBillItemDto.measurementUnit,
         unitPrice: createBillItemDto.unitPrice,
         totalPrice: createBillItemDto.totalPrice,
       },
@@ -1315,6 +1357,7 @@ export class BillsService {
     const updateData: {
       name?: string;
       quantity?: number;
+      measurementUnit?: MeasurementUnit;
       unitPrice?: number;
       totalPrice?: number;
     } = {};
@@ -1331,6 +1374,10 @@ export class BillsService {
       updateData.quantity = updateBillItemDto.quantity;
     }
 
+    if (updateBillItemDto.measurementUnit !== undefined) {
+      updateData.measurementUnit = updateBillItemDto.measurementUnit;
+    }
+
     if (updateBillItemDto.unitPrice !== undefined) {
       updateData.unitPrice = updateBillItemDto.unitPrice;
     }
@@ -1345,17 +1392,15 @@ export class BillsService {
         updateBillItemDto.unitPrice !== undefined) &&
       updateBillItemDto.totalPrice === undefined
     ) {
-      const finalQuantity =
-        updateBillItemDto.quantity ?? item.quantity;
+      const finalQuantity = updateBillItemDto.quantity ?? Number(item.quantity);
       const finalUnitPrice =
         updateBillItemDto.unitPrice ?? Number(item.unitPrice);
       updateData.totalPrice = finalQuantity * finalUnitPrice;
     }
 
     // Validar que totalPrice = unitPrice * quantity (com tolerância)
-    const finalQuantity = updateData.quantity ?? item.quantity;
-    const finalUnitPrice =
-      updateData.unitPrice ?? Number(item.unitPrice);
+    const finalQuantity = updateData.quantity ?? Number(item.quantity);
+    const finalUnitPrice = updateData.unitPrice ?? Number(item.unitPrice);
     const finalTotalPrice = updateData.totalPrice ?? Number(item.totalPrice);
     const expectedTotal = finalQuantity * finalUnitPrice;
     const difference = Math.abs(finalTotalPrice - expectedTotal);
@@ -1443,6 +1488,7 @@ export class BillsService {
       billId,
       name: item.name,
       quantity: item.quantity,
+      measurementUnit: item.measurementUnit,
       unitPrice: item.unitPrice,
       totalPrice: item.totalPrice,
     }));
@@ -1467,11 +1513,7 @@ export class BillsService {
   /**
    * Criar taxa/couvert
    */
-  async createFee(
-    billId: string,
-    userId: string,
-    createFeeDto: CreateFeeDto,
-  ) {
+  async createFee(billId: string, userId: string, createFeeDto: CreateFeeDto) {
     // Validar ownership
     await this.validateBillOwnership(billId, userId);
 
@@ -1534,6 +1576,7 @@ export class BillsService {
         billId: newBill.id,
         name: item.name,
         quantity: item.quantity,
+        measurementUnit: item.measurementUnit,
         unitPrice: item.unitPrice,
         totalPrice: item.totalPrice,
       }));
@@ -1563,7 +1606,8 @@ export class BillsService {
 
     return {
       ...newBillWithData,
-      message: 'Conta duplicada com sucesso. Você pode editar os itens e participantes.',
+      message:
+        'Conta duplicada com sucesso. Você pode editar os itens e participantes.',
     };
   }
 }

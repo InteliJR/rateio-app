@@ -40,7 +40,10 @@ export const parsePtBrNumber = (value: string) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-export const sanitizePtBrNumberInput = (value: string) => {
+export const sanitizePtBrNumberInput = (
+  value: string,
+  maximumFractionDigits = 2,
+) => {
   const sanitized = value.replace(/[^0-9,.-]/g, "");
   const signal = sanitized.startsWith("-") ? "-" : "";
   const unsigned = sanitized.replace(/-/g, "");
@@ -54,7 +57,7 @@ export const sanitizePtBrNumberInput = (value: string) => {
   const decimalPart = unsigned
     .slice(separatorIndex + 1)
     .replace(/[,.]/g, "")
-    .slice(0, 2);
+    .slice(0, maximumFractionDigits);
 
   return `${signal}${integerPart},${decimalPart}`;
 };

@@ -1,10 +1,37 @@
 import 'reflect-metadata';
 import { OcrService } from './ocr.service';
+import { MeasurementUnit } from '@prisma/client';
 
 describe('OcrService parsing fallback', () => {
   beforeEach(() => {
     process.env.OPENAI_API_KEY = 'test-key';
     process.env.OPENAI_MODEL = 'gpt-4.1-mini';
+  });
+
+  it('keeps fractional quantities and measurement units in fallback JSON', () => {
+    const service = new OcrService();
+    const parsed = (service as any).parseJsonResponseUnvalidated(
+      {
+        items: [
+          {
+            name: 'Comida por quilo',
+            quantity: '0,750',
+            unit: 'kg',
+            unitPrice: '80,00',
+            totalPrice: '60,00',
+          },
+        ],
+        totalAmount: '60,00',
+      },
+      '',
+    );
+
+    expect(parsed.items[0]).toMatchObject({
+      quantity: 0.75,
+      measurementUnit: MeasurementUnit.KILOGRAM,
+      unitPrice: 80,
+      totalPrice: 60,
+    });
   });
 
   it('keeps items when fallback JSON contains pt-BR currency strings', () => {

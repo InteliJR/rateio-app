@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import { OcrResultDto } from './ocr-result.dto';
+import { MeasurementUnit } from '@prisma/client';
 
 describe('OcrResultDto', () => {
   it('normalizes pt-BR currency strings before validation', async () => {
@@ -23,6 +24,28 @@ describe('OcrResultDto', () => {
       quantity: 2,
       unitPrice: 5.5,
       totalPrice: 11,
+    });
+  });
+
+  it('preserves fractional quantities and normalizes measurement units', async () => {
+    const dto = await OcrResultDto.fromOpenAiResponse({
+      items: [
+        {
+          name: 'Comida por quilo',
+          quantity: '0,750',
+          unit: 'kg',
+          unitPrice: 'R$ 80,00',
+          totalPrice: 'R$ 60,00',
+        },
+      ],
+      totalAmount: 'R$ 60,00',
+    });
+
+    expect(dto.items[0]).toMatchObject({
+      quantity: 0.75,
+      measurementUnit: MeasurementUnit.KILOGRAM,
+      unitPrice: 80,
+      totalPrice: 60,
     });
   });
 

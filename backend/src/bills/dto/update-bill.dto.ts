@@ -3,6 +3,7 @@ import {
   IsOptional,
   IsString,
   IsNumber,
+  Max,
   IsArray,
   ValidateNested,
   IsNotEmpty,
@@ -10,20 +11,7 @@ import {
 import { Type } from 'class-transformer';
 import { BillStatus } from '@prisma/client';
 import { CreateBillItemDto } from '../../bill-items/dto/create-bill-item.dto';
-
-class UpdateBillItemDto {
-  @IsString()
-  name: string;
-
-  @IsNumber()
-  quantity: number;
-
-  @IsNumber()
-  unitPrice: number;
-
-  @IsNumber()
-  totalPrice: number;
-}
+import { MAX_MONEY_VALUE } from '../../common/numeric-limits';
 
 export class UpdateBillDto {
   @IsOptional()
@@ -36,13 +24,14 @@ export class UpdateBillDto {
 
   @IsOptional()
   @IsNumber()
+  @Max(MAX_MONEY_VALUE)
   totalAmount?: number;
 
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => UpdateBillItemDto)
-  items?: UpdateBillItemDto[];
+  @Type(() => CreateBillItemDto)
+  items?: CreateBillItemDto[];
 }
 
 /**

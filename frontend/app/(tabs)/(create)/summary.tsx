@@ -19,6 +19,7 @@ import {
   validateItemAllocations,
 } from "../../../lib/rateio";
 import { formatCurrency } from "../../../lib/formatters";
+import { formatItemQuantity } from "../../../lib/measurementUnits";
 import billService from "../../../services/bill.service";
 import { useRateioDraftStore } from "../../../store/rateioDraftStore";
 
@@ -157,9 +158,7 @@ export default function SummaryScreen() {
       contentContainerStyle={styles.content}
     >
       <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text }]}>
-          Resumo final
-        </Text>
+        <Text style={[styles.title, { color: colors.text }]}>Resumo final</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
           {billName || "Conta"} • {participants.length} participante
           {participants.length !== 1 ? "s" : ""}
@@ -187,9 +186,13 @@ export default function SummaryScreen() {
           </View>
 
           {participant.items.map((item) => (
-            <View key={`${participant.id}-${item.itemId}-${item.name}`} style={styles.row}>
+            <View
+              key={`${participant.id}-${item.itemId}-${item.name}`}
+              style={styles.row}
+            >
               <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>
-                {item.name} ({item.quantity}x)
+                {item.name} (
+                {formatItemQuantity(item.quantity, item.measurementUnit)})
               </Text>
               <Text style={[styles.rowValue, { color: colors.textSecondary }]}>
                 {formatCurrency(item.amount)}
@@ -199,13 +202,19 @@ export default function SummaryScreen() {
 
           {participant.fees.length > 0 && (
             <>
-              <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+              <View
+                style={[styles.divider, { backgroundColor: colors.divider }]}
+              />
               {participant.fees.map((fee) => (
                 <View key={`${participant.id}-${fee.type}`} style={styles.row}>
-                  <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>
+                  <Text
+                    style={[styles.rowLabel, { color: colors.textSecondary }]}
+                  >
                     {fee.label}
                   </Text>
-                  <Text style={[styles.rowValue, { color: colors.textSecondary }]}>
+                  <Text
+                    style={[styles.rowValue, { color: colors.textSecondary }]}
+                  >
                     {formatCurrency(fee.amount)}
                   </Text>
                 </View>

@@ -5,6 +5,11 @@ import {
   DraftParticipant,
 } from "../store/rateioDraftStore";
 import { round2 } from "./formatters";
+import {
+  getItemTotalPrice,
+  isMeasuredItem,
+  MeasurementUnit,
+} from "./measurementUnits";
 
 export interface ParticipantBreakdown {
   id: string;
@@ -16,6 +21,7 @@ export interface ParticipantBreakdown {
     itemId: string;
     name: string;
     quantity: number;
+    measurementUnit: MeasurementUnit;
     amount: number;
   }>;
   fees: Array<{
@@ -74,13 +80,16 @@ export const buildDefaultAllocation = (
   participants: DraftParticipant[],
 ): DraftItemAllocation => ({
   selectedParticipantIds: participants.map((participant) => participant.id),
-  quantities: participants.reduce<Record<string, number>>((acc, participant) => {
-    acc[participant.id] = 0;
-    return acc;
-  }, {}),
+  quantities: participants.reduce<Record<string, number>>(
+    (acc, participant) => {
+      acc[participant.id] = 0;
+      return acc;
+    },
+    {},
+  ),
 });
 
-const getItemTotal = (item: DraftItem) => round2(item.quantity * item.price);
+const getItemTotal = (item: DraftItem) => getItemTotalPrice(item);
 
 const getSelectedParticipantIds = (
   allocation: DraftItemAllocation | undefined,
@@ -124,21 +133,32 @@ export const getAssignedQuantity = (
   item: DraftItem,
   allocation: DraftItemAllocation | undefined,
   validParticipantIds?: Set<string>,
-) =>
-  getNormalizedParticipantQuantities(item, allocation, validParticipantIds).reduce(
-    (acc, participant) => acc + participant.quantity,
-    0,
-  );
+) => {
+  if (isMeasuredItem(item)) {
+    return getSelectedParticipantIds(allocation, validParticipantIds).length > 0
+      ? item.quantity
+      : 0;
+  }
+
+  return getNormalizedParticipantQuantities(
+    item,
+    allocation,
+    validParticipantIds,
+  ).reduce((acc, participant) => acc + participant.quantity, 0);
+};
 
 export const getSharedQuantity = (
   item: DraftItem,
   allocation: DraftItemAllocation | undefined,
   validParticipantIds?: Set<string>,
 ) =>
-  Math.max(
-    0,
-    getAssignedQuantity(item, allocation, validParticipantIds) - item.quantity,
-  );
+  isMeasuredItem(item)
+    ? 0
+    : Math.max(
+        0,
+        getAssignedQuantity(item, allocation, validParticipantIds) -
+          item.quantity,
+      );
 
 const buildItemUnitAssignments = (
   item: DraftItem,
@@ -158,13 +178,12 @@ const buildItemUnitAssignments = (
   const units = Array.from({ length: item.quantity }, () => ({
     participantIds: [] as string[],
   }));
-  const remainingByParticipant = participantQuantities.reduce<Record<string, number>>(
-    (acc, participant) => {
-      acc[participant.participantId] = participant.quantity;
-      return acc;
-    },
-    {},
-  );
+  const remainingByParticipant = participantQuantities.reduce<
+    Record<string, number>
+  >((acc, participant) => {
+    acc[participant.participantId] = participant.quantity;
+    return acc;
+  }, {});
   const orderedParticipantIds = participantQuantities.map(
     (participant) => participant.participantId,
   );
@@ -210,6 +229,13 @@ export const buildItemParticipantAmounts = (
   allocation: DraftItemAllocation | undefined,
   validParticipantIds: Set<string>,
 ) => {
+  if (isMeasuredItem(item)) {
+    return distributeEvenly(
+      getItemTotal(item),
+      getSelectedParticipantIds(allocation, validParticipantIds),
+    );
+  }
+
   const units = buildItemUnitAssignments(item, allocation, validParticipantIds);
   const amounts: Record<string, number> = {};
 
@@ -240,6 +266,25 @@ const buildItemParticipantQuantities = (
   allocation: DraftItemAllocation | undefined,
   validParticipantIds: Set<string>,
 ) => {
+  if (isMeasuredItem(item)) {
+    const participantIds = getSelectedParticipantIds(
+      allocation,
+      validParticipantIds,
+    );
+    const quantityPerParticipant =
+      participantIds.length > 0
+        ? Math.round((item.quantity / participantIds.length) * 1000) / 1000
+        : 0;
+
+    return participantIds.reduce<Record<string, number>>(
+      (acc, participantId) => {
+        acc[participantId] = quantityPerParticipant;
+        return acc;
+      },
+      {},
+    );
+  }
+
   const units = buildItemUnitAssignments(item, allocation, validParticipantIds);
   const quantities: Record<string, number> = {};
 
@@ -276,7 +321,9 @@ export const validateItemAllocations = (
   participants: DraftParticipant[],
 ): ValidationIssue[] => {
   const issues: ValidationIssue[] = [];
-  const validParticipantIds = new Set(participants.map((participant) => participant.id));
+  const validParticipantIds = new Set(
+    participants.map((participant) => participant.id),
+  );
 
   for (const item of items) {
     const allocation = allocations[item.id];
@@ -302,6 +349,10 @@ export const validateItemAllocations = (
       continue;
     }
 
+    if (isMeasuredItem(item)) {
+      continue;
+    }
+
     const normalizedParticipantQuantities = getNormalizedParticipantQuantities(
       item,
       allocation,
@@ -318,7 +369,9 @@ export const validateItemAllocations = (
 
     const hasInvalidQuantity = selectedParticipantIds.some((participantId) => {
       const quantity = allocation.quantities[participantId] ?? 0;
-      return !Number.isInteger(quantity) || quantity < 0 || quantity > item.quantity;
+      return (
+        !Number.isInteger(quantity) || quantity < 0 || quantity > item.quantity
+      );
     });
 
     if (hasInvalidQuantity) {
@@ -329,7 +382,11 @@ export const validateItemAllocations = (
       continue;
     }
 
-    const assignedQuantity = getAssignedQuantity(item, allocation, validParticipantIds);
+    const assignedQuantity = getAssignedQuantity(
+      item,
+      allocation,
+      validParticipantIds,
+    );
 
     if (assignedQuantity < item.quantity) {
       issues.push({
@@ -358,23 +415,24 @@ export const buildRateioSummary = ({
   couvertValue: number;
   couvertConfig: DraftFeeConfig;
 }): RateioSummary => {
-  const validParticipantIds = new Set(participants.map((participant) => participant.id));
-
-  const participantMap = participants.reduce<Record<string, ParticipantBreakdown>>(
-    (acc, participant) => {
-      acc[participant.id] = {
-        id: participant.id,
-        name: participant.name,
-        itemSubtotal: 0,
-        feeTotal: 0,
-        total: 0,
-        items: [],
-        fees: [],
-      };
-      return acc;
-    },
-    {},
+  const validParticipantIds = new Set(
+    participants.map((participant) => participant.id),
   );
+
+  const participantMap = participants.reduce<
+    Record<string, ParticipantBreakdown>
+  >((acc, participant) => {
+    acc[participant.id] = {
+      id: participant.id,
+      name: participant.name,
+      itemSubtotal: 0,
+      feeTotal: 0,
+      total: 0,
+      items: [],
+      fees: [],
+    };
+    return acc;
+  }, {});
 
   for (const item of items) {
     const allocation = itemAllocations[item.id];
@@ -399,6 +457,7 @@ export const buildRateioSummary = ({
         itemId: item.id,
         name: item.name,
         quantity: participantQuantities[participantId] ?? 0,
+        measurementUnit: item.measurementUnit,
         amount,
       });
     });
@@ -413,9 +472,7 @@ export const buildRateioSummary = ({
 
   if (serviceFeePercentage > 0) {
     const serviceParticipants = participants.filter((participant) => {
-      if (
-        !serviceFeeConfig.selectedParticipantIds.includes(participant.id)
-      ) {
+      if (!serviceFeeConfig.selectedParticipantIds.includes(participant.id)) {
         return false;
       }
 
@@ -524,7 +581,9 @@ export const buildDivisionsPayload = ({
   items: DraftItem[];
   itemAllocations: Record<string, DraftItemAllocation>;
 }) => {
-  const validParticipantIds = new Set(participants.map((participant) => participant.id));
+  const validParticipantIds = new Set(
+    participants.map((participant) => participant.id),
+  );
   const divisions: Array<{
     billItemId: string;
     participantId: string;
@@ -539,15 +598,17 @@ export const buildDivisionsPayload = ({
       validParticipantIds,
     );
 
-    Object.entries(participantAmounts).forEach(([participantId, shareAmount]) => {
-      if (shareAmount <= 0) return;
+    Object.entries(participantAmounts).forEach(
+      ([participantId, shareAmount]) => {
+        if (shareAmount <= 0) return;
 
-      divisions.push({
-        billItemId: item.id,
-        participantId,
-        shareAmount,
-      });
-    });
+        divisions.push({
+          billItemId: item.id,
+          participantId,
+          shareAmount,
+        });
+      },
+    );
   }
 
   return divisions;

@@ -10,12 +10,21 @@ import { StorageService } from '../storage/storage.service';
 @Injectable()
 export class OcrQueueService {
   private readonly logger = new Logger(OcrQueueService.name);
-  private readonly maxConcurrency = Number(process.env.OCR_QUEUE_CONCURRENCY ?? 2);
-  private readonly maxAttempts = Number(process.env.OCR_QUEUE_MAX_ATTEMPTS ?? 3);
-  private readonly retryDelayMs = Number(process.env.OCR_QUEUE_RETRY_DELAY_MS ?? 30000);
-  private readonly lockTimeoutMs = Number(process.env.OCR_QUEUE_LOCK_TIMEOUT_MS ?? 120000);
+  private readonly maxConcurrency = Number(
+    process.env.OCR_QUEUE_CONCURRENCY ?? 2,
+  );
+  private readonly maxAttempts = Number(
+    process.env.OCR_QUEUE_MAX_ATTEMPTS ?? 3,
+  );
+  private readonly retryDelayMs = Number(
+    process.env.OCR_QUEUE_RETRY_DELAY_MS ?? 30000,
+  );
+  private readonly lockTimeoutMs = Number(
+    process.env.OCR_QUEUE_LOCK_TIMEOUT_MS ?? 120000,
+  );
   private readonly maxJobsPerRun = Number(
-    process.env.OCR_QUEUE_MAX_JOBS_PER_RUN ?? (process.env.VERCEL ? 1 : this.maxConcurrency),
+    process.env.OCR_QUEUE_MAX_JOBS_PER_RUN ??
+      (process.env.VERCEL ? 1 : this.maxConcurrency),
   );
   private activeWorkers = 0;
 
@@ -163,7 +172,13 @@ export class OcrQueueService {
     const imageUrl = await this.getProcessableImageUrl(job.bill);
 
     if (!imageUrl) {
-      await this.failJob(job.id, job.billId, 'Bill has no image URL for OCR.', false, 0);
+      await this.failJob(
+        job.id,
+        job.billId,
+        'Bill has no image URL for OCR.',
+        false,
+        0,
+      );
       return;
     }
 
@@ -187,14 +202,22 @@ export class OcrQueueService {
         },
       });
 
-      this.logger.log(`OCR completed for bill ${job.billId} in ${durationMs}ms.`);
+      this.logger.log(
+        `OCR completed for bill ${job.billId} in ${durationMs}ms.`,
+      );
     } catch (error) {
       const durationMs = Date.now() - startedAt;
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown OCR processing error';
       const shouldRetry = job.attempts + 1 < this.maxAttempts;
 
-      await this.failJob(job.id, job.billId, errorMessage, shouldRetry, durationMs);
+      await this.failJob(
+        job.id,
+        job.billId,
+        errorMessage,
+        shouldRetry,
+        durationMs,
+      );
     }
   }
 
@@ -229,6 +252,7 @@ export class OcrQueueService {
       billId,
       name: item.name,
       quantity: item.quantity,
+      measurementUnit: item.measurementUnit,
       unitPrice: item.unitPrice,
       totalPrice: item.totalPrice,
     }));

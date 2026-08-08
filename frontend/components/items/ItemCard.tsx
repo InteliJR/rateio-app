@@ -11,14 +11,24 @@ import { useTheme } from "../../contexts/ThemeContext";
 import {
   formatEditableNumber,
   parsePtBrNumber,
+  round2,
   sanitizePtBrNumberInput,
 } from "../../lib/formatters";
+import {
+  MAX_ITEM_QUANTITY,
+  MAX_MONEY_VALUE,
+  MEASUREMENT_UNIT_OPTIONS,
+  MeasurementUnit,
+  getMeasurementUnitLabel,
+} from "../../lib/measurementUnits";
 
 export interface BillItem {
   id: string;
   name: string;
   quantity: number;
+  measurementUnit: MeasurementUnit;
   price: number;
+  totalPrice: number;
   assignedParticipants?: string[];
 }
 
@@ -39,13 +49,15 @@ export const ItemCard = React.memo(function ItemCard({
 }: ItemCardProps) {
   const { colors, getFontSize } = useTheme();
   const [name, setName] = useState(item.name);
-  const [quantity, setQuantity] = useState(item.quantity.toString());
+  const [quantity, setQuantity] = useState(
+    formatEditableNumber(item.quantity, 3),
+  );
   const [price, setPrice] = useState(formatEditableNumber(item.price));
   const [isEditingName, setIsEditingName] = useState(false);
 
   useEffect(() => {
     setName(item.name);
-    setQuantity(item.quantity.toString());
+    setQuantity(formatEditableNumber(item.quantity, 3));
     setPrice(formatEditableNumber(item.price));
   }, [item.id, item.name, item.quantity, item.price]);
 
@@ -68,20 +80,21 @@ export const ItemCard = React.memo(function ItemCard({
     }
 
     if (field === "quantity") {
-      const parsedQuantity = parseInt(quantity, 10);
-      if (!Number.isNaN(parsedQuantity) && parsedQuantity >= 1) {
+      const parsedQuantity = parsePtBrNumber(quantity);
+      if (parsedQuantity >= 0.001 && parsedQuantity <= MAX_ITEM_QUANTITY) {
         if (parsedQuantity !== item.quantity) {
           nextItem.quantity = parsedQuantity;
           hasChanges = true;
         }
+        setQuantity(formatEditableNumber(parsedQuantity, 3));
       } else {
-        setQuantity(item.quantity.toString());
+        setQuantity(formatEditableNumber(item.quantity, 3));
       }
     }
 
     if (field === "price") {
       const parsedPrice = parsePtBrNumber(price);
-      if (!Number.isNaN(parsedPrice) && parsedPrice >= 0) {
+      if (parsedPrice > 0 && parsedPrice <= MAX_MONEY_VALUE) {
         if (parsedPrice !== item.price) {
           nextItem.price = parsedPrice;
           hasChanges = true;
@@ -93,15 +106,24 @@ export const ItemCard = React.memo(function ItemCard({
     }
 
     if (hasChanges) {
+      nextItem.totalPrice = round2(nextItem.quantity * nextItem.price);
       onUpdate(nextItem);
     }
+  };
+
+  const handleUnitChange = (measurementUnit: MeasurementUnit) => {
+    if (!onUpdate || measurementUnit === item.measurementUnit) return;
+    onUpdate({ ...item, measurementUnit });
   };
 
   return (
     <View
       style={[
         styles.container,
-        { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder },
+        {
+          backgroundColor: colors.cardBackground,
+          borderColor: colors.cardBorder,
+        },
       ]}
     >
       <TouchableOpacity
@@ -156,10 +178,12 @@ export const ItemCard = React.memo(function ItemCard({
                 { color: colors.text, borderBottomColor: colors.divider },
               ]}
               value={quantity}
-              onChangeText={(text) => setQuantity(text.replace(/[^0-9]/g, ""))}
+              onChangeText={(text) =>
+                setQuantity(sanitizePtBrNumberInput(text, 3))
+              }
               onBlur={() => handleBlur("quantity")}
-              keyboardType="number-pad"
-              maxLength={3}
+              keyboardType="decimal-pad"
+              maxLength={12}
             />
             <Text
               style={[
@@ -167,7 +191,7 @@ export const ItemCard = React.memo(function ItemCard({
                 { fontSize: getFontSize(16), color: colors.textSecondary },
               ]}
             >
-              x
+              {getMeasurementUnitLabel(item.measurementUnit)}
             </Text>
           </View>
 
@@ -209,20 +233,54 @@ export const ItemCard = React.memo(function ItemCard({
             </TouchableOpacity>
           )}
         </View>
+
+        {onUpdate && (
+          <View style={styles.unitOptions}>
+            {MEASUREMENT_UNIT_OPTIONS.map((option) => {
+              const isSelected = option.value === item.measurementUnit;
+              return (
+                <TouchableOpacity
+                  key={option.value}
+                  style={[
+                    styles.unitOption,
+                    {
+                      borderColor: isSelected
+                        ? colors.primary
+                        : colors.cardBorder,
+                      backgroundColor: isSelected
+                        ? colors.primary
+                        : colors.inputBackground,
+                    },
+                  ]}
+                  onPress={() => handleUnitChange(option.value)}
+                >
+                  <Text
+                    style={{
+                      color: isSelected ? colors.accent : colors.textSecondary,
+                      fontSize: getFontSize(12),
+                      fontWeight: "600",
+                    }}
+                  >
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
       </View>
     </View>
   );
 }, areItemCardPropsEqual);
 
-function areItemCardPropsEqual(
-  previous: ItemCardProps,
-  next: ItemCardProps,
-) {
+function areItemCardPropsEqual(previous: ItemCardProps, next: ItemCardProps) {
   return (
     previous.item.id === next.item.id &&
     previous.item.name === next.item.name &&
     previous.item.quantity === next.item.quantity &&
+    previous.item.measurementUnit === next.item.measurementUnit &&
     previous.item.price === next.item.price &&
+    previous.item.totalPrice === next.item.totalPrice &&
     previous.isActive === next.isActive &&
     previous.onDelete === next.onDelete &&
     previous.onUpdate === next.onUpdate &&
@@ -277,7 +335,7 @@ const styles = StyleSheet.create({
   },
   quantityInput: {
     textAlign: "center",
-    width: 30,
+    minWidth: 48,
   },
   priceInput: {
     textAlign: "right",
@@ -296,5 +354,18 @@ const styles = StyleSheet.create({
   expandButton: {
     padding: 4,
     marginLeft: 4,
+  },
+  unitOptions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  unitOption: {
+    minWidth: 38,
+    alignItems: "center",
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
   },
 });
