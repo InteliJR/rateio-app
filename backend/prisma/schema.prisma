@@ -80,6 +80,14 @@ enum BillStatus {
   COMPLETED // Divisão finalizada
 }
 
+enum MeasurementUnit {
+  UNIT
+  KILOGRAM
+  GRAM
+  LITER
+  MILLILITER
+}
+
 model Bill {
   id                String     @id @default(uuid())
   userId            String
@@ -110,12 +118,13 @@ model Bill {
 // ============================================
 
 model BillItem {
-  id         String  @id @default(uuid())
-  billId     String
-  name       String
-  quantity   Int     @default(1)
-  unitPrice  Decimal @db.Decimal(10, 2)
-  totalPrice Decimal @db.Decimal(10, 2)
+  id              String          @id @default(uuid())
+  billId          String
+  name            String
+  quantity        Decimal         @default(1) @db.Decimal(12, 3)
+  measurementUnit MeasurementUnit @default(UNIT)
+  unitPrice       Decimal         @db.Decimal(10, 2)
+  totalPrice      Decimal         @db.Decimal(10, 2)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

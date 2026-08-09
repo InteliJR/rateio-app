@@ -1,0 +1,5 @@
+export const MIN_ITEM_QUANTITY = 0.001;
+export const MAX_ITEM_QUANTITY = 999_999.999;
+export const MAX_MONEY_VALUE = 99_999_999.99;
+export const MAX_QUANTITY_DECIMAL_PLACES = 3;
+export const MAX_MONEY_DECIMAL_PLACES = 2;

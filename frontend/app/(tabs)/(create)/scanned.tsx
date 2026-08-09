@@ -20,7 +20,10 @@ import {
   sanitizePtBrNumberInput,
 } from "../../../lib/formatters";
 import { useTheme } from "../../../contexts/ThemeContext";
-import { buildDefaultAllocation, parseFeeParticipantIds } from "../../../lib/rateio";
+import {
+  buildDefaultAllocation,
+  parseFeeParticipantIds,
+} from "../../../lib/rateio";
 import billService from "../../../services/bill.service";
 import feesService, { Fee, FeeType } from "../../../services/fees.service";
 import itemsService from "../../../services/items.service";
@@ -28,6 +31,10 @@ import participantsService, {
   Participant,
 } from "../../../services/participants.service";
 import { useRateioDraftStore } from "../../../store/rateioDraftStore";
+import {
+  getItemTotalPrice,
+  normalizeMeasurementUnit,
+} from "../../../lib/measurementUnits";
 
 type BillStatus =
   | "PENDING_OCR"
@@ -39,7 +46,10 @@ type BillStatus =
 export default function ScannedBillScreen() {
   const { colors } = useTheme();
   const router = useRouter();
-  const { id, editMode } = useLocalSearchParams<{ id: string; editMode?: string }>();
+  const { id, editMode } = useLocalSearchParams<{
+    id: string;
+    editMode?: string;
+  }>();
   const initializeDraft = useRateioDraftStore((state) => state.initializeDraft);
   const draftBillId = useRateioDraftStore((state) => state.billId);
   const draftBillName = useRateioDraftStore((state) => state.billName);
@@ -52,7 +62,9 @@ export default function ScannedBillScreen() {
   const draftServiceFeeSelectedParticipantIds = useRateioDraftStore(
     (state) => state.serviceFeeConfig.selectedParticipantIds,
   );
-  const draftAllocations = useRateioDraftStore((state) => state.itemAllocations);
+  const draftAllocations = useRateioDraftStore(
+    (state) => state.itemAllocations,
+  );
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -179,7 +191,9 @@ export default function ScannedBillScreen() {
         id: item.id,
         name: item.name,
         quantity: item.quantity,
+        measurementUnit: item.measurementUnit,
         price: item.price,
+        totalPrice: item.totalPrice,
         assignedParticipants: [],
       })),
     );
@@ -221,9 +235,7 @@ export default function ScannedBillScreen() {
 
     if (existingFee) {
       await feesService.update(existingFee.id, { value });
-      await Promise.all(
-        duplicateFees.map((fee) => feesService.remove(fee.id)),
-      );
+      await Promise.all(duplicateFees.map((fee) => feesService.remove(fee.id)));
       return;
     }
 
@@ -242,17 +254,23 @@ export default function ScannedBillScreen() {
       id: participant.id,
       name: participant.name,
     }));
-    const sourceKeys = sourceItems.reduce<Record<string, string[]>>((acc, item) => {
-      const key = `${item.name.trim().toLowerCase()}::${item.quantity}::${item.price.toFixed(2)}`;
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(item.id);
-      return acc;
-    }, {});
+    const sourceKeys = sourceItems.reduce<Record<string, string[]>>(
+      (acc, item) => {
+        const key = `${item.name.trim().toLowerCase()}::${item.quantity}::${item.measurementUnit}::${item.price.toFixed(2)}`;
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(item.id);
+        return acc;
+      },
+      {},
+    );
 
-    const mapped: Record<string, ReturnType<typeof buildDefaultAllocation>> = {};
+    const mapped: Record<
+      string,
+      ReturnType<typeof buildDefaultAllocation>
+    > = {};
 
     targetItems.forEach((item) => {
-      const key = `${item.name.trim().toLowerCase()}::${item.quantity}::${item.price.toFixed(2)}`;
+      const key = `${item.name.trim().toLowerCase()}::${item.quantity}::${item.measurementUnit}::${item.price.toFixed(2)}`;
       const sourceItemId = sourceKeys[key]?.shift();
 
       if (sourceItemId && draftAllocations[sourceItemId]) {
@@ -282,7 +300,9 @@ export default function ScannedBillScreen() {
             id: item.id,
             name: item.name,
             quantity: item.quantity,
+            measurementUnit: item.measurementUnit,
             price: item.price,
+            totalPrice: item.totalPrice,
             assignedParticipants: [],
           }))
         : items;
@@ -296,8 +316,9 @@ export default function ScannedBillScreen() {
         items: sourceItems.map((item) => ({
           name: item.name,
           quantity: item.quantity,
+          measurementUnit: item.measurementUnit,
           unitPrice: item.price,
-          totalPrice: Number((item.price * item.quantity).toFixed(2)),
+          totalPrice: getItemTotalPrice(item),
         })),
       });
 
@@ -306,7 +327,9 @@ export default function ScannedBillScreen() {
             id: item.id,
             name: item.name,
             quantity: Number(item.quantity) || 1,
+            measurementUnit: normalizeMeasurementUnit(item.measurementUnit),
             price: Number(item.unitPrice) || 0,
+            totalPrice: Number(item.totalPrice) || 0,
             assignedParticipants: [],
           }))
         : await itemsService.getItems(id);
@@ -365,13 +388,20 @@ export default function ScannedBillScreen() {
           id: item.id,
           name: item.name,
           quantity: item.quantity,
+          measurementUnit: item.measurementUnit,
           price: item.price,
+          totalPrice: item.totalPrice,
         })),
-        serviceFeePercentage: refreshedService ? Number(refreshedService.value) : 0,
+        serviceFeePercentage: refreshedService
+          ? Number(refreshedService.value)
+          : 0,
         couvertValue: getCouvertValuePerParticipant(refreshedCouvert),
         serviceFeeSelectedParticipantIds,
         couvertSelectedParticipantIds,
-        itemAllocations: mapAllocationsToPersistedItems(sourceItems, persistedItems),
+        itemAllocations: mapAllocationsToPersistedItems(
+          sourceItems,
+          persistedItems,
+        ),
       });
 
       router.push({
@@ -402,22 +432,34 @@ export default function ScannedBillScreen() {
       setParticipants((prev) => [...prev, participant]);
       setNewParticipantName("");
     } catch (error: any) {
-      Alert.alert("Erro", error.message || "Não foi possível adicionar participante.");
+      Alert.alert(
+        "Erro",
+        error.message || "Não foi possível adicionar participante.",
+      );
     } finally {
       setAddingParticipant(false);
     }
   };
 
-  const handleUpdateParticipant = async (participantId: string, name: string) => {
+  const handleUpdateParticipant = async (
+    participantId: string,
+    name: string,
+  ) => {
     try {
-      const updated = await participantsService.updateParticipant(participantId, name);
+      const updated = await participantsService.updateParticipant(
+        participantId,
+        name,
+      );
       setParticipants((prev) =>
         prev.map((participant) =>
           participant.id === participantId ? updated : participant,
         ),
       );
     } catch (error: any) {
-      Alert.alert("Erro", error.message || "Não foi possível atualizar participante.");
+      Alert.alert(
+        "Erro",
+        error.message || "Não foi possível atualizar participante.",
+      );
     }
   };
 
@@ -433,7 +475,10 @@ export default function ScannedBillScreen() {
         prev.filter((participant) => participant.id !== participantId),
       );
     } catch (error: any) {
-      Alert.alert("Erro", error.message || "Não foi possível remover participante.");
+      Alert.alert(
+        "Erro",
+        error.message || "Não foi possível remover participante.",
+      );
     }
   };
 
@@ -490,9 +535,14 @@ export default function ScannedBillScreen() {
                 },
               ]}
             >
-              <Ionicons name="warning-outline" size={20} color={colors.warning} />
+              <Ionicons
+                name="warning-outline"
+                size={20}
+                color={colors.warning}
+              />
               <Text style={[styles.warningText, { color: colors.text }]}>
-                O OCR não conseguiu identificar todos os itens. Revise a conta e ajuste o que for necessário.
+                O OCR não conseguiu identificar todos os itens. Revise a conta e
+                ajuste o que for necessário.
               </Text>
             </View>
           )}
@@ -518,7 +568,9 @@ export default function ScannedBillScreen() {
 
             <View style={styles.feeRow}>
               <View style={styles.feeColumn}>
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+                <Text
+                  style={[styles.fieldLabel, { color: colors.textSecondary }]}
+                >
                   Taxa de serviço (%)
                 </Text>
                 <TextInput
@@ -546,7 +598,9 @@ export default function ScannedBillScreen() {
               </View>
 
               <View style={styles.feeColumn}>
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+                <Text
+                  style={[styles.fieldLabel, { color: colors.textSecondary }]}
+                >
                   Couvert artístico (R$)
                 </Text>
                 <TextInput
@@ -638,14 +692,15 @@ export default function ScannedBillScreen() {
             {saving ? (
               <ActivityIndicator color={colors.accent} />
             ) : (
-              <Text style={[styles.primaryButtonText, { color: colors.accent }]}>
+              <Text
+                style={[styles.primaryButtonText, { color: colors.accent }]}
+              >
                 Continuar para o rateio
               </Text>
             )}
           </TouchableOpacity>
         </View>
       </ScrollView>
-
     </KeyboardAvoidingView>
   );
 }

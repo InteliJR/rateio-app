@@ -15,6 +15,17 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { BillItem } from "../items/ItemCard";
 import { useTheme } from "../../contexts/ThemeContext";
+import {
+  parsePtBrNumber,
+  round2,
+  sanitizePtBrNumberInput,
+} from "../../lib/formatters";
+import {
+  MAX_ITEM_QUANTITY,
+  MAX_MONEY_VALUE,
+  MEASUREMENT_UNIT_OPTIONS,
+  MeasurementUnit,
+} from "../../lib/measurementUnits";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -32,6 +43,8 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
   const { colors, getFontSize } = useTheme();
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("");
+  const [measurementUnit, setMeasurementUnit] =
+    useState<MeasurementUnit>("UNIT");
   const [value, setValue] = useState("");
   const [errors, setErrors] = useState({ name: "", quantity: "", value: "" });
   const nameInputRef = useRef<TextInput>(null);
@@ -41,6 +54,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     if (!visible) {
       setName("");
       setQuantity("");
+      setMeasurementUnit("UNIT");
       setValue("");
       setErrors({ name: "", quantity: "", value: "" });
     }
@@ -89,7 +103,10 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     if (!quantity.trim()) {
       newErrors.quantity = "Quantidade é obrigatória";
       isValid = false;
-    } else if (parseInt(quantity) <= 0) {
+    } else if (
+      parsePtBrNumber(quantity) < 0.001 ||
+      parsePtBrNumber(quantity) > MAX_ITEM_QUANTITY
+    ) {
       newErrors.quantity = "Quantidade deve ser maior que 0";
       isValid = false;
     }
@@ -97,7 +114,10 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     if (!value.trim()) {
       newErrors.value = "Valor é obrigatório";
       isValid = false;
-    } else if (parseCurrency(value) <= 0) {
+    } else if (
+      parseCurrency(value) <= 0 ||
+      parseCurrency(value) > MAX_MONEY_VALUE
+    ) {
       newErrors.value = "Valor deve ser maior que 0";
       isValid = false;
     }
@@ -110,12 +130,14 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     if (!validate()) return;
 
     const unitPrice = parseCurrency(value);
-    const qty = parseInt(quantity);
+    const qty = parsePtBrNumber(quantity);
 
     onAdd({
       name: name.trim(),
       quantity: qty,
+      measurementUnit,
       price: unitPrice,
+      totalPrice: round2(qty * unitPrice),
     });
 
     Keyboard.dismiss();
@@ -154,7 +176,9 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
             ]}
           >
             {/* Handle */}
-            <View style={[styles.handle, { backgroundColor: colors.divider }]} />
+            <View
+              style={[styles.handle, { backgroundColor: colors.divider }]}
+            />
 
             {/* Header */}
             <View style={styles.header}>
@@ -193,7 +217,9 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
                     {
                       backgroundColor: colors.inputBackground,
                       color: colors.text,
-                      borderColor: errors.name ? colors.error : colors.inputBorder,
+                      borderColor: errors.name
+                        ? colors.error
+                        : colors.inputBorder,
                     },
                     errors.name && styles.inputError,
                   ]}
@@ -240,15 +266,15 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
                     },
                     errors.quantity && styles.inputError,
                   ]}
-                  placeholder="Ex: 2"
+                  placeholder="Ex: 0,750"
                   placeholderTextColor={colors.placeholderText}
                   value={quantity}
                   onChangeText={(text) => {
-                    setQuantity(text.replace(/[^0-9]/g, ""));
+                    setQuantity(sanitizePtBrNumberInput(text, 3));
                     if (errors.quantity)
                       setErrors((prev) => ({ ...prev, quantity: "" }));
                   }}
-                  keyboardType="numeric"
+                  keyboardType="decimal-pad"
                   returnKeyType="next"
                 />
                 {errors.quantity ? (
@@ -261,6 +287,38 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
                     {errors.quantity}
                   </Text>
                 ) : null}
+                <View style={styles.unitOptions}>
+                  {MEASUREMENT_UNIT_OPTIONS.map((option) => {
+                    const isSelected = measurementUnit === option.value;
+                    return (
+                      <TouchableOpacity
+                        key={option.value}
+                        style={[
+                          styles.unitOption,
+                          {
+                            borderColor: isSelected
+                              ? colors.primary
+                              : colors.inputBorder,
+                            backgroundColor: isSelected
+                              ? colors.primary
+                              : colors.inputBackground,
+                          },
+                        ]}
+                        onPress={() => setMeasurementUnit(option.value)}
+                      >
+                        <Text
+                          style={{
+                            color: isSelected ? colors.accent : colors.text,
+                            fontSize: getFontSize(13),
+                            fontWeight: "600",
+                          }}
+                        >
+                          {option.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               </View>
 
               <View style={styles.inputGroup}>
@@ -278,7 +336,9 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
                     {
                       backgroundColor: colors.inputBackground,
                       color: colors.text,
-                      borderColor: errors.value ? colors.error : colors.inputBorder,
+                      borderColor: errors.value
+                        ? colors.error
+                        : colors.inputBorder,
                     },
                     errors.value && styles.inputError,
                   ]}
@@ -391,6 +451,20 @@ const styles = StyleSheet.create({
   errorText: {
     color: "#ff4444",
     fontSize: 12,
+  },
+  unitOptions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 2,
+  },
+  unitOption: {
+    minWidth: 42,
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
   },
   addButton: {
     backgroundColor: "#81007F",

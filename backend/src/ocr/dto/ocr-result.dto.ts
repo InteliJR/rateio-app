@@ -6,6 +6,7 @@ import {
   IsNotEmpty,
   ValidateNested,
   Min,
+  Max,
   ArrayMinSize,
   registerDecorator,
   ValidationOptions,
@@ -16,13 +17,21 @@ import { validate } from 'class-validator';
 import { OcrItemDto } from './ocr-item.dto';
 import { OcrTaxDto } from './ocr-tax.dto';
 import { OcrDiscountDto } from './ocr-discount.dto';
-import { parseOcrNumber, parseOcrQuantity, roundMoney } from '../ocr-number.util';
+import {
+  parseOcrNumber,
+  parseOcrQuantity,
+  roundMoney,
+} from '../ocr-number.util';
+import { normalizeMeasurementUnit } from '../../common/measurement-unit';
+import { MAX_MONEY_VALUE } from '../../common/numeric-limits';
+import { MeasurementUnit } from '@prisma/client';
 
 export interface OcrResult {
   rawText: string;
   items: Array<{
     name: string;
     quantity: number;
+    measurementUnit: MeasurementUnit;
     unitPrice: number;
     totalPrice: number;
   }>;
@@ -43,7 +52,7 @@ function IsTotalAmountValid(validationOptions?: ValidationOptions) {
       validator: {
         validate(value: any, args: ValidationArguments) {
           const dto = args.object as OcrResultDto;
-          
+
           // Se não tem totalAmount, não valida (é opcional)
           if (!dto.totalAmount) {
             return true;
@@ -62,14 +71,20 @@ function IsTotalAmountValid(validationOptions?: ValidationOptions) {
           // Adiciona taxas se existirem
           let sumWithTaxes = sumOfItems;
           if (dto.taxes && dto.taxes.length > 0) {
-            const taxesSum = dto.taxes.reduce((sum, tax) => sum + (tax.value || 0), 0);
+            const taxesSum = dto.taxes.reduce(
+              (sum, tax) => sum + (tax.value || 0),
+              0,
+            );
             sumWithTaxes += taxesSum;
           }
 
           // Subtrai descontos se existirem
           let finalSum = sumWithTaxes;
           if (dto.discounts && dto.discounts.length > 0) {
-            const discountsSum = dto.discounts.reduce((sum, discount) => sum + (discount.value || 0), 0);
+            const discountsSum = dto.discounts.reduce(
+              (sum, discount) => sum + (discount.value || 0),
+              0,
+            );
             finalSum -= discountsSum;
           }
 
@@ -81,27 +96,36 @@ function IsTotalAmountValid(validationOptions?: ValidationOptions) {
         },
         defaultMessage(args: ValidationArguments) {
           const dto = args.object as OcrResultDto;
-          
+
           if (!dto.items || dto.items.length === 0) {
             return 'Não é possível validar o total sem itens';
           }
 
-          const sumOfItems = dto.items.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
+          const sumOfItems = dto.items.reduce(
+            (sum, item) => sum + (item.totalPrice || 0),
+            0,
+          );
           let sumWithTaxes = sumOfItems;
-          
+
           if (dto.taxes && dto.taxes.length > 0) {
-            const taxesSum = dto.taxes.reduce((sum, tax) => sum + (tax.value || 0), 0);
+            const taxesSum = dto.taxes.reduce(
+              (sum, tax) => sum + (tax.value || 0),
+              0,
+            );
             sumWithTaxes += taxesSum;
           }
 
           let finalSum = sumWithTaxes;
           if (dto.discounts && dto.discounts.length > 0) {
-            const discountsSum = dto.discounts.reduce((sum, discount) => sum + (discount.value || 0), 0);
+            const discountsSum = dto.discounts.reduce(
+              (sum, discount) => sum + (discount.value || 0),
+              0,
+            );
             finalSum -= discountsSum;
           }
 
           const difference = Math.abs(finalSum - (dto.totalAmount || 0));
-          
+
           return `A soma dos itens (${finalSum.toFixed(2)}) não corresponde ao total (${dto.totalAmount?.toFixed(2)}). Diferença: ${difference.toFixed(2)}. Tolerância permitida: 0.01`;
         },
       },
@@ -124,12 +148,16 @@ export class OcrResultDto {
   @IsOptional()
   @IsNumber({}, { message: 'Valor total deve ser um número' })
   @Min(0.01, { message: 'Valor total deve ser um valor positivo' })
-  @IsTotalAmountValid({ message: 'A soma dos itens não corresponde ao total (tolerância: 0.01)' })
+  @Max(MAX_MONEY_VALUE, { message: 'Valor total excede o limite permitido' })
+  @IsTotalAmountValid({
+    message: 'A soma dos itens não corresponde ao total (tolerância: 0.01)',
+  })
   totalAmount?: number;
 
   @IsOptional()
   @IsNumber({}, { message: 'Subtotal deve ser um número' })
   @Min(0, { message: 'Subtotal não pode ser negativo' })
+  @Max(MAX_MONEY_VALUE, { message: 'Subtotal excede o limite permitido' })
   subtotal?: number;
 
   @IsOptional()
@@ -190,13 +218,15 @@ export class OcrResultDto {
     }
 
     if (processedData.discounts && Array.isArray(processedData.discounts)) {
-      processedData.discounts = processedData.discounts.map((discount: any) => ({
-        ...discount,
-        value: OcrResultDto.normalizePositiveMoney(
-          discount.value ?? discount.valor ?? discount.amount,
-          true,
-        ),
-      }));
+      processedData.discounts = processedData.discounts.map(
+        (discount: any) => ({
+          ...discount,
+          value: OcrResultDto.normalizePositiveMoney(
+            discount.value ?? discount.valor ?? discount.amount,
+            true,
+          ),
+        }),
+      );
     }
     if (!processedData.currency) {
       processedData.currency = 'BRL';
@@ -266,6 +296,13 @@ export class OcrResultDto {
         item.descricao ??
         item.produto,
       quantity,
+      measurementUnit: normalizeMeasurementUnit(
+        item.measurementUnit ??
+          item.measurement_unit ??
+          item.unit ??
+          item.unidade ??
+          item.uom,
+      ),
       unitPrice:
         normalizedUnitPrice === undefined
           ? undefined
@@ -287,7 +324,7 @@ export class OcrResultDto {
     }
 
     const normalized = Math.abs(parsed);
-    if (normalized > 0 || allowZero) {
+    if (normalized <= MAX_MONEY_VALUE && (normalized > 0 || allowZero)) {
       return roundMoney(normalized);
     }
 
@@ -301,4 +338,3 @@ export class OcrResultDto {
     return result.rawText.length > 10 && result.items.length > 0;
   }
 }
-

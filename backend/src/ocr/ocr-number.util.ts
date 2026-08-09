@@ -1,3 +1,5 @@
+import { MAX_ITEM_QUANTITY, MIN_ITEM_QUANTITY } from '../common/numeric-limits';
+
 export function parseOcrNumber(value: unknown): number | undefined {
   if (typeof value === 'number') {
     return Number.isFinite(value) ? value : undefined;
@@ -12,11 +14,14 @@ export function parseOcrNumber(value: unknown): number | undefined {
     return undefined;
   }
 
-  const sanitized = trimmed
-    .replace(/\s/g, '')
-    .replace(/[^\d,.-]/g, '');
+  const sanitized = trimmed.replace(/\s/g, '').replace(/[^\d,.-]/g, '');
 
-  if (!sanitized || sanitized === '-' || sanitized === ',' || sanitized === '.') {
+  if (
+    !sanitized ||
+    sanitized === '-' ||
+    sanitized === ',' ||
+    sanitized === '.'
+  ) {
     return undefined;
   }
 
@@ -44,16 +49,44 @@ export function parseOcrNumber(value: unknown): number | undefined {
 }
 
 export function parseOcrQuantity(value: unknown): number {
-  const parsed = parseOcrNumber(value);
-  if (!parsed || parsed < 1) {
+  const parsed =
+    typeof value === 'string'
+      ? parseQuantityString(value)
+      : parseOcrNumber(value);
+
+  if (
+    parsed === undefined ||
+    parsed < MIN_ITEM_QUANTITY ||
+    parsed > MAX_ITEM_QUANTITY
+  ) {
     return 1;
   }
 
-  return Math.max(1, Math.floor(parsed));
+  return roundQuantity(parsed);
 }
 
 export function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+export function roundQuantity(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
+
+function parseQuantityString(value: string): number | undefined {
+  const sanitized = value
+    .trim()
+    .replace(/\s/g, '')
+    .replace(/[^\d,.-]/g, '');
+
+  // Em quantidades, três casas representam normalmente peso/volume,
+  // enquanto em valores monetários o mesmo formato pode ser milhar.
+  if (/^-?\d+[,.]\d{1,3}$/.test(sanitized)) {
+    const parsed = Number(sanitized.replace(',', '.'));
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  return parseOcrNumber(value);
 }
 
 function normalizeSingleSeparator(value: string, separator: ',' | '.'): string {
