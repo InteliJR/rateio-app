@@ -1,8 +1,5 @@
-import { Controller, Get, HttpCode, HttpStatus, NotFoundException, Res } from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
-import type { Response } from 'express';
-import * as fs from 'fs';
-import * as path from 'path';
 import * as packageJson from '../package.json';
 import { MetricsService } from './observability/metrics.service';
 import { AppService } from './app.service';
@@ -42,23 +39,6 @@ export class AppController {
       metrics: this.metrics.getSnapshot(),
       version: packageJson.version,
     };
-  }
-
-  @SkipThrottle()
-  @Get('docs')
-  serveDocs(@Res() res: Response) {
-    const filePath = path.join(
-      process.cwd(),
-      'dist',
-      'assets',
-      'api_documentation.html',
-    );
-
-    if (!fs.existsSync(filePath)) {
-      throw new NotFoundException('Documentation file not found');
-    }
-
-    return res.sendFile(filePath);
   }
 
   private async checkDbConnection() {

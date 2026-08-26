@@ -2,158 +2,143 @@
 sidebar_position: 3
 ---
 
-# 🎨 Design
+# Design do aplicativo
 
-<!-- Este documento deve ser preenchido pela área de Design assim que o projeto for repassado pela área de Visão de Produto. -->
+Este documento registra as decisões de interface presentes no código do Por Partes. A fonte de verdade dos tokens de tema é `frontend/contexts/ThemeContext.tsx`.
 
-## 🗓 Informações Gerais
+## Princípios de experiência
 
-- **Nome do Projeto:**
-<!-- Exemplo: Sistema de Gestão de Reservas para Biblioteca -->
+- manter uma ação principal evidente por tela;
+- mostrar o progresso da conta: criação, revisão, participantes, divisão e resumo;
+- permitir correção antes de avançar;
+- explicar carregamento e erro sem deixar o usuário em um beco sem saída;
+- apresentar valores monetários com consistência e destaque suficiente;
+- preservar preferências de tema e tamanho de fonte;
+- não inserir monetização em momentos críticos do fluxo.
 
-- **Responsável de Design:**
-<!-- Nome da pessoa responsável pela coordenação e entrega da parte visual do projeto -->
+## Identidade visual atual
 
-- **Data de Entrada no Design:**
-<!-- Exemplo: 05/04/2025 -->
+O roxo identifica ações e seleção; o amarelo é usado como acento de alto contraste. Verde, vermelho e âmbar comunicam sucesso, erro e atenção.
 
-- **Data de Entrega Estimada para Desenvolvimento:**
-<!-- Exemplo: 19/04/2025 -->
+### Tema claro
 
-- **Link para Documento de Visão de Produto:**
-<!-- Exemplo: https://github.com/empresa/docs/projeto-reservas/visao.md -->
+| Token | Valor | Uso principal |
+| --- | --- | --- |
+| `primary` | `#8B2E8F` | ação principal e seleção |
+| `primaryLight` | `#9B3E9F` | variação e destaque |
+| `accent` | `#FFFF00` | acento sobre superfícies compatíveis |
+| `background` | `#FFFFFF` | fundo principal |
+| `backgroundSecondary` | `#F8F8F8` | agrupamentos e superfícies secundárias |
+| `text` | `#000000` | texto principal |
+| `textSecondary` | `#666666` | texto de apoio |
+| `success` | `#10B981` | confirmação |
+| `warning` | `#F59E0B` | atenção |
+| `error` | `#EF4444` | falha ou ação destrutiva |
 
----
+### Tema escuro
 
-## ✅ Checklist de Entrada (antes de iniciar o design)
+| Token | Valor | Uso principal |
+| --- | --- | --- |
+| `primary` | `#9B3E9F` | ação principal |
+| `primaryLight` | `#AB4EAF` | variação e destaque |
+| `accent` | `#FFFF00` | acento |
+| `background` | `#121212` | fundo principal |
+| `backgroundSecondary` | `#1E1E1E` | cartões e agrupamentos |
+| `backgroundTertiary` | `#2A2A2A` | campos e superfícies elevadas |
+| `text` | `#FFFFFF` | texto principal |
+| `textSecondary` | `#B0B0B0` | texto de apoio |
+| `cardBorder` | `#3A3A3A` | divisores e contornos |
 
-- [ ] Documento de Visão de Produto recebido e validado
-- [ ] Escopo e funcionalidades compreendidos
-- [ ] Personas identificadas
-- [ ] Alinhamento com PO realizado
-- [ ] Capacidade da equipe verificada
-- [ ] Deadline estabelecido
+O tema também define tokens específicos para campos, abas, cartões, overlays, couvert e chips de seleção. Componentes novos devem consumir esses tokens; cores fixas dentro de componentes devem ser tratadas como dívida técnica e migradas quando o componente for alterado.
 
----
+## Tipografia e escala
 
-## 📤 Checklist de Saída (antes de repassar para Desenvolvimento)
+O aplicativo usa a tipografia padrão da plataforma e aplica a escala configurada pelo usuário. A preferência aceita valores entre `0.8` e `1.4` e é persistida localmente.
 
-- [ ] Wireframes
-- [ ] Protótipo final validado pelo cliente
-- [ ] Layouts organizados no Figma
-- [ ] Especificações visuais claras (cores, tamanhos, espaçamentos)
-- [ ] Responsividade definida
-- [ ] Assets entregues (logos, imagens, ícones)
+Regras para novos componentes:
 
----
+- calcular tamanhos por `getFontSize` ou pelo padrão de escala usado no módulo;
+- permitir quebra de linha em rótulos e valores longos;
+- não depender somente de cor para comunicar estado;
+- testar no mínimo as escalas `1.0` e `1.4`;
+- evitar alturas fixas que cortem conteúdo ampliado.
 
-## 🎯 Objetivo do Design
+## Ícones e componentes
 
-<!-- Explique brevemente o que o design precisa atingir em termos de comunicação visual, clareza de uso, tom da marca etc. -->
+O conjunto predominante é Ionicons por `@expo/vector-icons`. Um ícone deve ter rótulo acessível quando sua finalidade não estiver expressa por texto adjacente.
 
-<!-- **Exemplo:**
-Criar uma interface moderna, clara e acessível para facilitar reservas de salas em uma biblioteca universitária. A identidade visual deve transmitir profissionalismo e simplicidade, voltada para estudantes e servidores. -->
+Padrões esperados:
 
----
+- botões primários usam o token `primary` e texto com contraste adequado;
+- ações destrutivas usam `error` e confirmação quando não forem facilmente reversíveis;
+- campos exibem rótulo, valor, estado de foco, erro textual e área de toque adequada;
+- carregamentos longos informam contexto e, quando possível, permitem sair sem perder trabalho;
+- valores de itens, taxas e totais usam a mesma formatação monetária.
 
-## 🖼 Wireframes
+## Fluxo principal
 
-<!-- Inserir aqui os wireframes iniciais do projeto, com links para Figma ou imagens embutidas, se possível -->
-<!-- Os wireframes devem ser validados com o cliente a fim de se determinar o fluxo da solução junto ao cliente. -->
+```text
+Entrada
+  ↓
+Criar manualmente ───────────────┐
+ou capturar/selecionar imagem    │
+  ↓                              │
+Processamento e recuperação      │
+  ↓                              │
+Revisão de itens ◄───────────────┘
+  ↓
+Participantes
+  ↓
+Divisão dos itens
+  ↓
+Taxas e resumo
+  ↓
+Finalização e histórico
+```
 
-**Link para protótipo (Figma, Excalidraw, etc):**
-<!-- Exemplo: https://figma.com/projeto-reservas -->
+Cada etapa deve preservar a conta em andamento e oferecer uma saída clara em caso de erro. O resultado do OCR nunca deve avançar sem possibilidade de revisão.
 
----
+## Estados obrigatórios
 
-## 🖌 Identidade Visual
+Toda tela que depende de dados deve considerar:
 
-### 🅰️ Tipografia
+- carregando;
+- conteúdo disponível;
+- vazio;
+- erro recuperável;
+- erro sem recuperação imediata;
+- conectividade ausente ou instável;
+- ação em andamento, evitando envios duplicados.
 
-- **Fonte Primária:** 
-<!-- Exemplo: Inter -->
+Na próxima fase, telas afetadas também deverão considerar saldo disponível, saldo reservado, saldo insuficiente, compra pendente, compra cancelada e serviço de loja indisponível.
 
-<!-- - **Fonte Secundária (se houver):** -->
-<!-- Exemplo: Roboto Mono -->
+## Acessibilidade
 
-- **Tamanhos padrão:**
-<!-- Exemplo:
-  - Títulos: 24px / Semibold
-  - Texto: 16px / Regular
-  - Notas secundárias: 12px / Light
--->
+- respeitar tema e escala de fonte em todas as telas;
+- fornecer rótulos acessíveis para ações somente com ícone;
+- manter ordem de foco coerente;
+- não bloquear orientação de leitura por mensagens temporárias;
+- validar contraste antes de adicionar combinações de cor;
+- testar tarefas críticas com leitor de tela e fonte ampliada antes do release.
 
----
+## Regras para anúncios e compra
 
-### 🎨 Paleta de Cores
+Esses elementos ainda são planejados. Quando implementados:
 
-- **Cor Primária:** `#003366` <!-- Exemplo: Azul escuro -->
-- **Cor Secundária:** `#F4A261` <!-- Exemplo: Laranja suave -->
-- **Cor de Fundo:** `#FFFFFF`
-- **Texto Principal:** `#333333`
-- **Feedback positivo:** `#2A9D8F`
-- **Feedback negativo:** `#E76F51`
+- anúncios não aparecem em login, captura, processamento, revisão, divisão ou erro;
+- preço exibido deve vir da loja, e não de texto fixo no aplicativo;
+- compra pendente não pode ser mostrada como saldo disponível;
+- cancelamento mantém o usuário no contexto e oferece o fluxo manual;
+- consentimento e privacidade vêm antes da solicitação de anúncio;
+- estados de monetização devem ser testados em temas claro/escuro e com fonte ampliada.
 
-<!-- Pode-se adicionar um print ou link para o sistema de design no Figma -->
+## Checklist de revisão visual
 
----
-
-### 🧩 Estilo de Ícones
-
-- [ ] Filled
-- [ ] Outlined
-- [ ] Duotone
-- [ ] Outro (especifique): ____________
-
-**Fonte dos ícones:**
-<!-- Exemplo: Lucide, Feather Icons, Material Symbols, etc -->
-
----
-
-## 🧼 Limitações e Restrições Visuais
-
-<!-- Alguma exigência por parte do cliente? Algo que deve ser evitado (ex: "sem imagens", "evitar uso de ícones", etc)? -->
-
-<!-- 
-**Exemplo:**
-Cliente não quer o uso de imagens de pessoas reais. Todo o visual deve ser baseado em formas, ícones e cores neutras. 
--->
-
----
-
-## 🖼 Protótipo
-
-**Link para protótipo navegável (Figma, Adobe XD, etc):**
-<!-- Exemplo: https://figma.com/projeto-reservas -->
-
-**Observações sobre navegação e testes:**
-<!-- Exemplo: A tela de confirmação de reserva ainda será validada com o cliente -->
-
----
-
-## 📱 Responsividade
-
-**O design contempla os seguintes formatos?**
-
-- [ ] Mobile
-- [ ] Tablet
-- [ ] Desktop
-- [ ] Outros: ____________
-
-**Observações:**
-<!-- Exemplo: Algumas tabelas estão otimizadas apenas para tablet e desktop. -->
-
----
-
-## 📌 Observações Finais
-
-<!-- Algum risco, dependência externa ou algo a ser monitorado? -->
-<!-- Também pode incluir aprendizados para o próximo projeto. -->
-
-<!-- 
-**Exemplo:**
-Cliente pediu uma versão dark mode, mas isso não foi incluído no escopo inicial. Pode ser discutido como melhoria futura. 
--->
-
----
-
+- ação principal e retorno estão claros;
+- tema claro e escuro usam tokens, sem contraste acidental;
+- fonte em `1.4` não corta conteúdo;
+- teclado não cobre o campo ou botão necessário;
+- toque repetido não duplica operação;
+- moeda, quantidade e unidade estão formatadas corretamente;
+- carregamento, vazio e erros possuem texto e ação coerentes;
+- nenhuma funcionalidade planejada é apresentada como disponível.
