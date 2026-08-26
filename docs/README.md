@@ -1,88 +1,76 @@
-# 📚 Configuração da Documentação
+# Documentação do Por Partes
 
-Este diretório contém a documentação do projeto utilizando [Docusaurus](https://docusaurus.io/).
+Este diretório reúne dois conjuntos diferentes:
 
-## Configuração Inicial
+1. documentação interna do produto e do desenvolvimento, mantida em Markdown;
+2. site público com páginas legais, construído com Docusaurus.
 
-Para configurar a documentação em um novo repositório, siga os passos abaixo:
+## Estrutura atual
 
-1. **Configuração do GitHub Pages**:
-   - Vá para as configurações do repositório (Settings)
-   - No menu lateral, clique em "Actions" dentro da seção "Code and automation"
-   - Role até a seção "Workflow permissions"
-   - Selecione "Read and write permissions"
-   - Salve as alterações
-   - Volte ao menu lateral e clique em "Pages"
-   - Em "Source", selecione "Deploy from a branch"
-   - Em "Branch", selecione "gh-pages" e "/ (root)"
-   - Clique em "Save"
+```text
+docs/
+├── dev/
+│   └── planejamento-epicos-nova-fase-2026.md
+├── docs/
+│   ├── intro.md
+│   ├── visao-produto.md
+│   ├── design.md
+│   └── tecnologias.md
+├── src/pages/
+│   ├── index.tsx
+│   ├── politica-de-privacidade.tsx
+│   ├── termos-de-uso.tsx
+│   └── excluir-conta.tsx
+├── static/                  # Imagens e arquivos públicos
+├── docusaurus.config.ts
+└── package.json
+```
 
-2. **Configuração do Docusaurus**:
-   - Abra o arquivo `docs/docusaurus.config.ts`
-   - ⚠️ **IMPORTANTE**: Atualize os seguintes campos com os dados do seu repositório:
-     ```typescript
-     const config: Config = {
-       title: "NOME_DO_PROJETO Docs",        // Exemplo: "MeuProjeto Docs"
-       tagline: "Descrição do projeto",      // Exemplo: "Sistema de Gestão"
-       baseUrl: "/NOME_DO_REPOSITORIO/",     // Exemplo: "/sistema-gestao/"
-       projectName: "NOME_DO_REPOSITORIO",   // Exemplo: "sistema-gestao"
-     }
-     ```
-   - Substitua `NOME_DO_PROJETO`, `NOME_DO_REPOSITORIO` e `ORGANIZACAO` pelos valores correspondentes ao seu projeto
-   - ⚠️ **ATENÇÃO**: O `baseUrl` e `projectName` DEVEM corresponder EXATAMENTE ao nome do repositório
+Os arquivos em `docs/docs` e `docs/dev` são lidos no repositório e não são publicados no site. O plugin de documentação do Docusaurus está desativado em `docusaurus.config.ts`; o build público contém somente a página inicial e as páginas legais de `src/pages`.
 
-## Desenvolvimento Local
+## Navegação interna
+
+- [Índice e governança](./docs/intro.md)
+- [Visão do produto](./docs/visao-produto.md)
+- [Design do aplicativo](./docs/design.md)
+- [Tecnologias e arquitetura](./docs/tecnologias.md)
+- [Planejamento de épicos da nova fase](./dev/planejamento-epicos-nova-fase-2026.md)
+- [Tasks do EPIC-00](./dev/epic-00-qualidade-observabilidade.md)
+
+## Executar o site público
 
 ```bash
-# Acesse o diretório docs
 cd docs
-
-# Instale as dependências
-npm install
-
-# Inicie o servidor de desenvolvimento
+npm ci
 npm start
 ```
 
-## Deploy
+O servidor local abre, por padrão, em `http://localhost:3000`.
 
-### Deploy Automático
-O deploy automático acontece sempre que há um push na branch `main`. O GitHub Action configurado irá buildar e publicar a documentação automaticamente. Se isso não acontecer, é necessário verificar se houve algum erro na pipeline.
+## Validar antes de publicar
 
-### Deploy Manual (se necessário)
 ```bash
-# No diretório docs
-npm run deploy
+cd docs
+npm run typecheck
+npm run build
+npm run serve
 ```
 
-## Estrutura do Diretório
+O build falha para links de página quebrados. Avisos de Markdown também devem ser corrigidos antes do merge.
 
-```
-docs/
-├── docs/                      # Arquivos de documentação em Markdown
-│   ├── visao-produto.md       # Documento elaborado pela área de Visão de Produto
-│   ├── design.md              # Documento elaborado pela área de Design
-│   ├── desenvolvimento.md     # Documento elaborado pela área de Desenvolvimento
-├── src/                       # Arquivos fonte do site
-├── static/                    # Arquivos estáticos (imagens, etc)
-├── docusaurus.config.ts       # Configuração principal
-├── package.json               # Dependências e scripts
-└── README.md                  # Este arquivo
-```
+## Publicação
 
-## Troubleshooting
+O workflow `.github/workflows/deploy_docusaurus.yml` executa o build em alterações da branch `main` e publica `docs/build` no GitHub Pages. A configuração atual usa:
 
-Se você encontrar algum dos seguintes problemas:
+- URL: `https://intelijr.github.io`;
+- caminho base: `/rateio-app/`;
+- idioma: `pt-BR`;
+- projeto: `rateio-app` da organização `InteliJR`.
 
-1. **CSS não carrega/página sem estilo**:
-   - Verifique se `baseUrl` e `projectName` correspondem EXATAMENTE ao nome do seu repositório
-   - Exemplo: se seu repositório é "sistema-gestao", então:
-     ```typescript
-     baseUrl: "/sistema-gestao/"
-     projectName: "sistema-gestao"
-     ```
+## Regras de manutenção
 
-2. **Erro 404 ao acessar a página**:
-   - Verifique se a branch `gh-pages` foi criada
-   - Verifique se o GitHub Pages está configurado para usar a branch `gh-pages`
-   - Aguarde alguns minutos após o deploy (pode levar até 5 minutos para atualizar) 
+- Atualize a data de vigência quando o conteúdo legal mudar.
+- Antes de ativar um novo SDK, provedor, dado coletado, compra ou anúncio, revise Política de Privacidade, Termos de Uso e declarações da loja.
+- Não descreva uma funcionalidade planejada como já disponível.
+- Use o código e os arquivos `.env.example` como fonte de verdade para versões, integrações e variáveis.
+- Remova ou corrija links no mesmo merge em que um documento for renomeado ou excluído.
