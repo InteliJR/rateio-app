@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { MeasurementUnit } from "../lib/measurementUnits";
 
 export interface DraftParticipant {
   id: string;
@@ -9,7 +10,9 @@ export interface DraftItem {
   id: string;
   name: string;
   quantity: number;
+  measurementUnit: MeasurementUnit;
   price: number;
+  totalPrice: number;
 }
 
 export interface DraftFeeConfig {
@@ -50,10 +53,7 @@ export interface RateioDraftState {
     serviceFeePercentage: number;
     couvertValue: number;
   }) => void;
-  setItemAllocation: (
-    itemId: string,
-    allocation: DraftItemAllocation,
-  ) => void;
+  setItemAllocation: (itemId: string, allocation: DraftItemAllocation) => void;
   setFeeSelection: (
     feeType: "service" | "couvert",
     selectedParticipantIds: string[],
@@ -65,9 +65,7 @@ const getMandatoryCouvertParticipantIds = (
   participants: DraftParticipant[],
   couvertValue: number,
 ) =>
-  couvertValue > 0
-    ? participants.map((participant) => participant.id)
-    : [];
+  couvertValue > 0 ? participants.map((participant) => participant.id) : [];
 
 const reconcileItemAllocations = (
   items: DraftItem[],
@@ -81,23 +79,32 @@ const reconcileItemAllocations = (
   return items.reduce<Record<string, DraftItemAllocation>>((acc, item) => {
     const existingAllocation = existingAllocations[item.id];
     const existingQuantities =
-      (existingAllocation as unknown as {
-        quantities?: Record<string, number>;
-        shares?: Record<string, number>;
-      })?.quantities ??
-      (existingAllocation as unknown as {
-        quantities?: Record<string, number>;
-        shares?: Record<string, number>;
-      })?.shares ??
+      (
+        existingAllocation as unknown as {
+          quantities?: Record<string, number>;
+          shares?: Record<string, number>;
+        }
+      )?.quantities ??
+      (
+        existingAllocation as unknown as {
+          quantities?: Record<string, number>;
+          shares?: Record<string, number>;
+        }
+      )?.shares ??
       {};
 
     if (!existingAllocation) {
       acc[item.id] = {
-        selectedParticipantIds: participants.map((participant) => participant.id),
-        quantities: participants.reduce<Record<string, number>>((quantityAcc, participant) => {
-          quantityAcc[participant.id] = 0;
-          return quantityAcc;
-        }, {}),
+        selectedParticipantIds: participants.map(
+          (participant) => participant.id,
+        ),
+        quantities: participants.reduce<Record<string, number>>(
+          (quantityAcc, participant) => {
+            quantityAcc[participant.id] = 0;
+            return quantityAcc;
+          },
+          {},
+        ),
       };
       return acc;
     }
@@ -106,10 +113,13 @@ const reconcileItemAllocations = (
       selectedParticipantIds: existingAllocation.selectedParticipantIds.filter(
         (participantId) => validParticipantIds.has(participantId),
       ),
-      quantities: participants.reduce<Record<string, number>>((quantityAcc, participant) => {
-        quantityAcc[participant.id] = existingQuantities[participant.id] ?? 0;
-        return quantityAcc;
-      }, {}),
+      quantities: participants.reduce<Record<string, number>>(
+        (quantityAcc, participant) => {
+          quantityAcc[participant.id] = existingQuantities[participant.id] ?? 0;
+          return quantityAcc;
+        },
+        {},
+      ),
     };
 
     return acc;
@@ -121,7 +131,9 @@ const buildDefaultAllocations = (
   participants: DraftParticipant[],
 ): Record<string, DraftItemAllocation> => {
   return items.reduce<Record<string, DraftItemAllocation>>((acc, item) => {
-    const selectedParticipantIds = participants.map((participant) => participant.id);
+    const selectedParticipantIds = participants.map(
+      (participant) => participant.id,
+    );
     const quantities = participants.reduce<Record<string, number>>(
       (quantityAcc, participant) => {
         quantityAcc[participant.id] = 0;
@@ -204,9 +216,13 @@ export const useRateioDraftStore = create<RateioDraftState>((set) => ({
       serviceFeeConfig: {
         ...state.serviceFeeConfig,
         value: serviceFeePercentage,
-        selectedParticipantIds: state.serviceFeeConfig.selectedParticipantIds.filter(
-          (participantId) => participants.some((participant) => participant.id === participantId),
-        ),
+        selectedParticipantIds:
+          state.serviceFeeConfig.selectedParticipantIds.filter(
+            (participantId) =>
+              participants.some(
+                (participant) => participant.id === participantId,
+              ),
+          ),
       },
       couvertConfig: {
         ...state.couvertConfig,

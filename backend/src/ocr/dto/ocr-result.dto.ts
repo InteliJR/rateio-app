@@ -6,6 +6,7 @@ import {
   IsNotEmpty,
   ValidateNested,
   Min,
+  Max,
   ArrayMinSize,
   registerDecorator,
   ValidationOptions,
@@ -16,12 +17,21 @@ import { validate } from 'class-validator';
 import { OcrItemDto } from './ocr-item.dto';
 import { OcrTaxDto } from './ocr-tax.dto';
 import { OcrDiscountDto } from './ocr-discount.dto';
+import {
+  parseOcrNumber,
+  parseOcrQuantity,
+  roundMoney,
+} from '../ocr-number.util';
+import { normalizeMeasurementUnit } from '../../common/measurement-unit';
+import { MAX_MONEY_VALUE } from '../../common/numeric-limits';
+import { MeasurementUnit } from '@prisma/client';
 
 export interface OcrResult {
   rawText: string;
   items: Array<{
     name: string;
     quantity: number;
+    measurementUnit: MeasurementUnit;
     unitPrice: number;
     totalPrice: number;
   }>;
@@ -42,7 +52,7 @@ function IsTotalAmountValid(validationOptions?: ValidationOptions) {
       validator: {
         validate(value: any, args: ValidationArguments) {
           const dto = args.object as OcrResultDto;
-          
+
           // Se não tem totalAmount, não valida (é opcional)
           if (!dto.totalAmount) {
             return true;
@@ -61,14 +71,20 @@ function IsTotalAmountValid(validationOptions?: ValidationOptions) {
           // Adiciona taxas se existirem
           let sumWithTaxes = sumOfItems;
           if (dto.taxes && dto.taxes.length > 0) {
-            const taxesSum = dto.taxes.reduce((sum, tax) => sum + (tax.value || 0), 0);
+            const taxesSum = dto.taxes.reduce(
+              (sum, tax) => sum + (tax.value || 0),
+              0,
+            );
             sumWithTaxes += taxesSum;
           }
 
           // Subtrai descontos se existirem
           let finalSum = sumWithTaxes;
           if (dto.discounts && dto.discounts.length > 0) {
-            const discountsSum = dto.discounts.reduce((sum, discount) => sum + (discount.value || 0), 0);
+            const discountsSum = dto.discounts.reduce(
+              (sum, discount) => sum + (discount.value || 0),
+              0,
+            );
             finalSum -= discountsSum;
           }
 
@@ -80,27 +96,36 @@ function IsTotalAmountValid(validationOptions?: ValidationOptions) {
         },
         defaultMessage(args: ValidationArguments) {
           const dto = args.object as OcrResultDto;
-          
+
           if (!dto.items || dto.items.length === 0) {
             return 'Não é possível validar o total sem itens';
           }
 
-          const sumOfItems = dto.items.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
+          const sumOfItems = dto.items.reduce(
+            (sum, item) => sum + (item.totalPrice || 0),
+            0,
+          );
           let sumWithTaxes = sumOfItems;
-          
+
           if (dto.taxes && dto.taxes.length > 0) {
-            const taxesSum = dto.taxes.reduce((sum, tax) => sum + (tax.value || 0), 0);
+            const taxesSum = dto.taxes.reduce(
+              (sum, tax) => sum + (tax.value || 0),
+              0,
+            );
             sumWithTaxes += taxesSum;
           }
 
           let finalSum = sumWithTaxes;
           if (dto.discounts && dto.discounts.length > 0) {
-            const discountsSum = dto.discounts.reduce((sum, discount) => sum + (discount.value || 0), 0);
+            const discountsSum = dto.discounts.reduce(
+              (sum, discount) => sum + (discount.value || 0),
+              0,
+            );
             finalSum -= discountsSum;
           }
 
           const difference = Math.abs(finalSum - (dto.totalAmount || 0));
-          
+
           return `A soma dos itens (${finalSum.toFixed(2)}) não corresponde ao total (${dto.totalAmount?.toFixed(2)}). Diferença: ${difference.toFixed(2)}. Tolerância permitida: 0.01`;
         },
       },
@@ -123,12 +148,16 @@ export class OcrResultDto {
   @IsOptional()
   @IsNumber({}, { message: 'Valor total deve ser um número' })
   @Min(0.01, { message: 'Valor total deve ser um valor positivo' })
-  @IsTotalAmountValid({ message: 'A soma dos itens não corresponde ao total (tolerância: 0.01)' })
+  @Max(MAX_MONEY_VALUE, { message: 'Valor total excede o limite permitido' })
+  @IsTotalAmountValid({
+    message: 'A soma dos itens não corresponde ao total (tolerância: 0.01)',
+  })
   totalAmount?: number;
 
   @IsOptional()
   @IsNumber({}, { message: 'Subtotal deve ser um número' })
   @Min(0, { message: 'Subtotal não pode ser negativo' })
+  @Max(MAX_MONEY_VALUE, { message: 'Subtotal excede o limite permitido' })
   subtotal?: number;
 
   @IsOptional()
@@ -156,10 +185,48 @@ export class OcrResultDto {
 
     // Aplicar defaults antes da conversão
     if (processedData.items && Array.isArray(processedData.items)) {
-      processedData.items = processedData.items.map((item: any) => ({
-        ...item,
-        quantity: item.quantity ?? 1,
+      processedData.items = processedData.items.map((item: any) =>
+        OcrResultDto.normalizeItem(item),
+      );
+    }
+
+    processedData.totalAmount = OcrResultDto.normalizePositiveMoney(
+      processedData.totalAmount ??
+        processedData.total ??
+        processedData.valorTotal ??
+        processedData.valor_total ??
+        processedData.totalGeral ??
+        processedData.total_geral,
+    );
+    processedData.subtotal = OcrResultDto.normalizePositiveMoney(
+      processedData.subtotal,
+      true,
+    );
+
+    if (processedData.taxes && Array.isArray(processedData.taxes)) {
+      processedData.taxes = processedData.taxes.map((tax: any) => ({
+        ...tax,
+        value: OcrResultDto.normalizePositiveMoney(
+          tax.value ?? tax.valor ?? tax.amount,
+          true,
+        ),
+        percentage: OcrResultDto.normalizePositiveMoney(
+          tax.percentage ?? tax.percentual ?? tax.percent,
+          true,
+        ),
       }));
+    }
+
+    if (processedData.discounts && Array.isArray(processedData.discounts)) {
+      processedData.discounts = processedData.discounts.map(
+        (discount: any) => ({
+          ...discount,
+          value: OcrResultDto.normalizePositiveMoney(
+            discount.value ?? discount.valor ?? discount.amount,
+            true,
+          ),
+        }),
+      );
     }
     if (!processedData.currency) {
       processedData.currency = 'BRL';
@@ -183,6 +250,87 @@ export class OcrResultDto {
     return ocrResultDto;
   }
 
+  private static normalizeItem(item: any) {
+    const quantity = parseOcrQuantity(
+      item.quantity ?? item.quantidade ?? item.qty ?? item.qtd ?? 1,
+    );
+    const unitPrice = parseOcrNumber(
+      item.unitPrice ??
+        item.unit_price ??
+        item.precoUnitario ??
+        item.preco_unitario ??
+        item.valorUnitario ??
+        item.valor_unitario ??
+        item.price ??
+        item.preco ??
+        item.valor,
+    );
+    const totalPrice = parseOcrNumber(
+      item.totalPrice ??
+        item.total_price ??
+        item.precoTotal ??
+        item.preco_total ??
+        item.valorTotal ??
+        item.valor_total ??
+        item.total,
+    );
+    const normalizedUnitPrice =
+      unitPrice && unitPrice > 0
+        ? unitPrice
+        : totalPrice && totalPrice > 0
+          ? totalPrice / quantity
+          : undefined;
+    const normalizedTotalPrice =
+      totalPrice && totalPrice > 0
+        ? totalPrice
+        : normalizedUnitPrice && normalizedUnitPrice > 0
+          ? normalizedUnitPrice * quantity
+          : undefined;
+
+    return {
+      ...item,
+      name:
+        item.name ??
+        item.nome ??
+        item.description ??
+        item.descricao ??
+        item.produto,
+      quantity,
+      measurementUnit: normalizeMeasurementUnit(
+        item.measurementUnit ??
+          item.measurement_unit ??
+          item.unit ??
+          item.unidade ??
+          item.uom,
+      ),
+      unitPrice:
+        normalizedUnitPrice === undefined
+          ? undefined
+          : roundMoney(normalizedUnitPrice),
+      totalPrice:
+        normalizedTotalPrice === undefined
+          ? undefined
+          : roundMoney(normalizedTotalPrice),
+    };
+  }
+
+  private static normalizePositiveMoney(
+    value: unknown,
+    allowZero = false,
+  ): number | undefined {
+    const parsed = parseOcrNumber(value);
+    if (parsed === undefined) {
+      return undefined;
+    }
+
+    const normalized = Math.abs(parsed);
+    if (normalized <= MAX_MONEY_VALUE && (normalized > 0 || allowZero)) {
+      return roundMoney(normalized);
+    }
+
+    return undefined;
+  }
+
   /**
    * Valida se o resultado do OCR tem conteúdo suficiente
    */
@@ -190,4 +338,3 @@ export class OcrResultDto {
     return result.rawText.length > 10 && result.items.length > 0;
   }
 }
-

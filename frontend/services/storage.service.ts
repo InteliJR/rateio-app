@@ -1,4 +1,5 @@
 // services/storage.service.ts
+import { logger } from '../lib/logger';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
@@ -14,7 +15,7 @@ class StorageService {
       try {
         localStorage.setItem(key, value);
       } catch (error) {
-        console.error('[Storage] Error setting item on web:', error);
+        logger.error('[Storage] Error setting item on web:', error);
         throw error;
       }
     } else {
@@ -28,7 +29,7 @@ class StorageService {
       try {
         return localStorage.getItem(key);
       } catch (error) {
-        console.error('[Storage] Error getting item on web:', error);
+        logger.error('[Storage] Error getting item on web:', error);
         return null;
       }
     } else {
@@ -41,7 +42,7 @@ class StorageService {
       try {
         localStorage.removeItem(key);
       } catch (error) {
-        console.error('[Storage] Error deleting item on web:', error);
+        logger.error('[Storage] Error deleting item on web:', error);
         throw error;
       }
     } else {

@@ -4,10 +4,20 @@ import {
   BadRequestException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import OpenAI, { APIError, APIConnectionError, APIConnectionTimeoutError } from 'openai';
+import OpenAI, {
+  APIError,
+  APIConnectionError,
+  APIConnectionTimeoutError,
+} from 'openai';
 import { ValidationError } from 'class-validator';
 import { OcrResultDto, OcrResult } from './dto/ocr-result.dto';
-
+import {
+  parseOcrNumber,
+  parseOcrQuantity,
+  roundMoney,
+} from './ocr-number.util';
+import { normalizeMeasurementUnit } from '../common/measurement-unit';
+import { MAX_MONEY_VALUE } from '../common/numeric-limits';
 
 @Injectable()
 export class OcrService {
@@ -20,10 +30,14 @@ export class OcrService {
   constructor() {
     // Validar variáveis de ambiente obrigatórias
     if (!process.env.OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY não está definida nas variáveis de ambiente');
+      throw new Error(
+        'OPENAI_API_KEY não está definida nas variáveis de ambiente',
+      );
     }
     if (!process.env.OPENAI_MODEL) {
-      throw new Error('OPENAI_MODEL não está definida nas variáveis de ambiente');
+      throw new Error(
+        'OPENAI_MODEL não está definida nas variáveis de ambiente',
+      );
     }
 
     // Inicializar cliente OpenAI
@@ -40,33 +54,30 @@ export class OcrService {
   async processImage(imageUrl: string): Promise<OcrResult> {
     try {
       // 1. Fazer OCR da imagem com retry
-      const response = await this.retryWithBackoff(
-        async () => {
-          return await this.openaiClient.chat.completions.create({
-            model: this.model,
-            messages: [
-              {
-                role: 'user',
-                content: [
-                  {
-                    type: 'text',
-                    text: this.getStructuredPrompt(),
+      const response = await this.retryWithBackoff(async () => {
+        return await this.openaiClient.chat.completions.create({
+          model: this.model,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: this.getStructuredPrompt(),
+                },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: imageUrl,
                   },
-                  {
-                    type: 'image_url',
-                    image_url: {
-                      url: imageUrl,
-                    },
-                  },
-                ],
-              },
-            ],
-            response_format: { type: 'json_object' },
-            max_tokens: 2000,
-          });
-        },
-        imageUrl,
-      );
+                },
+              ],
+            },
+          ],
+          response_format: { type: 'json_object' },
+          max_tokens: 2000,
+        });
+      }, imageUrl);
 
       const responseContent = response.choices[0]?.message?.content || '';
 
@@ -78,7 +89,10 @@ export class OcrService {
       try {
         const jsonData = JSON.parse(responseContent);
         const validatedData = await OcrResultDto.fromOpenAiResponse(jsonData);
-        const parsedData = this.parseJsonResponse(validatedData, responseContent);
+        const parsedData = this.parseJsonResponse(
+          validatedData,
+          responseContent,
+        );
 
         return {
           rawText: responseContent,
@@ -87,36 +101,57 @@ export class OcrService {
       } catch (error) {
         // Tratar erros de parsing/validação
         if (error instanceof SyntaxError) {
-          this.logError('JSON_INVALID', 'Resposta não é JSON válido', { imageUrl, error }, 'warn');
-          console.warn('Resposta não é JSON válido, usando parser de texto como fallback');
-          
+          this.logError(
+            'JSON_INVALID',
+            'Resposta não é JSON válido',
+            { imageUrl, error },
+            'warn',
+          );
+          console.warn(
+            'Resposta não é JSON válido, usando parser de texto como fallback',
+          );
+
           // Fallback: tenta processar como texto
           const parsedData = this.parseReceiptText(responseContent);
           return {
             rawText: responseContent,
             ...parsedData,
           };
-        } else if (Array.isArray(error) && error.length > 0 && error[0] instanceof ValidationError) {
+        } else if (
+          Array.isArray(error) &&
+          error.length > 0 &&
+          error[0] instanceof ValidationError
+        ) {
           this.logValidationError(error, imageUrl);
-          console.warn('JSON não passou na validação, tentando extrair dados mesmo assim...');
-          
+          console.warn(
+            'JSON não passou na validação, tentando extrair dados mesmo assim...',
+          );
+
           // Tentar extrair dados do JSON mesmo com validação falhada
           try {
             const jsonData = JSON.parse(responseContent);
-            const parsedData = this.parseJsonResponseUnvalidated(jsonData, responseContent);
-            
+            const parsedData = this.parseJsonResponseUnvalidated(
+              jsonData,
+              responseContent,
+            );
+
             // Se conseguiu extrair pelo menos alguns itens, usar esses dados
             if (parsedData.items && parsedData.items.length > 0) {
-              console.warn('Dados extraídos do JSON apesar da validação falhar. Itens encontrados:', parsedData.items.length);
+              console.warn(
+                'Dados extraídos do JSON apesar da validação falhar. Itens encontrados:',
+                parsedData.items.length,
+              );
               return {
                 rawText: responseContent,
                 ...parsedData,
               };
             }
           } catch (fallbackError) {
-            console.warn('Não foi possível extrair dados do JSON, usando parser de texto como fallback');
+            console.warn(
+              'Não foi possível extrair dados do JSON, usando parser de texto como fallback',
+            );
           }
-          
+
           // Fallback final: tenta processar como texto
           const parsedData = this.parseReceiptText(responseContent);
           return {
@@ -124,8 +159,11 @@ export class OcrService {
             ...parsedData,
           };
         } else {
-          this.logError('PARSE_ERROR', 'Erro ao processar resposta da OpenAI', { imageUrl, error });
-          
+          this.logError('PARSE_ERROR', 'Erro ao processar resposta da OpenAI', {
+            imageUrl,
+            error,
+          });
+
           // Fallback: tenta processar como texto
           const parsedData = this.parseReceiptText(responseContent);
           return {
@@ -154,6 +192,7 @@ Estrutura esperada:
     {
       "name": "Nome do item",
       "quantity": 1,
+      "measurementUnit": "UNIT",
       "unitPrice": 10.00,
       "totalPrice": 10.00
     }
@@ -185,11 +224,13 @@ Instruções:
 5. Extraia taxas e serviços (garçom, couvert, etc.) - inclua tipo, descrição, valor e percentual quando aplicável
 6. Identifique descontos quando presentes
 7. Identifique a moeda (BRL, USD, EUR, etc.) - padrão é BRL se não especificado
-8. Para quantidades, se não estiver explícito, assuma 1
+8. Para quantidades, aceite valores fracionários e preserve até 3 casas decimais; se não estiver explícito, assuma 1
 9. Para preços unitários, se não estiver explícito, calcule dividindo o preço total pela quantidade
 10. Trate valores com vírgula ou ponto decimal (ex: 10,50 ou 10.50)
 11. Se houver múltiplas moedas, use a moeda principal da conta
 12. Retorne APENAS o JSON, sem texto adicional ou markdown
+13. Informe measurementUnit como UNIT, KILOGRAM, GRAM, LITER ou MILLILITER; use UNIT quando a unidade não estiver explícita
+14. Itens vendidos por peso ou volume devem manter a quantidade decimal impressa na conta (ex.: 0,750 kg)
 
 Casos especiais:
 - Se houver taxa de serviço percentual, calcule o valor e inclua tanto o valor quanto o percentual
@@ -274,16 +315,19 @@ JSON esperado:
 Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos fornecidos.`;
   }
 
-
   /**
    * Processa resposta JSON validada da OpenAI
    * Os dados já foram validados pelo class-validator, então podemos confiar nos tipos
    */
-  private parseJsonResponse(jsonData: OcrResultDto, rawText: string): Omit<OcrResult, 'rawText'> {
+  private parseJsonResponse(
+    jsonData: OcrResultDto,
+    rawText: string,
+  ): Omit<OcrResult, 'rawText'> {
     // Converter itens validados para o formato OcrResult
     const items: OcrResult['items'] = jsonData.items.map((item) => ({
       name: item.name.trim(),
       quantity: item.quantity || 1,
+      measurementUnit: item.measurementUnit,
       unitPrice: item.unitPrice,
       totalPrice: item.totalPrice,
     }));
@@ -299,25 +343,77 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
    * Processa resposta JSON sem validação rigorosa (fallback quando validação falha)
    * Tenta extrair dados mesmo quando a validação do DTO falhou
    */
-  private parseJsonResponseUnvalidated(jsonData: any, rawText: string): Omit<OcrResult, 'rawText'> {
+  private parseJsonResponseUnvalidated(
+    jsonData: any,
+    rawText: string,
+  ): Omit<OcrResult, 'rawText'> {
     const items: OcrResult['items'] = [];
-    
+
     // Tentar extrair itens do JSON
     if (jsonData.items && Array.isArray(jsonData.items)) {
       for (const item of jsonData.items) {
-        if (item && item.name) {
-          const name = String(item.name).trim();
-          const quantity = item.quantity ? Math.max(1, Math.floor(Number(item.quantity))) : 1;
-          const unitPrice = item.unitPrice ? Math.max(0, Number(item.unitPrice)) : 0;
-          const totalPrice = item.totalPrice ? Math.max(0, Number(item.totalPrice)) : 0;
-          
+        if (item) {
+          const name = String(
+            item.name ??
+              item.nome ??
+              item.description ??
+              item.descricao ??
+              item.produto ??
+              '',
+          ).trim();
+          const quantity = parseOcrQuantity(
+            item.quantity ?? item.quantidade ?? item.qty ?? item.qtd ?? 1,
+          );
+          const measurementUnit = normalizeMeasurementUnit(
+            item.measurementUnit ??
+              item.measurement_unit ??
+              item.unit ??
+              item.unidade ??
+              item.uom,
+          );
+          const parsedUnitPrice = Math.max(
+            0,
+            parseOcrNumber(
+              item.unitPrice ??
+                item.unit_price ??
+                item.precoUnitario ??
+                item.preco_unitario ??
+                item.valorUnitario ??
+                item.valor_unitario ??
+                item.price ??
+                item.preco ??
+                item.valor,
+            ) ?? 0,
+          );
+          const parsedTotalPrice = Math.max(
+            0,
+            parseOcrNumber(
+              item.totalPrice ??
+                item.total_price ??
+                item.precoTotal ??
+                item.preco_total ??
+                item.valorTotal ??
+                item.valor_total ??
+                item.total,
+            ) ?? 0,
+          );
+          const unitPrice =
+            parsedUnitPrice <= MAX_MONEY_VALUE ? parsedUnitPrice : 0;
+          const totalPrice =
+            parsedTotalPrice <= MAX_MONEY_VALUE ? parsedTotalPrice : 0;
+
           // Só adicionar se tiver nome válido e preço válido
           if (name.length > 0 && (unitPrice > 0 || totalPrice > 0)) {
             items.push({
               name,
               quantity,
-              unitPrice: unitPrice > 0 ? unitPrice : (totalPrice / quantity),
-              totalPrice: totalPrice > 0 ? totalPrice : (unitPrice * quantity),
+              measurementUnit,
+              unitPrice: roundMoney(
+                unitPrice > 0 ? unitPrice : totalPrice / quantity,
+              ),
+              totalPrice: roundMoney(
+                totalPrice > 0 ? totalPrice : unitPrice * quantity,
+              ),
             });
           }
         }
@@ -325,13 +421,28 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
     }
 
     // Extrair outros campos
-    const totalAmount = jsonData.totalAmount ? Number(jsonData.totalAmount) : undefined;
-    const establishmentName = jsonData.establishmentName ? String(jsonData.establishmentName).trim() : undefined;
+    const totalAmount = parseOcrNumber(
+      jsonData.totalAmount ??
+        jsonData.total ??
+        jsonData.valorTotal ??
+        jsonData.valor_total ??
+        jsonData.totalGeral ??
+        jsonData.total_geral,
+    );
+    const establishmentName = jsonData.establishmentName
+      ? String(jsonData.establishmentName).trim()
+      : undefined;
 
     return {
       items,
-      totalAmount: totalAmount && totalAmount > 0 ? totalAmount : undefined,
-      establishmentName: establishmentName && establishmentName.length > 0 ? establishmentName : undefined,
+      totalAmount:
+        totalAmount && totalAmount > 0 && totalAmount <= MAX_MONEY_VALUE
+          ? roundMoney(totalAmount)
+          : undefined,
+      establishmentName:
+        establishmentName && establishmentName.length > 0
+          ? establishmentName
+          : undefined,
     };
   }
 
@@ -347,7 +458,7 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
 
     // Regex para detectar itens com valor (ex: "Coca Cola 5,00" ou "2x Cerveja 12,00")
     const itemRegex = /(\d+x?\s*)?([a-zA-ZÀ-ÿ\s]+)\s+(\d+[,.]?\d*)/gi;
-    
+
     // Regex para detectar total (ex: "TOTAL: 45,00" ou "Total R$ 45,00")
     const totalRegex = /total[:\s]*r?\$?\s*(\d+[,.]?\d+)/gi;
 
@@ -364,15 +475,16 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
         const name = match[2].trim();
         const priceStr = match[3].replace(',', '.');
 
-        const quantity = parseInt(quantityStr, 10) || 1;
+        const quantity = parseOcrQuantity(quantityStr);
         const price = parseFloat(priceStr);
 
         if (!isNaN(price) && name.length > 2) {
           items.push({
             name,
             quantity,
-            unitPrice: quantity > 1 ? price / quantity : price,
-            totalPrice: price,
+            measurementUnit: normalizeMeasurementUnit(undefined),
+            unitPrice: roundMoney(quantity !== 1 ? price / quantity : price),
+            totalPrice: roundMoney(price),
           });
         }
       }
@@ -391,11 +503,13 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
     };
   }
 
-
   /**
    * Trata erros específicos da API OpenAI e retorna exceções apropriadas
    */
-  private handleOpenAiError(error: any, imageUrl: string): InternalServerErrorException {
+  private handleOpenAiError(
+    error: any,
+    imageUrl: string,
+  ): InternalServerErrorException {
     // Erro de API (status HTTP, rate limit, etc)
     if (error instanceof APIError) {
       const status = error.status;
@@ -438,7 +552,10 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
     }
 
     // Erro de conexão
-    if (error instanceof APIConnectionError || error instanceof APIConnectionTimeoutError) {
+    if (
+      error instanceof APIConnectionError ||
+      error instanceof APIConnectionTimeoutError
+    ) {
       this.logError('OPENAI_CONNECTION_ERROR', 'Erro de conexão com OpenAI', {
         imageUrl,
         message: error.message,
@@ -465,7 +582,10 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
   /**
    * Loga erros de validação com detalhes
    */
-  private logValidationError(errors: ValidationError[], imageUrl: string): void {
+  private logValidationError(
+    errors: ValidationError[],
+    imageUrl: string,
+  ): void {
     const validationErrors = errors.map((err) => {
       const error: any = {
         property: err.property,
@@ -484,13 +604,20 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
       return error;
     });
 
-    console.error('Erros de validação:', JSON.stringify(validationErrors, null, 2));
+    console.error(
+      'Erros de validação:',
+      JSON.stringify(validationErrors, null, 2),
+    );
 
-    this.logError('VALIDATION_ERROR', 'Erro de validação do JSON retornado pela OpenAI', {
-      imageUrl,
-      errors: validationErrors,
-      errorCount: validationErrors.length,
-    });
+    this.logError(
+      'VALIDATION_ERROR',
+      'Erro de validação do JSON retornado pela OpenAI',
+      {
+        imageUrl,
+        errors: validationErrors,
+        errorCount: validationErrors.length,
+      },
+    );
   }
 
   /**
@@ -517,13 +644,24 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
 
       // Se atingiu o máximo de tentativas, lança o erro
       if (attempt >= this.maxRetries) {
-        this.logRetryAttempt(attempt, imageUrl, 'falhou_apos_todas_tentativas', error);
+        this.logRetryAttempt(
+          attempt,
+          imageUrl,
+          'falhou_apos_todas_tentativas',
+          error,
+        );
         throw error;
       }
 
       // Calcula delay exponencial: após tentativa 1 falhar = 1s, após tentativa 2 falhar = 2s
       const delayMs = this.getRetryDelayMs(error, attempt);
-      this.logRetryAttempt(attempt, imageUrl, 'falhou_tentando_novamente', error, delayMs);
+      this.logRetryAttempt(
+        attempt,
+        imageUrl,
+        'falhou_tentando_novamente',
+        error,
+        delayMs,
+      );
 
       // Aguarda antes de tentar novamente
       await this.sleep(delayMs);
@@ -554,13 +692,20 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
     // Erros de autenticação (401, 403) não devem ser retentados
     if (error instanceof APIError) {
       const apiErrorStatus = error.status;
-      if (apiErrorStatus === 401 || apiErrorStatus === 403 || apiErrorStatus === 400) {
+      if (
+        apiErrorStatus === 401 ||
+        apiErrorStatus === 403 ||
+        apiErrorStatus === 400
+      ) {
         return true;
       }
     }
 
     // Verificar também se o erro tem a propriedade code que indica erro de autenticação
-    if (error.code && (error.code === 'unauthorized' || error.code === 'invalid_api_key')) {
+    if (
+      error.code &&
+      (error.code === 'unauthorized' || error.code === 'invalid_api_key')
+    ) {
       return true;
     }
 
@@ -582,8 +727,7 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
 
   private getRetryAfterMs(error: any): number | null {
     const retryAfterHeader =
-      error?.headers?.['retry-after'] ??
-      error?.headers?.get?.('retry-after');
+      error?.headers?.['retry-after'] ?? error?.headers?.get?.('retry-after');
 
     if (!retryAfterHeader) {
       return null;
@@ -618,7 +762,11 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
   private logRetryAttempt(
     attempt: number,
     imageUrl: string,
-    status: 'iniciando' | 'sucesso' | 'falhou_tentando_novamente' | 'falhou_apos_todas_tentativas',
+    status:
+      | 'iniciando'
+      | 'sucesso'
+      | 'falhou_tentando_novamente'
+      | 'falhou_apos_todas_tentativas',
     error?: any,
     delayMs?: number,
   ): void {
@@ -646,11 +794,20 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
     }
 
     if (status === 'falhou_apos_todas_tentativas') {
-      console.error(`[OCR_RETRY] Tentativa ${attempt}/${this.maxRetries} falhou após todas as tentativas:`, JSON.stringify(logData, null, 2));
+      console.error(
+        `[OCR_RETRY] Tentativa ${attempt}/${this.maxRetries} falhou após todas as tentativas:`,
+        JSON.stringify(logData, null, 2),
+      );
     } else if (status === 'falhou_tentando_novamente') {
-      console.warn(`[OCR_RETRY] Tentativa ${attempt}/${this.maxRetries} falhou, tentando novamente em ${delayMs}ms:`, JSON.stringify(logData, null, 2));
+      console.warn(
+        `[OCR_RETRY] Tentativa ${attempt}/${this.maxRetries} falhou, tentando novamente em ${delayMs}ms:`,
+        JSON.stringify(logData, null, 2),
+      );
     } else if (status === 'sucesso' && attempt > 1) {
-      console.log(`[OCR_RETRY] Tentativa ${attempt}/${this.maxRetries} bem-sucedida após retry:`, JSON.stringify(logData, null, 2));
+      console.log(
+        `[OCR_RETRY] Tentativa ${attempt}/${this.maxRetries} bem-sucedida após retry:`,
+        JSON.stringify(logData, null, 2),
+      );
     } else if (status === 'iniciando' && attempt === 1) {
       // Não loga a primeira tentativa inicial para não poluir os logs
     }
@@ -673,9 +830,15 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
     };
 
     if (level === 'error') {
-      console.error(`[OCR_ERROR] ${errorType}:`, JSON.stringify(logData, null, 2));
+      console.error(
+        `[OCR_ERROR] ${errorType}:`,
+        JSON.stringify(logData, null, 2),
+      );
     } else {
-      console.warn(`[OCR_WARN] ${errorType}:`, JSON.stringify(logData, null, 2));
+      console.warn(
+        `[OCR_WARN] ${errorType}:`,
+        JSON.stringify(logData, null, 2),
+      );
     }
   }
 }

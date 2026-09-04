@@ -19,6 +19,11 @@ import {
   validateItemAllocations,
 } from "../../../lib/rateio";
 import { formatCurrency } from "../../../lib/formatters";
+import {
+  formatItemQuantity,
+  getItemTotalPrice,
+  isMeasuredItem,
+} from "../../../lib/measurementUnits";
 import itemsService from "../../../services/items.service";
 import { useRateioDraftStore } from "../../../store/rateioDraftStore";
 
@@ -49,28 +54,40 @@ export default function SplitScreen() {
     () => validateItemAllocations(items, itemAllocations, participants),
     [items, itemAllocations, participants],
   );
+  const serviceFeePayerCount = useMemo(
+    () =>
+      serviceFeeConfig.selectedParticipantIds.filter((participantId) =>
+        validParticipantIds.has(participantId),
+      ).length,
+    [serviceFeeConfig.selectedParticipantIds, validParticipantIds],
+  );
 
+  const serviceFeeDescription =
+    serviceFeePayerCount === 0
+      ? "Selecione quem vai pagar a taxa sobre o próprio subtotal."
+      : serviceFeePayerCount === 1
+        ? "A taxa de serviço será paga pela pessoa selecionada."
+        : `A taxa de serviço será dividida entre as ${serviceFeePayerCount} pessoas selecionadas.`;
 
-  const syncDraftItems = useCallback((nextItems: BillItem[]) => {
-    setBillMeta({
-      billName,
-      participants,
-      items: nextItems.map((item) => ({
-        id: item.id,
-        name: item.name,
-        quantity: item.quantity,
-        price: item.price,
-      })),
-      serviceFeePercentage,
-      couvertValue,
-    });
-  }, [
-    billName,
-    participants,
-    serviceFeePercentage,
-    couvertValue,
-    setBillMeta,
-  ]);
+  const syncDraftItems = useCallback(
+    (nextItems: BillItem[]) => {
+      setBillMeta({
+        billName,
+        participants,
+        items: nextItems.map((item) => ({
+          id: item.id,
+          name: item.name,
+          quantity: item.quantity,
+          measurementUnit: item.measurementUnit,
+          price: item.price,
+          totalPrice: item.totalPrice,
+        })),
+        serviceFeePercentage,
+        couvertValue,
+      });
+    },
+    [billName, participants, serviceFeePercentage, couvertValue, setBillMeta],
+  );
 
   const reloadItemsFromBackend = useCallback(async () => {
     if (!billId) return;
@@ -114,7 +131,9 @@ export default function SplitScreen() {
         ? allocation.selectedParticipantIds.includes(participantId)
           ? allocation.selectedParticipantIds
           : [...allocation.selectedParticipantIds, participantId]
-        : allocation.selectedParticipantIds.filter((id) => id !== participantId);
+        : allocation.selectedParticipantIds.filter(
+            (id) => id !== participantId,
+          );
 
     setItemAllocation(itemId, {
       selectedParticipantIds: nextSelectedParticipantIds,
@@ -131,9 +150,10 @@ export default function SplitScreen() {
     if (!item || !allocation) return;
 
     const currentQuantity = allocation.quantities[participantId] ?? 0;
+    const measured = isMeasuredItem(item);
     const isParticipantIncluded =
       allocation.selectedParticipantIds.includes(participantId);
-    const isSelected = currentQuantity > 0;
+    const isSelected = measured ? isParticipantIncluded : currentQuantity > 0;
     const nextSelectedParticipantIds = isSelected
       ? allocation.selectedParticipantIds.filter((id) => id !== participantId)
       : isParticipantIncluded
@@ -145,12 +165,47 @@ export default function SplitScreen() {
       quantities: {
         ...allocation.quantities,
         [participantId]:
-          item.quantity === 1
+          measured || item.quantity === 1
             ? Number(!isSelected)
             : isSelected
               ? 0
               : item.quantity,
       },
+    });
+  };
+
+  const toggleAllParticipantsForItem = (itemId: string) => {
+    const item = items.find((currentItem) => currentItem.id === itemId);
+    const allocation = getAllocationForItem(itemId);
+    if (!item || !allocation || participants.length === 0) return;
+
+    const measured = isMeasuredItem(item);
+    const areAllSelected = participants.every((participant) =>
+      measured
+        ? allocation.selectedParticipantIds.includes(participant.id)
+        : (allocation.quantities[participant.id] ?? 0) > 0,
+    );
+
+    const quantities = participants.reduce<Record<string, number>>(
+      (nextQuantities, participant) => {
+        const currentQuantity = allocation.quantities[participant.id] ?? 0;
+        nextQuantities[participant.id] = areAllSelected
+          ? 0
+          : measured
+            ? 1
+            : currentQuantity > 0
+              ? currentQuantity
+              : item.quantity;
+        return nextQuantities;
+      },
+      { ...allocation.quantities },
+    );
+
+    setItemAllocation(itemId, {
+      selectedParticipantIds: areAllSelected
+        ? []
+        : participants.map((participant) => participant.id),
+      quantities,
     });
   };
 
@@ -163,80 +218,109 @@ export default function SplitScreen() {
     setFeeSelection("service", nextSelected);
   };
 
-  const handleAddItem = useCallback(async (
-    item: Omit<BillItem, "id" | "assignedParticipants">,
-  ) => {
-    if (!billId) return;
+  const handleAddItem = useCallback(
+    async (item: Omit<BillItem, "id" | "assignedParticipants">) => {
+      if (!billId) return;
 
-    try {
-      const created = await itemsService.createItem(billId, item);
-      syncDraftItems([
-        ...items.map((currentItem) => ({
-          ...currentItem,
-          assignedParticipants: [],
-        })),
-        created,
-      ]);
-    } catch (error: any) {
-      Alert.alert("Erro", error.message || "Não foi possível adicionar item.");
-    }
-  }, [billId, items, syncDraftItems]);
-
-  const handleDeleteItem = useCallback(async (itemId: string) => {
-    if (!billId) return;
-
-    try {
-      await itemsService.deleteItem(billId, itemId);
-      syncDraftItems(
-        items
-          .filter((item) => item.id !== itemId)
-          .map((item) => ({ ...item, assignedParticipants: [] })),
-      );
-    } catch (error: any) {
-      Alert.alert("Erro", error.message || "Não foi possível remover item.");
-    }
-  }, [billId, items, syncDraftItems]);
-
-  const handleUpdateItem = useCallback(async (updatedItem: BillItem) => {
-    if (!billId) return;
-
-    const currentItem = items.find((item) => item.id === updatedItem.id);
-    if (!currentItem) return;
-
-    const previousItems = items.map((item) => ({
-      ...item,
-      assignedParticipants: [],
-    }));
-    const optimisticItems = items.map((item) =>
-      item.id === updatedItem.id
-        ? { ...updatedItem, assignedParticipants: [] }
-        : { ...item, assignedParticipants: [] },
-    );
-
-    syncDraftItems(optimisticItems);
-
-    try {
-      if (currentItem.name !== updatedItem.name) {
-        await itemsService.updateItemName(billId, updatedItem.id, updatedItem.name);
-      }
-
-      if (currentItem.quantity !== updatedItem.quantity) {
-        await itemsService.updateItemQuantity(
-          billId,
-          updatedItem.id,
-          updatedItem.quantity,
+      try {
+        const created = await itemsService.createItem(billId, item);
+        syncDraftItems([
+          ...items.map((currentItem) => ({
+            ...currentItem,
+            assignedParticipants: [],
+          })),
+          created,
+        ]);
+      } catch (error: any) {
+        Alert.alert(
+          "Erro",
+          error.message || "Não foi possível adicionar item.",
         );
       }
+    },
+    [billId, items, syncDraftItems],
+  );
 
-      if (currentItem.price !== updatedItem.price) {
-        await itemsService.updateItemPrice(billId, updatedItem.id, updatedItem.price);
+  const handleDeleteItem = useCallback(
+    async (itemId: string) => {
+      if (!billId) return;
+
+      try {
+        await itemsService.deleteItem(billId, itemId);
+        syncDraftItems(
+          items
+            .filter((item) => item.id !== itemId)
+            .map((item) => ({ ...item, assignedParticipants: [] })),
+        );
+      } catch (error: any) {
+        Alert.alert("Erro", error.message || "Não foi possível remover item.");
       }
-    } catch (error: any) {
-      syncDraftItems(previousItems);
-      Alert.alert("Erro", error.message || "Não foi possível atualizar item.");
-      await reloadItemsFromBackend();
-    }
-  }, [billId, items, reloadItemsFromBackend, syncDraftItems]);
+    },
+    [billId, items, syncDraftItems],
+  );
+
+  const handleUpdateItem = useCallback(
+    async (updatedItem: BillItem) => {
+      if (!billId) return;
+
+      const currentItem = items.find((item) => item.id === updatedItem.id);
+      if (!currentItem) return;
+
+      const previousItems = items.map((item) => ({
+        ...item,
+        assignedParticipants: [],
+      }));
+      const optimisticItems = items.map((item) =>
+        item.id === updatedItem.id
+          ? { ...updatedItem, assignedParticipants: [] }
+          : { ...item, assignedParticipants: [] },
+      );
+
+      syncDraftItems(optimisticItems);
+
+      try {
+        if (currentItem.name !== updatedItem.name) {
+          await itemsService.updateItemName(
+            billId,
+            updatedItem.id,
+            updatedItem.name,
+          );
+        }
+
+        if (currentItem.quantity !== updatedItem.quantity) {
+          await itemsService.updateItemQuantity(
+            billId,
+            updatedItem.id,
+            updatedItem.quantity,
+          );
+        }
+
+        if (currentItem.measurementUnit !== updatedItem.measurementUnit) {
+          await itemsService.updateItemMeasurementUnit(
+            billId,
+            updatedItem.id,
+            updatedItem.measurementUnit,
+          );
+        }
+
+        if (currentItem.price !== updatedItem.price) {
+          await itemsService.updateItemPrice(
+            billId,
+            updatedItem.id,
+            updatedItem.price,
+          );
+        }
+      } catch (error: any) {
+        syncDraftItems(previousItems);
+        Alert.alert(
+          "Erro",
+          error.message || "Não foi possível atualizar item.",
+        );
+        await reloadItemsFromBackend();
+      }
+    },
+    [billId, items, reloadItemsFromBackend, syncDraftItems],
+  );
 
   const handleContinue = () => {
     if (!billId) {
@@ -315,7 +399,9 @@ export default function SplitScreen() {
               },
             ]}
           >
-            <Text style={[styles.emptyCardText, { color: colors.textSecondary }]}>
+            <Text
+              style={[styles.emptyCardText, { color: colors.textSecondary }]}
+            >
               Adicione os itens da conta antes de fazer o rateio.
             </Text>
           </View>
@@ -331,10 +417,14 @@ export default function SplitScreen() {
         )}
       </View>
 
-      <View style={[styles.sectionDivider, { backgroundColor: colors.primary }]} />
+      <View
+        style={[styles.sectionDivider, { backgroundColor: colors.primary }]}
+      />
 
       <View style={styles.header}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Rateio dos itens</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          Rateio dos itens
+        </Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
           Selecione quem vai pagar cada item.
         </Text>
@@ -347,7 +437,8 @@ export default function SplitScreen() {
         const allocation = getAllocationForItem(item.id);
         if (!allocation) return null;
 
-        const itemTotal = item.quantity * item.price;
+        const measured = isMeasuredItem(item);
+        const itemTotal = getItemTotalPrice(item);
         const assignedQuantity = getAssignedQuantity(
           item,
           allocation,
@@ -358,6 +449,13 @@ export default function SplitScreen() {
           allocation,
           validParticipantIds,
         );
+        const areAllParticipantsSelected =
+          participants.length > 0 &&
+          participants.every((participant) =>
+            measured
+              ? allocation.selectedParticipantIds.includes(participant.id)
+              : (allocation.quantities[participant.id] ?? 0) > 0,
+          );
 
         return (
           <View
@@ -378,8 +476,12 @@ export default function SplitScreen() {
                 >
                   {item.name}
                 </Text>
-                <Text style={[styles.itemMeta, { color: colors.textSecondary }]}>
-                  {item.quantity}x • {formatCurrency(item.price)} cada
+                <Text
+                  style={[styles.itemMeta, { color: colors.textSecondary }]}
+                >
+                  {formatItemQuantity(item.quantity, item.measurementUnit)} •{" "}
+                  {formatCurrency(item.price)} por{" "}
+                  {formatItemQuantity(1, item.measurementUnit)}
                 </Text>
               </View>
               <Text style={[styles.itemTotal, { color: colors.text }]}>
@@ -388,18 +490,62 @@ export default function SplitScreen() {
             </View>
 
             <View style={styles.helperBlock}>
-              {assignedQuantity < item.quantity && (
-                <Text style={[styles.helperText, { color: colors.textSecondary }]}>
-                  Restam {item.quantity - assignedQuantity} unidade
-                  {item.quantity - assignedQuantity !== 1 ? "s" : ""} para cobrir.
+              {measured ? (
+                <Text
+                  style={[styles.helperText, { color: colors.textSecondary }]}
+                >
+                  O valor total será dividido igualmente entre as pessoas
+                  selecionadas.
                 </Text>
-              )}
+              ) : assignedQuantity < item.quantity ? (
+                <Text
+                  style={[styles.helperText, { color: colors.textSecondary }]}
+                >
+                  Restam {item.quantity - assignedQuantity} unidade
+                  {item.quantity - assignedQuantity !== 1 ? "s" : ""} para
+                  cobrir.
+                </Text>
+              ) : null}
+            </View>
+
+            <View style={styles.selectionHeader}>
+              <Text style={[styles.selectionTitle, { color: colors.text }]}>
+                Pessoas
+              </Text>
+              <TouchableOpacity
+                style={styles.selectAllButton}
+                onPress={() => toggleAllParticipantsForItem(item.id)}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  areAllParticipantsSelected
+                    ? `Desmarcar todas as pessoas de ${item.name}`
+                    : `Selecionar todas as pessoas para ${item.name}`
+                }
+              >
+                <Ionicons
+                  name={
+                    areAllParticipantsSelected
+                      ? "checkbox-outline"
+                      : "square-outline"
+                  }
+                  size={18}
+                  color={colors.primary}
+                />
+                <Text style={[styles.selectAllText, { color: colors.primary }]}>
+                  {areAllParticipantsSelected
+                    ? "Desmarcar todos"
+                    : "Selecionar todos"}
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.participantsList}>
               {participants.map((participant) => {
-                const quantityValue = allocation.quantities[participant.id] ?? 0;
-                const isSelected = quantityValue > 0;
+                const quantityValue =
+                  allocation.quantities[participant.id] ?? 0;
+                const isSelected = measured
+                  ? allocation.selectedParticipantIds.includes(participant.id)
+                  : quantityValue > 0;
 
                 return (
                   <View key={participant.id} style={styles.participantBlock}>
@@ -415,18 +561,28 @@ export default function SplitScreen() {
                             styles.checkbox,
                             {
                               borderColor: isSelected ? "#111111" : "#B7B7B7",
-                              backgroundColor: isSelected ? "#111111" : "#E0E0E0",
+                              backgroundColor: isSelected
+                                ? "#111111"
+                                : "#E0E0E0",
                             },
                           ]}
                         >
                           {isSelected && (
-                            <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                            <Ionicons
+                              name="checkmark"
+                              size={14}
+                              color="#FFFFFF"
+                            />
                           )}
                         </View>
                         <Text
                           style={[
                             styles.participantName,
-                            { color: isSelected ? colors.text : colors.textTertiary },
+                            {
+                              color: isSelected
+                                ? colors.text
+                                : colors.textTertiary,
+                            },
                           ]}
                           numberOfLines={1}
                         >
@@ -434,7 +590,7 @@ export default function SplitScreen() {
                         </Text>
                       </TouchableOpacity>
 
-                      {item.quantity > 1 && (
+                      {!measured && item.quantity > 1 && (
                         <View style={styles.quantityControl}>
                           <TouchableOpacity
                             style={[
@@ -445,13 +601,26 @@ export default function SplitScreen() {
                               },
                             ]}
                             onPress={() =>
-                              changeParticipantQuantity(item.id, participant.id, -1)
+                              changeParticipantQuantity(
+                                item.id,
+                                participant.id,
+                                -1,
+                              )
                             }
                             disabled={quantityValue === 0}
                           >
-                            <Ionicons name="remove" size={16} color={colors.text} />
+                            <Ionicons
+                              name="remove"
+                              size={16}
+                              color={colors.text}
+                            />
                           </TouchableOpacity>
-                          <Text style={[styles.quantityText, { color: colors.text }]}>
+                          <Text
+                            style={[
+                              styles.quantityText,
+                              { color: colors.text },
+                            ]}
+                          >
                             {quantityValue}
                           </Text>
                           <TouchableOpacity
@@ -459,15 +628,24 @@ export default function SplitScreen() {
                               styles.quantityButton,
                               {
                                 borderColor: colors.cardBorder,
-                                opacity: quantityValue >= item.quantity ? 0.5 : 1,
+                                opacity:
+                                  quantityValue >= item.quantity ? 0.5 : 1,
                               },
                             ]}
                             onPress={() =>
-                              changeParticipantQuantity(item.id, participant.id, 1)
+                              changeParticipantQuantity(
+                                item.id,
+                                participant.id,
+                                1,
+                              )
                             }
                             disabled={quantityValue >= item.quantity}
                           >
-                            <Ionicons name="add" size={16} color={colors.text} />
+                            <Ionicons
+                              name="add"
+                              size={16}
+                              color={colors.text}
+                            />
                           </TouchableOpacity>
                         </View>
                       )}
@@ -497,7 +675,7 @@ export default function SplitScreen() {
           {serviceFeePercentage > 0 && (
             <FeeSelector
               title={`Taxa de serviço (${serviceFeePercentage}%)`}
-              description="Selecione quem vai pagar a taxa sobre o próprio subtotal."
+              description={serviceFeeDescription}
               participants={participants}
               selectedParticipantIds={serviceFeeConfig.selectedParticipantIds}
               onToggle={toggleServiceFeeParticipant}
@@ -510,8 +688,11 @@ export default function SplitScreen() {
               <Text style={[styles.feeTitle, { color: colors.text }]}>
                 {`Couvert artístico (${formatCurrency(couvertValue)})`}
               </Text>
-              <Text style={[styles.feeInfoText, { color: colors.textSecondary }]}>
-                O couvert é obrigatório e pago por todos os participantes da conta.
+              <Text
+                style={[styles.feeInfoText, { color: colors.textSecondary }]}
+              >
+                O couvert é obrigatório e pago por todos os participantes da
+                conta.
               </Text>
             </View>
           )}
@@ -519,7 +700,9 @@ export default function SplitScreen() {
       )}
 
       {(items.length === 0 || issues.length > 0) && (
-        <View style={[styles.errorCard, { backgroundColor: colors.warningLight }]}>
+        <View
+          style={[styles.errorCard, { backgroundColor: colors.warningLight }]}
+        >
           <Ionicons name="warning-outline" size={18} color={colors.warning} />
           <Text style={[styles.errorText, { color: colors.text }]}>
             {items.length === 0
@@ -725,6 +908,26 @@ const styles = StyleSheet.create({
   },
   helperText: {
     fontSize: 13,
+  },
+  selectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  selectionTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  selectAllButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 4,
+  },
+  selectAllText: {
+    fontSize: 13,
+    fontWeight: "600",
   },
   participantsList: {
     gap: 10,

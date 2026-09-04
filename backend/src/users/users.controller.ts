@@ -160,6 +160,12 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Delete('me')
+  deleteOwnAccount(@Request() req: any) {
+    return this.usersService.deleteOwnAccount(req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Post('me/avatar/upload-url')
   createAvatarUploadUrl(
     @Request() req: any,

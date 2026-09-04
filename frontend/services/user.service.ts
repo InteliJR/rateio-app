@@ -127,6 +127,10 @@ class UserService {
     const response = await api.delete("/users/me/avatar");
     return response.data;
   }
+
+  async deleteAccount(): Promise<void> {
+    await api.delete("/users/me");
+  }
 }
 
 function shouldFallbackToMultipart(error: any) {

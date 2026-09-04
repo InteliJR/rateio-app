@@ -16,6 +16,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { parseFeeParticipantIds } from "../../../lib/rateio";
 import { formatCurrency } from "../../../lib/formatters";
+import {
+  formatItemQuantity,
+  MeasurementUnit,
+  normalizeMeasurementUnit,
+} from "../../../lib/measurementUnits";
 import billService from "../../../services/bill.service";
 
 interface DetailParticipant {
@@ -42,6 +47,7 @@ interface DetailData {
     id: string;
     name: string;
     quantity: number;
+    measurementUnit: MeasurementUnit;
     unitPrice: number;
     totalPrice: number;
   }>;
@@ -66,9 +72,9 @@ export default function BillDetailScreen() {
   const [duplicating, setDuplicating] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [isLatestBill, setIsLatestBill] = useState(false);
-  const [expandedParticipantId, setExpandedParticipantId] = useState<string | null>(
-    null,
-  );
+  const [expandedParticipantId, setExpandedParticipantId] = useState<
+    string | null
+  >(null);
   const [detail, setDetail] = useState<DetailData | null>(null);
 
   const loadData = useCallback(async () => {
@@ -191,7 +197,10 @@ export default function BillDetailScreen() {
     >
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backButton}
+          >
             <Ionicons name="chevron-back" size={22} color={colors.text} />
           </TouchableOpacity>
           <View style={styles.headerText}>
@@ -235,7 +244,8 @@ export default function BillDetailScreen() {
                   {item.name}
                 </Text>
                 <Text style={[styles.rowMeta, { color: colors.textSecondary }]}>
-                  {item.quantity}x • {formatCurrency(item.unitPrice)}
+                  {formatItemQuantity(item.quantity, item.measurementUnit)} •{" "}
+                  {formatCurrency(item.unitPrice)}
                 </Text>
               </View>
               <Text style={[styles.rowValue, { color: colors.text }]}>
@@ -245,7 +255,9 @@ export default function BillDetailScreen() {
           ))}
         </View>
 
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Por pessoa</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          Por pessoa
+        </Text>
         {detail.participants.map((participant) => (
           <View
             key={participant.id}
@@ -269,7 +281,9 @@ export default function BillDetailScreen() {
                 {participant.name}
               </Text>
               <View style={styles.participantHeaderRight}>
-                <Text style={[styles.participantTotal, { color: colors.primary }]}>
+                <Text
+                  style={[styles.participantTotal, { color: colors.primary }]}
+                >
                   {formatCurrency(participant.total)}
                 </Text>
                 <MaterialCommunityIcons
@@ -304,17 +318,26 @@ export default function BillDetailScreen() {
                 {participant.fees.length > 0 && (
                   <>
                     <View
-                      style={[styles.divider, { backgroundColor: colors.divider }]}
+                      style={[
+                        styles.divider,
+                        { backgroundColor: colors.divider },
+                      ]}
                     />
                     {participant.fees.map((fee) => (
                       <View key={fee.id} style={styles.row}>
                         <Text
-                          style={[styles.rowLabel, { color: colors.textSecondary }]}
+                          style={[
+                            styles.rowLabel,
+                            { color: colors.textSecondary },
+                          ]}
                         >
                           {fee.label}
                         </Text>
                         <Text
-                          style={[styles.rowValue, { color: colors.textSecondary }]}
+                          style={[
+                            styles.rowValue,
+                            { color: colors.textSecondary },
+                          ]}
                         >
                           {formatCurrency(fee.amount)}
                         </Text>
@@ -416,22 +439,24 @@ function buildDetailData(bill: any): DetailData {
     (acc: Record<string, DetailParticipant>, participant: any) => {
       const items = (participant.divisions || []).map((division: any) => ({
         id: division.billItemId,
-        name: bill.items.find((item: any) => item.id === division.billItemId)?.name || "Item",
+        name:
+          bill.items.find((item: any) => item.id === division.billItemId)
+            ?.name || "Item",
         shareAmount: Number(division.shareAmount),
       }));
 
-    const subtotal = round2(
-      items.reduce((sum: number, item: any) => sum + item.shareAmount, 0),
-    );
+      const subtotal = round2(
+        items.reduce((sum: number, item: any) => sum + item.shareAmount, 0),
+      );
 
-    acc[participant.id] = {
-      id: participant.id,
-      name: participant.name,
-      subtotal,
-      fees: [],
-      items,
-      total: subtotal,
-    };
+      acc[participant.id] = {
+        id: participant.id,
+        name: participant.name,
+        subtotal,
+        fees: [],
+        items,
+        total: subtotal,
+      };
 
       return acc;
     },
@@ -444,14 +469,12 @@ function buildDetailData(bill: any): DetailData {
 
   for (const fee of bill.fees || []) {
     const totalFee =
-      fee.type === "SERVICE_PERCENTAGE"
-        ? 0
-        : round2(Number(fee.value));
+      fee.type === "SERVICE_PERCENTAGE" ? 0 : round2(Number(fee.value));
 
     if (fee.type === "SERVICE_PERCENTAGE") {
-      const selectedParticipantIds = parseFeeParticipantIds(fee.description).filter(
-        (participantId) => participantsMap[participantId]?.subtotal > 0,
-      );
+      const selectedParticipantIds = parseFeeParticipantIds(
+        fee.description,
+      ).filter((participantId) => participantsMap[participantId]?.subtotal > 0);
       const servicePayers =
         selectedParticipantIds.length > 0
           ? selectedParticipantIds
@@ -499,11 +522,13 @@ function buildDetailData(bill: any): DetailData {
       serviceFeeTotal = round2(serviceFeeTotal + totalFee);
     }
 
-    const selectedParticipantIds = parseFeeParticipantIds(fee.description).filter(
-      (participantId) => participantsMap[participantId],
-    );
+    const selectedParticipantIds = parseFeeParticipantIds(
+      fee.description,
+    ).filter((participantId) => participantsMap[participantId]);
     const feePayers =
-      selectedParticipantIds.length > 0 ? selectedParticipantIds : participantIds;
+      selectedParticipantIds.length > 0
+        ? selectedParticipantIds
+        : participantIds;
     const baseShare = round2(totalFee / feePayers.length);
 
     feePayers.forEach((participantId, index) => {
@@ -528,7 +553,8 @@ function buildDetailData(bill: any): DetailData {
   const items = (bill.items || []).map((item: any) => ({
     id: item.id,
     name: item.name,
-    quantity: item.quantity,
+    quantity: Number(item.quantity),
+    measurementUnit: normalizeMeasurementUnit(item.measurementUnit),
     unitPrice: Number(item.unitPrice),
     totalPrice: Number(item.totalPrice),
   }));

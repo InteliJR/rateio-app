@@ -1,3 +1,4 @@
+import { logger } from '../../../lib/logger';
 import React, { useState, useRef, useEffect } from "react";
 import {
   View,
@@ -93,7 +94,7 @@ export default function CameraScreen() {
           checkImageResolution(photo.uri);
         }
       } catch (error) {
-        console.error("Erro ao capturar foto:", error);
+        logger.error("Erro ao capturar foto:", error);
         Alert.alert("Erro", "Não foi possível capturar a foto");
       } finally {
         setIsLoading(false);
@@ -131,7 +132,7 @@ export default function CameraScreen() {
         checkImageResolution(result.assets[0].uri);
       }
     } catch (error) {
-      console.error("Erro ao escolher imagem:", error);
+      logger.error("Erro ao escolher imagem:", error);
       Alert.alert("Erro", "Não foi possível acessar a galeria");
     }
   };
@@ -179,7 +180,7 @@ export default function CameraScreen() {
     try {
       // Na web, pular otimização (FileSystem não funciona)
       if (Platform.OS === "web") {
-        console.log("Pulando otimização na web");
+        logger.debug("Pulando otimização na web");
         return imageUri;
       }
 
@@ -237,7 +238,7 @@ export default function CameraScreen() {
         );
       }
 
-      console.log("Imagem otimizada:", {
+      logger.debug("Imagem otimizada:", {
         originalSize: `${(
           (imageInfo.exists && "size" in imageInfo ? imageInfo.size : 0) /
           (1024 * 1024)
@@ -249,7 +250,7 @@ export default function CameraScreen() {
 
       return manipulatedImage.uri;
     } catch (error) {
-      console.error("Erro ao otimizar imagem:", error);
+      logger.error("Erro ao otimizar imagem:", error);
       throw error;
     }
   };
@@ -302,11 +303,11 @@ export default function CameraScreen() {
 
       // Se já temos um ID (veio da tela anterior), usar endpoint específico
       if (id && typeof id === "string") {
-        console.log("Upload de imagem para conta existente:", id);
+        logger.debug("Upload de imagem para conta existente:", id);
         uploadedBill = await billService.uploadBillImage(id, optimizedImageUri);
       } else {
         // Senão, criar nova conta (comportamento antigo)
-        console.log("Criando nova conta com imagem");
+        logger.debug("Criando nova conta com imagem");
         uploadedBill = await billService.uploadBill(optimizedImageUri);
       }
 
@@ -330,7 +331,7 @@ export default function CameraScreen() {
         params: { id: uploadedBill.id, editMode: "false" },
       });
     } catch (error: any) {
-      console.error("❌ Erro ao processar conta:", {
+      logger.error("❌ Erro ao processar conta:", {
         message: error.message,
         statusCode: error.statusCode,
         response: error.response?.status,

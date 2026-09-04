@@ -1,5 +1,6 @@
 // frontend/services/divisions.service.ts
 
+import { logger } from '../lib/logger';
 import { apiService } from './api.service';
 
 export interface Division {
@@ -60,11 +61,11 @@ class DivisionsService {
         divisions,
       };
 
-      console.log('[DivisionsService] Creating batch divisions:', payload);
+      logger.debug('[DivisionsService] Creating batch divisions:', payload);
 
       const response = await api.post<Division[]>('/divisions/batch', payload);
       
-      console.log('[DivisionsService] Batch created successfully:', response.data);
+      logger.debug('[DivisionsService] Batch created successfully:', response.data);
       
       return response.data;
     } catch (error: any) {
@@ -79,7 +80,7 @@ class DivisionsService {
         divisionsError.message = error.message;
       }
 
-      console.error('[DivisionsService] Error creating batch:', divisionsError);
+      logger.error('[DivisionsService] Error creating batch:', divisionsError);
       throw divisionsError;
     }
   }
@@ -118,7 +119,7 @@ class DivisionsService {
     } catch (error: any) {
       // Se não houver divisões, retornar array vazio em vez de erro
       if (error.response?.status === 404 || error.response?.status === 400) {
-        console.log('[DivisionsService] No divisions found for bill:', billId);
+        logger.debug('[DivisionsService] No divisions found for bill:', billId);
         return [];
       }
       throw {

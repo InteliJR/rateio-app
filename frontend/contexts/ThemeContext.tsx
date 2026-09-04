@@ -1,5 +1,7 @@
+import { logger } from '../lib/logger';
 import React, { createContext, useState, useContext, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SplashScreen from "expo-splash-screen";
 
 // Definição das cores para cada tema
 export const lightColors = {
@@ -114,6 +116,12 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
     loadPreferences();
   }, []);
 
+  useEffect(() => {
+    if (!isLoading) {
+      void SplashScreen.hideAsync();
+    }
+  }, [isLoading]);
+
   const loadPreferences = async () => {
     try {
       const [savedTheme, savedFontScale] = await Promise.all([
@@ -123,18 +131,18 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
 
       if (savedTheme !== null) {
         setIsDark(savedTheme === "dark");
-        console.log("[Theme] Loaded preference:", savedTheme);
+        logger.debug("[Theme] Loaded preference:", savedTheme);
       }
 
       if (savedFontScale !== null) {
         const scale = parseFloat(savedFontScale);
         if (!isNaN(scale) && scale >= 0.8 && scale <= 1.4) {
           setFontScaleState(scale);
-          console.log("[FontScale] Loaded preference:", scale);
+          logger.debug("[FontScale] Loaded preference:", scale);
         }
       }
     } catch (error) {
-      console.error("[Theme] Error loading preferences:", error);
+      logger.error("[Theme] Error loading preferences:", error);
     } finally {
       setIsLoading(false);
     }
@@ -146,9 +154,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
         "@theme_preference",
         isDarkMode ? "dark" : "light",
       );
-      console.log("[Theme] Saved preference:", isDarkMode ? "dark" : "light");
+      logger.debug("[Theme] Saved preference:", isDarkMode ? "dark" : "light");
     } catch (error) {
-      console.error("[Theme] Error saving preference:", error);
+      logger.error("[Theme] Error saving preference:", error);
     }
   };
 
@@ -173,9 +181,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
         "@font_scale_preference",
         clampedScale.toString(),
       );
-      console.log("[FontScale] Saved preference:", clampedScale);
+      logger.debug("[FontScale] Saved preference:", clampedScale);
     } catch (error) {
-      console.error("[FontScale] Error saving preference:", error);
+      logger.error("[FontScale] Error saving preference:", error);
     }
   };
 
