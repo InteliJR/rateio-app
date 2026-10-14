@@ -1,0 +1,101 @@
+name: Qualidade
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [develop]
+
+# Um PR atualizado cancela a execução anterior, para não ocupar fila à toa
+concurrency:
+  group: qualidade-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (testes e build)
+    runs-on: ubuntu-latest
+    env:
+      # Valor de faz de conta: nenhum teste conecta no banco, mas o
+      # PrismaService exige a variável para ser instanciado.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      DIRECT_URL: postgresql://ci:ci@localhost:5432/ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Instalar dependências
+        working-directory: backend
+        run: npm ci
+
+      - name: Conferir se o schema do Prisma é válido
+        working-directory: backend
+        run: npx prisma validate
+
+      - name: Testes
+        working-directory: backend
+        run: npm test -- --ci
+
+      - name: Build
+        working-directory: backend
+        run: npm run build
+
+  frontend:
+    name: Aplicativo (tipos)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependências
+        working-directory: frontend
+        run: npm ci
+
+      - name: Conferir tipos
+        working-directory: frontend
+        run: npm run typecheck
+
+  lint:
+    name: Lint do que mudou (informativo)
+    runs-on: ubuntu-latest
+    # Não bloqueia o merge. O repositório tem erros de lint antigos, então
+    # travar agora pararia todos os PRs em aberto. Vira obrigatório depois
+    # de uma passada de formatação no backend inteiro.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Instalar dependências
+        working-directory: backend
+        run: npm ci
+
+      - name: Listar arquivos alterados
+        id: alterados
+        run: |
+          base="${{ github.event.pull_request.base.sha || github.event.before }}"
+          arquivos=$(git diff --name-only --diff-filter=ACMR "$base" HEAD -- 'backend/src/**/*.ts' | sed 's|^backend/||' | tr '\n' ' ')
+          echo "arquivos=$arquivos" >> "$GITHUB_OUTPUT"
+          echo "Arquivos a verificar: ${arquivos:-nenhum}"
+
+      - name: Lint
+        if: steps.alterados.outputs.arquivos != ''
+        working-directory: backend
+        run: npx eslint ${{ steps.alterados.outputs.arquivos }}
