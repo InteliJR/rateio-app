@@ -28,6 +28,7 @@ describe('OcrQueueService OCR_METRIC (job)', () => {
   const JOB_KEYS = [
     'attempt',
     'billId',
+    'errorCategory',
     'items',
     'jobId',
     'queueWaitMs',
@@ -164,9 +165,13 @@ describe('OcrQueueService OCR_METRIC (job)', () => {
     expect(metric.queueWaitMs).toBeGreaterThanOrEqual(5000);
     expect(metric.queueWaitMs).toBeLessThan(15000);
     expect(metric.totalMs).toBeGreaterThanOrEqual(0);
-    expect(ocrService.processImage).toHaveBeenCalledWith(SIGNED_URL, {
-      jobId: 'job-1',
-    });
+    expect(ocrService.processImage).toHaveBeenCalledWith(
+      SIGNED_URL,
+      expect.objectContaining({
+        jobId: 'job-1',
+        onOpenAiCall: expect.any(Function),
+      }),
+    );
     expectNoSensitiveData(lines);
   });
 
