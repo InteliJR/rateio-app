@@ -30,12 +30,15 @@ model User {
   googleId  String?  @unique
   googleAvatarUrl String?
   emailVerifiedAt DateTime?
+  creditPolicy CreditPolicy @default(METERED)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  bills         Bill[]
-  ocrJobs       OcrJob[]
-  revokedTokens RevokedToken[]
+  bills              Bill[]
+  ocrJobs            OcrJob[]
+  revokedTokens      RevokedToken[]
+  creditTransactions CreditTransaction[]
+  creditReservations CreditReservation[]
 
   @@map("users")
 }
@@ -231,4 +234,66 @@ model Fee {
 
   @@index([billId])
   @@map("fees")
+}
+
+// ============================================
+// CRÉDITOS (LEDGER)
+// ============================================
+
+enum CreditPolicy {
+  METERED // Consome créditos por leitura (padrão)
+  UNLIMITED // Conta isenta, ex.: restaurante parceiro
+}
+
+enum CreditTransactionType {
+  FREE_GRANT // Cota gratuita concedida
+  PURCHASE // Créditos comprados na loja
+  AD_REWARD // Crédito concedido por anúncio assistido
+  RESERVE // Crédito reservado para uma leitura
+  CONSUME // Reserva confirmada: a leitura foi utilizável
+  RELEASE // Reserva devolvida: falha nossa ou do provedor
+  ADMIN_ADJUST // Ajuste manual do suporte
+}
+
+enum CreditReservationStatus {
+  HELD
+  CONSUMED
+  RELEASED
+}
+
+/// Ledger imutável. O saldo é a soma de `amount`; nenhuma linha é editada ou apagada.
+model CreditTransaction {
+  id             String                @id @default(uuid())
+  userId         String
+  type           CreditTransactionType
+  amount         Int // Positivo concede, negativo retira
+  idempotencyKey String                @unique
+  ocrJobId       String?
+  purchaseToken  String?
+  reason         String?               @db.Text
+  actorId        String? // Quem executou, nos ajustes administrativos
+  createdAt      DateTime              @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([ocrJobId])
+  @@map("credit_transactions")
+}
+
+/// Reservas em aberto. Uma por trabalho de OCR.
+model CreditReservation {
+  id        String                  @id @default(uuid())
+  userId    String
+  ocrJobId  String                  @unique
+  status    CreditReservationStatus @default(HELD)
+  expiresAt DateTime
+  createdAt DateTime                @default(now())
+  updatedAt DateTime                @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status, expiresAt])
+  @@map("credit_reservations")
 }
