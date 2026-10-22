@@ -74,7 +74,10 @@ export async function createSmokeApp({
     });
   jest.spyOn(storage, 'deleteFile').mockResolvedValue(undefined);
 
-  await app.init();
+  // Escuta uma vez numa porta livre. Sem isso o supertest abre e fecha um
+  // servidor por requisição, e sob requisições paralelas algumas caem com
+  // "socket hang up".
+  await app.listen(0, '127.0.0.1');
 
   const runId = randomUUID().slice(0, 8);
   const prisma = app.get(PrismaService);
