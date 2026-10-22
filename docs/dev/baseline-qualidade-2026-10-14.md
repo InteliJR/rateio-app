@@ -1,9 +1,5 @@
 # Baseline de qualidade - 14 de outubro de 2026
 
-**Status:** baseline técnico e testes de fumaça da API registrados; verificação visual no dispositivo pendente
-
-**Atualizado em:** 16/10/2026, com a suíte de fumaça (seção 6)
-
 ## 1. Contexto da medição
 
 | Campo | Valor |
@@ -215,6 +211,48 @@ Todos os itens abaixo foram reproduzidos em 14/10/2026 no ambiente descrito na s
 - **Obtido:** [bill-items.controller.ts](../../backend/src/bill-items/bill-items.controller.ts) expõe `GET/POST/PATCH/DELETE /bill-items` sem autenticação. O serviço só devolve textos fixos ("This action returns all billItems"), então não há acesso a dados, mas as rotas não são usadas e confundem auditorias.
 - **Correção sugerida:** remover o controller e manter apenas os DTOs, que são usados por `BillsController`.
 
+Os itens BUG-015 a BUG-018 foram encontrados em 21/10/2026 pela suíte [credits-ledger.e2e-spec.ts](../../backend/test/smoke/credits-ledger.e2e-spec.ts), com o ledger de `feat/credits-ledger` e `CREDITS_ENFORCEMENT_ENABLED=true`. Em produção a cobrança está desligada por padrão, então nenhum deles afeta usuários hoje. BUG-015 e BUG-016 impedem ligar a cobrança.
+
+### BUG-015 - `consume` e `release` simultâneos devolvem um crédito já consumido
+
+- **Severidade:** P1 (ledger inconsistente; leitura sai de graça)
+- **Responsável sugerido:** Lucas (ledger)
+- **Passos:** reservar um crédito para um `ocrJobId` e chamar `consume(ocrJobId)` e `release(ocrJobId)` ao mesmo tempo.
+- **Esperado:** só uma das operações tem efeito: `CONSUMED` sem devolução, ou `RELEASED` com +1.
+- **Obtido:** nas 50 rodadas de cada execução o `release` sempre devolve +1. Em cerca de 30% delas a reserva ainda termina `CONSUMED`, ou seja, o crédito foi gasto e devolvido.
+- **Causa:** `settle` lê a reserva com `findUnique` sem trava. As duas transações veem `HELD`; a segunda espera a trava de linha do `update`, mas o `where` é só `ocrJobId`, sem `status: HELD`, então ela sobrescreve o status e o `release` grava a devolução. `releaseExpired` usa o mesmo `settle` e herda a corrida com um `consume` que termine na hora da expiração.
+- **Evidência:** [credits.service.ts](../../backend/src/credits/credits.service.ts) (`settle`); teste `BUG-015` marcado como `it.failing`.
+- **Correção sugerida:** trocar a leitura e o `update` por `updateMany({ where: { ocrJobId, status: HELD }, data: { status } })` e só gravar a transação quando `count === 1`. Alternativa: `SELECT ... FOR UPDATE` na reserva, como já é feito no `reserve`.
+
+### BUG-016 - Sem saldo, o upload devolve 500 e a leitura é feita de graça
+
+- **Severidade:** P1 (receita e experiência; bloqueia ligar a cobrança)
+- **Responsável sugerido:** Lucas (fila de OCR e ledger)
+- **Passos:** usuário com saldo 0 envia uma nota em `POST /bills`.
+- **Esperado:** resposta 4xx com código de saldo insuficiente, sem conta nem job criados, para o app abrir a tela de saldo e oferecer a criação manual.
+- **Obtido:** resposta `500 Internal server error`. A conta e o `OcrJob` já tinham sido gravados antes da reserva; a fila processa o job, a conta vai para `REVIEWING` com os itens e o saldo continua 0. O app mostra erro, mas a conta aparece no histórico já lida.
+- **Causa:** `OcrQueueService.enqueue` faz o `upsert` do job antes de `credits.reserve`, e `BillsService` cria a conta antes do `enqueue`, tudo fora de uma transação. `InsufficientCreditsError` é um `Error` comum, que o Nest converte em 500.
+- **Evidência:** [ocr-queue.service.ts](../../backend/src/ocr/ocr-queue.service.ts) (`enqueue`), [bills.service.ts](../../backend/src/bills/bills.service.ts) (`create` e `enqueueUploadedImageBill`); teste `BUG-016` marcado como `it.failing`.
+- **Correção sugerida:** reservar antes de criar a conta e o job (ou criar os três numa transação) e converter `InsufficientCreditsError` em `402` ou `409` com um código estável, por exemplo `INSUFFICIENT_CREDITS`. O filtro global de erros (Frente 1 - Tarefa 4) pode fazer esse mapeamento.
+
+### BUG-017 - Reprocessar o OCR depois de uma devolução não cobra
+
+- **Severidade:** P2 (depende de decisão de produto)
+- **Responsável sugerido:** produto decide; Lucas implementa
+- **Passos:** a leitura falha em todas as tentativas e o crédito é devolvido; o usuário chama `POST /bills/:id/retry-ocr` e a nova leitura dá certo.
+- **Esperado:** a definir. Pelo planejamento da semana 3, "retentativas técnicas não consomem novo crédito"; o retry do usuário, depois da devolução, não é técnico.
+- **Obtido:** o retry reaproveita o mesmo `OcrJob` (`upsert` por `billId`), o `reserve` encontra a reserva `RELEASED` e devolve `reserved: false`. A leitura é concluída e o saldo fica igual. Repetir falha e retry permite leituras sem custo enquanto o provedor falhar na primeira rodada.
+- **Evidência:** [credits.service.ts](../../backend/src/credits/credits.service.ts) (`reserve`, ramo `existing`); teste "retry-ocr depois da devolução não cobra de novo (comportamento atual)", que trava o comportamento atual.
+- **Correção sugerida:** se o produto quiser cobrar, usar uma chave por tentativa do usuário (por exemplo, um contador de reprocessamentos no `OcrJob`) em vez de `reserve:${ocrJobId}`, e inverter o teste.
+
+### BUG-018 - E2E falhava às vezes com `socket hang up`
+
+- **Severidade:** P3 (teste instável)
+- **Responsável sugerido:** Enzo
+- **Obtido:** cerca de 1 em 30 execuções de `npm run test:e2e` falhava com `socket hang up` em uma suíte qualquer (`auth`, `manual-bill-flow`, `ocr-queue`), com ou sem a suíte do ledger.
+- **Causa:** a aplicação de teste não escutava em nenhuma porta, então o supertest abria e fechava um servidor HTTP a cada requisição; sob requisições paralelas (polling da conta e uploads simultâneos), uma conexão às vezes caía.
+- **Status:** corrigido em [smoke-app.ts](../../backend/test/support/smoke-app.ts) com `app.listen(0)`.
+
 ### Observações de segurança para revisão (P3)
 
 Registradas para a frente de segurança decidir se viram itens `BUG-###`:
@@ -236,6 +274,7 @@ Como não houve aparelho nem chave real da OpenAI disponíveis, os fluxos críti
 | `isolation` | Outro usuário não lê, não altera, não finaliza e não exclui a conta; inclui o BUG-012 | 5 |
 | `ocr-queue` | Upload → fila → itens para revisão; falha transitória com retentativa; esgotamento e reprocessamento; arquivo inválido; segredo do cron | 5 |
 | `rate-limit` | Quarta tentativa de login no mesmo minuto recebe 429 | 1 |
+| `credits-ledger` | Reservas, grants e devoluções simultâneas contra Postgres real; upload → OCR → consumo ou devolução; retry; saldo zero; tentativa a mais da fila; inclui BUG-015 e BUG-016 | 12 |
 | `app` | `GET /` e `GET /health` | 2 |
 
 O que é real e o que é simulado:
@@ -258,13 +297,15 @@ Estes números medem a fila, não a OpenAI. A latência e o custo reais dependem
 
 Estabilidade: 20 execuções seguidas com `npm run test:e2e` e 5 com quatro workers em paralelo, todas verdes.
 
+Em 21/10, com a suíte `credits-ledger` (38 testes), apareceu a instabilidade do BUG-018. Depois da correção: 150 execuções seguidas de `npm run test:e2e` (50 + 100), todas verdes, contra 1 falha a cada 25 a 40 antes dela.
+
 ## 7. Lacunas de cobertura
 
 Não são bugs, mas limitam a capacidade de detectar regressões:
 
 | Lacuna | Situação atual | Task que trata |
 | --- | --- | --- |
-| E2E da API | 26 testes de fumaça; ainda não rodam no CI | E00-T09 / E00-T10 |
+| E2E da API | 38 testes de fumaça; ainda não rodam no CI | E00-T09 / E00-T10 |
 | Testes do app | 0 arquivos de teste, sem script `test` | E00-T09 (checklist de dispositivo) |
 | Typecheck do app | Passa com `npx tsc --noEmit`, mas não há script nem execução automática | E00-T10 (`feat/ci-quality-gate`) |
 | Gate de PR | Não existe workflow de testes e build em PRs | E00-T10 (`feat/ci-quality-gate`) |
