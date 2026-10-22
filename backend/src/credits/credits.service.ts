@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   CreditPolicy,
   CreditReservationStatus,
@@ -37,6 +37,36 @@ export interface ReserveResult {
   policy: CreditPolicy;
 }
 
+/** Linha do histórico exibida ao usuário. Não expõe chave, token nem autor. */
+export interface CreditHistoryEntry {
+  id: string;
+  type: CreditTransactionType;
+  amount: number;
+  reason: string | null;
+  createdAt: Date;
+}
+
+export interface CreditHistoryPage {
+  data: CreditHistoryEntry[];
+  meta: { total: number; page: number; limit: number; totalPages: number };
+}
+
+export interface AdminAdjustInput {
+  userId: string;
+  /** Positivo concede, negativo retira. Nunca zero. */
+  amount: number;
+  reason: string;
+  actorId: string;
+  /** Enviada pelo cliente: repetir o mesmo pedido não ajusta duas vezes. */
+  idempotencyKey: string;
+}
+
+export interface AdminAdjustResult {
+  /** Falso quando a chave já tinha sido usada: nada mudou. */
+  applied: boolean;
+  available: number;
+}
+
 /** Erro de domínio: o usuário não tem créditos disponíveis. */
 export class InsufficientCreditsError extends Error {
   constructor(public readonly available: number) {
@@ -45,7 +75,24 @@ export class InsufficientCreditsError extends Error {
   }
 }
 
+/** Erro de domínio: o ajuste deixaria o saldo disponível negativo. */
+export class NegativeBalanceError extends Error {
+  constructor(public readonly available: number) {
+    super('O ajuste deixaria o saldo negativo');
+    this.name = 'NegativeBalanceError';
+  }
+}
+
+/** Erro de domínio: a chave de idempotência já foi usada em outro ajuste. */
+export class IdempotencyKeyConflictError extends Error {
+  constructor() {
+    super('Chave de idempotência já usada em outro ajuste');
+    this.name = 'IdempotencyKeyConflictError';
+  }
+}
+
 const UNIQUE_VIOLATION = 'P2002';
+const MAX_HISTORY_LIMIT = 50;
 
 @Injectable()
 export class CreditsService {
@@ -252,23 +299,149 @@ export class CreditsService {
     return expired.length;
   }
 
-  /** Ajuste manual do suporte. Fica registrado com autor e motivo. */
-  async adminAdjust(
+  /**
+   * Histórico do usuário. Reserva e devolução da mesma leitura se anulam e não
+   * aparecem: para o usuário, uma leitura que falhou não custou nada.
+   */
+  async getHistory(
     userId: string,
-    amount: number,
-    reason: string,
-    actorId: string,
-  ): Promise<void> {
-    await this.prisma.creditTransaction.create({
-      data: {
-        userId,
-        type: CreditTransactionType.ADMIN_ADJUST,
-        amount,
-        idempotencyKey: `admin:${userId}:${Date.now()}`,
-        reason,
-        actorId,
-      },
+    page = 1,
+    limit = 20,
+  ): Promise<CreditHistoryPage> {
+    const validPage = Math.max(1, Math.floor(page) || 1);
+    const validLimit = Math.max(
+      1,
+      Math.min(MAX_HISTORY_LIMIT, Math.floor(limit) || 20),
+    );
+
+    const released = await this.prisma.creditTransaction.findMany({
+      where: { userId, type: CreditTransactionType.RELEASE },
+      select: { ocrJobId: true },
     });
+    const releasedJobIds = released
+      .map((row) => row.ocrJobId)
+      .filter((id): id is string => id !== null);
+
+    const where: Prisma.CreditTransactionWhereInput = {
+      userId,
+      type: { not: CreditTransactionType.RELEASE },
+      NOT: {
+        type: CreditTransactionType.RESERVE,
+        ocrJobId: { in: releasedJobIds },
+      },
+    };
+
+    const [total, data] = await Promise.all([
+      this.prisma.creditTransaction.count({ where }),
+      this.prisma.creditTransaction.findMany({
+        where,
+        select: {
+          id: true,
+          type: true,
+          amount: true,
+          reason: true,
+          createdAt: true,
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (validPage - 1) * validLimit,
+        take: validLimit,
+      }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        total,
+        page: validPage,
+        limit: validLimit,
+        totalPages: Math.ceil(total / validLimit),
+      },
+    };
+  }
+
+  /**
+   * Ajuste manual do suporte. Fica registrado com autor e motivo, não deixa o
+   * saldo disponível negativo e é idempotente pela chave enviada pelo cliente.
+   */
+  async adminAdjust(input: AdminAdjustInput): Promise<AdminAdjustResult> {
+    const idempotencyKey = `admin:${input.idempotencyKey}`;
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        // Mesma trava da reserva: ajuste e leitura simultâneos não furam o saldo.
+        const [user] = await tx.$queryRaw<{ id: string }[]>`
+          SELECT "id" FROM "users" WHERE "id" = ${input.userId} FOR UPDATE
+        `;
+        if (!user) {
+          throw new NotFoundException('Usuário não encontrado');
+        }
+
+        const existing = await tx.creditTransaction.findUnique({
+          where: { idempotencyKey },
+        });
+        if (existing) {
+          return this.repeatedAdjust(tx, existing, input);
+        }
+
+        const sum = await tx.creditTransaction.aggregate({
+          where: { userId: input.userId },
+          _sum: { amount: true },
+        });
+        const available = sum._sum.amount ?? 0;
+
+        if (available + input.amount < 0) {
+          throw new NegativeBalanceError(available);
+        }
+
+        await tx.creditTransaction.create({
+          data: {
+            userId: input.userId,
+            type: CreditTransactionType.ADMIN_ADJUST,
+            amount: input.amount,
+            idempotencyKey,
+            reason: input.reason,
+            actorId: input.actorId,
+          },
+        });
+
+        this.logger.log(
+          `Ajuste administrativo de ${input.amount} crédito(s) no usuário ${input.userId} por ${input.actorId}.`,
+        );
+
+        return { applied: true, available: available + input.amount };
+      });
+    } catch (error) {
+      if (this.isUniqueViolation(error)) {
+        // Pedido repetido ao mesmo tempo: o outro já gravou.
+        return this.prisma.$transaction(async (tx) => {
+          const existing = await tx.creditTransaction.findUniqueOrThrow({
+            where: { idempotencyKey },
+          });
+          return this.repeatedAdjust(tx, existing, input);
+        });
+      }
+      throw error;
+    }
+  }
+
+  private async repeatedAdjust(
+    tx: Prisma.TransactionClient,
+    existing: { userId: string; type: CreditTransactionType; amount: number },
+    input: AdminAdjustInput,
+  ): Promise<AdminAdjustResult> {
+    if (
+      existing.type !== CreditTransactionType.ADMIN_ADJUST ||
+      existing.userId !== input.userId ||
+      existing.amount !== input.amount
+    ) {
+      throw new IdempotencyKeyConflictError();
+    }
+
+    const sum = await tx.creditTransaction.aggregate({
+      where: { userId: input.userId },
+      _sum: { amount: true },
+    });
+    return { applied: false, available: sum._sum.amount ?? 0 };
   }
 
   private async settle(

@@ -342,7 +342,13 @@ describe('Fumaça: ledger de créditos', () => {
       async () => {
         const user = await registerUser(smoke, 'api-zero');
         await credits.ensureFreeGrant(user.id);
-        await credits.adminAdjust(user.id, -3, 'zerar saldo do teste', 'smoke');
+        await credits.adminAdjust({
+          userId: user.id,
+          amount: -3,
+          reason: 'zerar saldo do teste',
+          actorId: 'smoke',
+          idempotencyKey: randomUUID(),
+        });
         smoke.ocr.processImage.mockResolvedValue(fakeOcrResult());
 
         const response = await smoke
