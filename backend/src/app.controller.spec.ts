@@ -30,4 +30,19 @@ describe('AppController', () => {
       expect(appController.getHello()).toBe('Hello World!');
     });
   });
+
+  describe('healthCheck', () => {
+    it('deve retornar status ok sem expor snapshot de métricas ou erros de driver', async () => {
+      const response = await appController.healthCheck();
+
+      expect(response.status).toBe('ok');
+      expect(response.timestamp).toBeDefined();
+      expect(response.database).toBeDefined();
+      expect(response.ocrQueue).toBeDefined();
+      // Não deve vazar o snapshot de métricas
+      expect((response as any).metrics).toBeUndefined();
+      // Não deve vazar mensagem crua de erro do banco
+      expect((response.database as any).error).toBeUndefined();
+    });
+  });
 });
