@@ -35,6 +35,7 @@ model User {
 
   bills         Bill[]
   ocrJobs       OcrJob[]
+  purchases     Purchase[]
   revokedTokens RevokedToken[]
 
   @@map("users")
@@ -231,4 +232,34 @@ model Fee {
 
   @@index([billId])
   @@map("fees")
+}
+
+// ============================================
+// COMPRAS (GOOGLE PLAY)
+// ============================================
+
+enum PurchaseStatus {
+  PENDING // Compra aguardando confirmação de pagamento na loja
+  CREDITED // Compra validada e créditos concedidos
+  CANCELED // Compra cancelada na loja
+  REJECTED // Compra recusada (ex.: pertence a outra conta)
+}
+
+model Purchase {
+  id            String         @id @default(uuid())
+  userId        String
+  productId     String
+  purchaseToken String         @unique
+  orderId       String?
+  status        PurchaseStatus @default(PENDING)
+  credits       Int
+  consumedAt    DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@map("purchases")
 }
