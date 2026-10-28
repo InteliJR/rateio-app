@@ -1,35 +1,26 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { HttpStatus } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { MetricsService } from './observability/metrics.service';
-import { OcrQueueService } from './ocr/ocr-queue.service';
 import { PrismaService } from './prisma/prisma.service';
 
 describe('AppController', () => {
   let appController: AppController;
+  let prismaService: { $queryRaw: jest.Mock };
 
   beforeEach(async () => {
+    prismaService = { $queryRaw: jest.fn().mockResolvedValue([1]) };
+
     const app: TestingModule = await Test.createTestingModule({
       controllers: [AppController],
       providers: [
         AppService,
-        { provide: PrismaService, useValue: { $queryRaw: jest.fn().mockResolvedValue([1]) } },
-        { provide: MetricsService, useValue: { getSnapshot: jest.fn() } },
-        {
-          provide: OcrQueueService,
-          useValue: {
-            getQueueSnapshot: jest.fn().mockResolvedValue({
-              waiting: 0,
-              active: 0,
-              completed: 0,
-              failed: 0,
-            }),
-          },
-        },
+        { provide: PrismaService, useValue: prismaService },
       ],
     }).compile();
 
     appController = app.get<AppController>(AppController);
+    delete process.env.HEALTH_STRICT_STATUS;
   });
 
   describe('root', () => {
@@ -39,17 +30,42 @@ describe('AppController', () => {
   });
 
   describe('healthCheck', () => {
-    it('deve retornar status ok sem expor snapshot de métricas ou erros de driver', async () => {
-      const response = await appController.healthCheck();
+    it('deve retornar status ok e database.status connected sem expor topologia interna', async () => {
+      const mockRes: any = { status: jest.fn() };
+      const response = await appController.healthCheck(mockRes);
 
       expect(response.status).toBe('ok');
       expect(response.timestamp).toBeDefined();
-      expect(response.database).toBeDefined();
-      expect(response.ocrQueue).toBeDefined();
-      // Não deve vazar o snapshot de métricas
+      expect(response.database).toEqual({ status: 'connected' });
+      // Não deve vazar métricas ou detalhes de fila
+      expect((response as any).ocrQueue).toBeUndefined();
       expect((response as any).metrics).toBeUndefined();
-      // Não deve vazar mensagem crua de erro do banco
-      expect((response.database as any).error).toBeUndefined();
+      expect((response as any).uptime).toBeUndefined();
+      expect(mockRes.status).not.toHaveBeenCalled();
+    });
+
+    it('quando o banco está fora e HEALTH_STRICT_STATUS=true deve retornar 503 e status error', async () => {
+      process.env.HEALTH_STRICT_STATUS = 'true';
+      prismaService.$queryRaw.mockRejectedValue(new Error('Connection refused'));
+
+      const mockRes: any = { status: jest.fn() };
+      const response = await appController.healthCheck(mockRes);
+
+      expect(response.status).toBe('error');
+      expect(response.database).toEqual({ status: 'disconnected' });
+      expect(mockRes.status).toHaveBeenCalledWith(HttpStatus.SERVICE_UNAVAILABLE);
+    });
+
+    it('quando o banco está fora e HEALTH_STRICT_STATUS=false deve manter HTTP 200 para retrocompatibilidade', async () => {
+      process.env.HEALTH_STRICT_STATUS = 'false';
+      prismaService.$queryRaw.mockRejectedValue(new Error('Connection refused'));
+
+      const mockRes: any = { status: jest.fn() };
+      const response = await appController.healthCheck(mockRes);
+
+      expect(response.status).toBe('ok');
+      expect(response.database).toEqual({ status: 'disconnected' });
+      expect(mockRes.status).not.toHaveBeenCalled();
     });
   });
 });

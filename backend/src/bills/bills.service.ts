@@ -14,8 +14,8 @@ import {
   AttachUploadedImageDto,
   PresignedUploadDto,
 } from './dto/presigned-upload.dto';
-import { CreateBillItemDto } from '../bill-items/dto/create-bill-item.dto';
-import { UpdateBillItemDto } from '../bill-items/dto/update-bill-item.dto';
+import { CreateBillItemDto } from './dto/create-bill-item.dto';
+import { UpdateBillItemDto } from './dto/update-bill-item.dto';
 import { BatchUpdateBillItemsDto } from './dto/update-bill.dto';
 import { FeesService } from '../fees/fees.service';
 import { CreateFeeDto } from '../fees/dto/create-fee.dto';
@@ -187,6 +187,7 @@ export class BillsService {
       userId,
       dto.filename,
       dto.mimeType,
+      dto.size,
     );
   }
 
@@ -1015,12 +1016,35 @@ export class BillsService {
       );
     }
 
-    const billItens = await this.prisma.billItem.findMany({
-      where: { billId: id },
-    });
+    const [billItens, participants] = await Promise.all([
+      this.prisma.billItem.findMany({
+        where: { billId: id },
+      }),
+      this.prisma.participant.findMany({
+        where: { billId: id },
+      }),
+    ]);
 
     if (billItens.length === 0) {
       throw new BadRequestException('Conta não possui itens para finalizar');
+    }
+
+    const validItemIds = new Set(billItens.map((item) => item.id));
+    const validParticipantIds = new Set(participants.map((p) => p.id));
+    const seenPairs = new Set<string>();
+
+    for (const division of finalizeBillDto.divisions) {
+      if (!validItemIds.has(division.billItemId)) {
+        throw new BadRequestException('Divisão referencia item inválido ou de outra conta');
+      }
+      if (!validParticipantIds.has(division.participantId)) {
+        throw new BadRequestException('Divisão referencia participante inválido ou de outra conta');
+      }
+      const pairKey = `${division.billItemId}:${division.participantId}`;
+      if (seenPairs.has(pairKey)) {
+        throw new BadRequestException('Divisão duplicada para o mesmo item e participante');
+      }
+      seenPairs.add(pairKey);
     }
 
     for (const item of billItens) {
