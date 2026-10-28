@@ -13,11 +13,18 @@ describe('AppController', () => {
       controllers: [AppController],
       providers: [
         AppService,
-        { provide: PrismaService, useValue: { $queryRaw: jest.fn() } },
+        { provide: PrismaService, useValue: { $queryRaw: jest.fn().mockResolvedValue([1]) } },
         { provide: MetricsService, useValue: { getSnapshot: jest.fn() } },
         {
           provide: OcrQueueService,
-          useValue: { getQueueSnapshot: jest.fn() },
+          useValue: {
+            getQueueSnapshot: jest.fn().mockResolvedValue({
+              waiting: 0,
+              active: 0,
+              completed: 0,
+              failed: 0,
+            }),
+          },
         },
       ],
     }).compile();

@@ -27,6 +27,10 @@ import { GoogleTokenService } from './google-token.service';
         if (!secret) {
           throw new Error('JWT_SECRET environment variable is missing.');
         }
+        const refreshSecret = configService.get<string>('JWT_REFRESH_SECRET');
+        if (!refreshSecret) {
+          throw new Error('JWT_REFRESH_SECRET environment variable is missing.');
+        }
         return {
           secret,
           signOptions: {

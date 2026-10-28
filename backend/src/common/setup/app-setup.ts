@@ -37,7 +37,7 @@ export function configureApp(app: INestApplication): void {
           return callback(null, true);
         }
 
-        return callback(new Error(`Origin ${requestOrigin} not allowed by CORS`), false);
+        return callback(null, false);
       },
       credentials: true,
     });
