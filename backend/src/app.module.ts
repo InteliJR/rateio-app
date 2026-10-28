@@ -13,7 +13,7 @@ import { CommonModule } from './common/common.module';
 import { StorageModule } from './storage/storage.module';
 import { OcrModule } from './ocr/ocr.module';
 import { BillsModule } from './bills/bills.module';
-import { BillItemsModule } from './bill-items/bill-items.module';
+
 import { ParticipantsModule } from './participants/participants.module';
 import { DivisionsModule } from './divisions/divisions.module';
 import { FeesModule } from './fees/fees.module';
@@ -49,7 +49,7 @@ function getRateLimitConfig() {
     StorageModule,
     OcrModule,
     BillsModule,
-    BillItemsModule,
+
     ParticipantsModule,
     DivisionsModule,
     FeesModule,

@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import {
   S3Client,
@@ -15,9 +16,11 @@ import { diskStorage, memoryStorage } from 'multer';
 import { extname } from 'path';
 import * as fs from 'fs';
 import * as path from 'path';
+import { assertImageSignature } from './file-signature';
 
 @Injectable()
 export class StorageService {
+  private readonly logger = new Logger(StorageService.name);
   private s3Client: S3Client;
   private bucketName: string;
   private readonly uploadRoot = './uploads';
@@ -78,6 +81,7 @@ export class StorageService {
     userId: string,
     filename: string,
     mimetype: string,
+    size?: number,
   ): Promise<{
     key: string;
     uploadUrl: string;
@@ -97,21 +101,35 @@ export class StorageService {
       );
     }
 
+    if (size !== undefined) {
+      if (size <= 0 || size > 10 * 1024 * 1024) {
+        throw new BadRequestException('Tamanho de arquivo inválido (máximo 10MB)');
+      }
+    } else if (process.env.REQUIRE_UPLOAD_SIZE === 'true') {
+      throw new BadRequestException('O campo size é obrigatório para upload');
+    }
+
     const key = this.createObjectKey(folder, userId, filename, mimetype);
     const command = new PutObjectCommand({
       Bucket: this.bucketName,
       Key: key,
       ContentType: mimetype,
+      ...(size ? { ContentLength: size } : {}),
     });
     const expiresIn = 600;
+
+    const headers: Record<string, string> = {
+      'Content-Type': mimetype,
+    };
+    if (size) {
+      headers['Content-Length'] = size.toString();
+    }
 
     return {
       key,
       uploadUrl: await getSignedUrl(this.s3Client, command, { expiresIn }),
       fileUrl: await this.resolveS3Url(key),
-      headers: {
-        'Content-Type': mimetype,
-      },
+      headers,
       expiresIn,
     };
   }
@@ -165,18 +183,22 @@ export class StorageService {
     file: Express.Multer.File,
     folder: string = 'bills',
   ): Promise<{ key: string; url: string }> {
+    const detected = file.buffer ? assertImageSignature(file.buffer) : null;
+    const extension = detected?.extension || 'jpg';
+    const mimeType = detected?.mimeType || file.mimetype;
+
     if (this.useS3) {
-      return this.uploadToS3(file, folder);
+      return this.uploadToS3(file, folder, extension, mimeType);
     } else {
       const folderPath = path.join(this.uploadRoot, folder);
       if (!fs.existsSync(folderPath)) {
         fs.mkdirSync(folderPath, { recursive: true });
       }
 
-      const filename = file.filename || `${randomUUID()}.${file.originalname.split('.').pop()}`;
+      const filename = `${randomUUID()}.${extension}`;
       const filePath = path.join(folderPath, filename);
 
-      if (file.buffer && !file.filename) {
+      if (file.buffer) {
         fs.writeFileSync(filePath, file.buffer);
       }
 
@@ -188,22 +210,20 @@ export class StorageService {
     }
   }
 
-  /**
-   * Upload para S3
-   */
   private async uploadToS3(
     file: Express.Multer.File,
     folder: string,
+    extension: string = 'jpg',
+    mimeType: string = 'image/jpeg',
   ): Promise<{ key: string; url: string }> {
     try {
-      const fileExtension = file.originalname.split('.').pop();
-      const key = `${folder}/${randomUUID()}.${fileExtension}`;
+      const key = `${folder}/${randomUUID()}.${extension}`;
 
       const command = new PutObjectCommand({
         Bucket: this.bucketName,
         Key: key,
         Body: file.buffer,
-        ContentType: file.mimetype,
+        ContentType: mimeType,
       });
 
       await this.s3Client.send(command);
@@ -212,7 +232,9 @@ export class StorageService {
 
       return { key, url };
     } catch (error) {
-      console.error('❌ Erro no upload S3:', error);
+      this.logger.error(
+        JSON.stringify({ event: 's3_upload_failed', folder, error: (error as any)?.message }),
+      );
       throw new InternalServerErrorException('Falha ao fazer upload da imagem');
     }
   }

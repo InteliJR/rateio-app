@@ -117,6 +117,20 @@ class ApiService {
     // Interceptor para adicionar token
     this.api.interceptors.request.use(
       async (config) => {
+        const reqHeaders = config.headers as any;
+        if (reqHeaders) {
+          const existingId = reqHeaders['X-Request-Id'] || reqHeaders['x-request-id'];
+          if (!existingId) {
+            const reqId = typeof crypto !== 'undefined' && (crypto as any).randomUUID
+              ? (crypto as any).randomUUID()
+              : `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+            if (reqHeaders.set) {
+              reqHeaders.set('X-Request-Id', reqId);
+            } else {
+              reqHeaders['X-Request-Id'] = reqId;
+            }
+          }
+        }
         // Evita Content-Type incorreto em multipart/form-data no React Native.
         // O runtime deve definir automaticamente o boundary.
         if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
