@@ -1,4 +1,5 @@
 import { ConflictException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserRole } from '@prisma/client';
@@ -48,6 +49,12 @@ describe('AuthService', () => {
         { provide: MailService, useValue: {} },
         { provide: PrismaService, useValue: {} },
         { provide: GoogleTokenService, useValue: googleTokenService },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn().mockReturnValue('mock-refresh-secret'),
+          },
+        },
       ],
     })
       .compile();

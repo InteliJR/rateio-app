@@ -1,10 +1,9 @@
 import 'reflect-metadata';
 import express from 'express';
-import helmet from 'helmet';
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import { AppModule } from '../src/app.module';
+import { configureApp } from '../src/common/setup/app-setup';
 
 let cachedServer: ReturnType<typeof express> | null = null;
 
@@ -17,21 +16,7 @@ async function createServer() {
     bufferLogs: true,
   });
 
-  app.use(
-    helmet({
-      crossOriginResourcePolicy: { policy: 'cross-origin' },
-    }),
-  );
-
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
-
-  app.enableCors();
+  configureApp(app);
   await app.init();
 
   return server;
