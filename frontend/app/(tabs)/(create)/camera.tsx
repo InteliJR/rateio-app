@@ -19,6 +19,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import billService from "../../../services/bill.service";
+import { validateReceiptImage } from "../../../services/imageValidation";
 import { CropModal } from "../../../components/modals/CropModal";
 import { useTheme } from "../../../contexts/ThemeContext";
 
@@ -29,6 +30,8 @@ export default function CameraScreen() {
   const router = useRouter();
   const { id, participants } = useLocalSearchParams();
   const cameraRef = useRef<CameraView>(null);
+  // URI da foto já validada ou liberada pelo usuário (evita revalidar em retry)
+  const validatedImageRef = useRef<string | null>(null);
 
   // Estados
   const [facing, setFacing] = useState<CameraType>("back");
@@ -37,7 +40,7 @@ export default function CameraScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStage, setUploadStage] = useState<
-    "idle" | "optimizing" | "uploading" | "processing"
+    "idle" | "optimizing" | "validating" | "uploading" | "processing"
   >("idle");
   const [imageQuality, setImageQuality] = useState<
     "boa" | "media" | "baixa" | null
@@ -90,6 +93,7 @@ export default function CameraScreen() {
         });
 
         if (photo?.uri) {
+          validatedImageRef.current = null;
           setCapturedImage(photo.uri);
           checkImageResolution(photo.uri);
         }
@@ -128,6 +132,7 @@ export default function CameraScreen() {
       });
 
       if (!result.canceled && result.assets[0]) {
+        validatedImageRef.current = null;
         setCapturedImage(result.assets[0].uri);
         checkImageResolution(result.assets[0].uri);
       }
@@ -139,6 +144,7 @@ export default function CameraScreen() {
 
   // Função para refazer (tirar nova foto)
   const retakePicture = () => {
+    validatedImageRef.current = null;
     setCapturedImage(null);
     setUploadStage("idle");
     setUploadProgress(0);
@@ -166,6 +172,8 @@ export default function CameraScreen() {
     switch (uploadStage) {
       case "optimizing":
         return "Otimizando imagem...";
+      case "validating":
+        return "Verificando legibilidade...";
       case "uploading":
         return "Enviando imagem...";
       case "processing":
@@ -290,7 +298,38 @@ export default function CameraScreen() {
       const optimizedImageUri = await optimizeImage(capturedImage);
       setUploadProgress(30);
 
-      // Etapa 2: Upload da imagem (30-60%)
+      // Etapa 2: Validar legibilidade no aparelho (30-40%)
+      // Pula se esta mesma foto já foi validada ou liberada (ex.: retry após erro)
+      if (validatedImageRef.current !== capturedImage) {
+        setUploadStage("validating");
+        setUploadProgress(35);
+        const validation = await validateReceiptImage(optimizedImageUri);
+
+        if (!validation.isValid) {
+          await new Promise<void>((resolve, reject) => {
+            Alert.alert(
+              "Foto com pouco texto",
+              "Não conseguimos ler texto suficiente nesta foto. Ela pode estar escura, desfocada ou sem a conta. Recomendamos tirar uma nova foto.",
+              [
+                {
+                  text: "Refazer foto",
+                  style: "cancel",
+                  onPress: () => reject("retake"),
+                },
+                { text: "Enviar mesmo assim", onPress: () => resolve() },
+              ],
+              { cancelable: false },
+            );
+          }).catch((reason) => {
+            if (reason === "retake") retakePicture();
+            throw new Error("__cancelled__");
+          });
+        }
+
+        validatedImageRef.current = capturedImage;
+      }
+
+      // Etapa 3: Upload da imagem (40-60%)
       setUploadStage("uploading");
       setUploadProgress(40);
 
@@ -314,7 +353,7 @@ export default function CameraScreen() {
       clearInterval(uploadInterval);
       setUploadProgress(60);
 
-      // Etapa 3: Processamento OCR (60-100%)
+      // Etapa 4: Processamento OCR (60-100%)
       // O OCR roda assincronamente no backend; navegamos imediatamente para a
       // tela de edição que fará polling do status.
       setUploadStage("processing");
@@ -341,7 +380,12 @@ export default function CameraScreen() {
       });
 
       // Cancelamento pelo usuário (escolheu refazer foto) — não mostrar alerta
-      if (error.message === "__cancelled__") return;
+      if (error.message === "__cancelled__") {
+        setIsLoading(false);
+        setUploadStage("idle");
+        setUploadProgress(0);
+        return;
+      }
 
       let errorTitle = "Erro ao processar conta";
       let errorMessage = "Não foi possível processar a conta. Tente novamente.";
@@ -635,6 +679,8 @@ export default function CameraScreen() {
                 ]}
               >
                 {uploadStage === "optimizing" && "Preparando sua imagem..."}
+                {uploadStage === "validating" &&
+                  "Conferindo se o texto está legível..."}
                 {uploadStage === "uploading" &&
                   "Isso pode levar alguns segundos..."}
                 {uploadStage === "processing" &&
@@ -705,6 +751,7 @@ export default function CameraScreen() {
           imageUri={capturedImage}
           onCrop={(croppedUri) => {
             setShowCropModal(false);
+            validatedImageRef.current = null;
             setCapturedImage(croppedUri);
             checkImageResolution(croppedUri);
           }}
