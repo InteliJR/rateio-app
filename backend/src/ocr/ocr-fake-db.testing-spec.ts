@@ -70,6 +70,9 @@ export class FakeOcrDb {
   bills: Row[] = [];
   items: Row[] = [];
   idempotencyKeys: Row[] = [];
+  runMetrics: Row[] = [];
+  /** Se definido, a próxima gravação de métrica falha com este erro (teste de melhor esforço). */
+  failRunMetricWith: Error | null = null;
   private seq = 0;
   private readonly baseTime = Date.now() - 1_000_000;
 
@@ -272,11 +275,25 @@ export class FakeOcrDb {
       },
     };
 
+    const ocrRunMetric = {
+      create: async ({ data }: Row) => {
+        if (db.failRunMetricWith) throw db.failRunMetricWith;
+        return {
+          ...db.insert(
+            db.runMetrics,
+            { id: db.nextId('run'), createdAt: new Date(), ...data },
+            journal,
+          ),
+        };
+      },
+    };
+
     const base: any = {
       ocrJob,
       bill,
       billItem,
       idempotencyKey,
+      ocrRunMetric,
       $transaction: async (callback: (tx: any) => Promise<unknown>) => {
         const txJournal: Undo[] = [];
         try {

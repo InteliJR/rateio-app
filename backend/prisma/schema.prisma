@@ -241,6 +241,62 @@ model IdempotencyKey {
   @@map("idempotency_keys")
 }
 
+enum OcrRunOutcome {
+  COMPLETED // Resultado gravado na conta
+  RETRY_SCHEDULED // Falhou e o job voltou para a fila (errorCategory = motivo da retentativa)
+  FAILED_FINAL // Falha final (esgotamento de tentativas = FAILED_FINAL com errorCategory diferente de IMAGE_MISSING)
+  DISCARDED // Execução que perdeu o job ou resultado de imagem/conta que já mudou
+}
+
+enum OcrErrorCategory {
+  TRANSIENT // 429, 5xx e queda de conexão
+  TIMEOUT // timeout do provedor ou lock vencido
+  CREDENTIAL // 401 e 403
+  INVALID_REQUEST // 400 e demais 4xx
+  IMAGE_MISSING // conta sem imagem
+  INVALID_RESULT // sem itens, texto curto ou resposta vazia
+  EXHAUSTED // reservada ao lock vencido com tentativas esgotadas
+  INTERNAL // erro interno (ex.: banco)
+  UNKNOWN
+}
+
+/// Uma linha por execução do job de OCR (o OcrJob é reaproveitado e zeraria o histórico).
+/// NÃO guarda userId, imageUrl, rawText, itens, preços nem mensagens de erro cruas.
+/// Sem chave estrangeira de propósito: o histórico de custo sobrevive à exclusão da
+/// conta, mas, sem userId, deixa de ser ligável a uma pessoa.
+/// Sem índice único em (ocrJobId, attempt): o job é recriado e attempts volta a 0;
+/// startedAt identifica a execução.
+model OcrRunMetric {
+  id                String            @id @default(uuid())
+  ocrJobId          String
+  billId            String
+  attempt           Int // nº da execução na vida atual do job (1-based)
+  startedAt         DateTime // momento do claim
+  provider          String // 'openai'
+  model             String? // null quando o provedor não foi chamado
+  outcome           OcrRunOutcome
+  errorCategory     OcrErrorCategory?
+  httpStatus        Int?
+  errorCode         String?           @db.VarChar(64) // só código curto em padrão seguro
+  providerRequestId String?           @db.VarChar(64)
+  queueWaitMs       Int
+  openaiMs          Int?
+  totalMs           Int
+  openaiCalls       Int? // chamadas da camada própria de retentativa (sem as do SDK)
+  promptTokens      Int?
+  completionTokens  Int?
+  totalTokens       Int?
+  items             Int? // itens gravados (só em COMPLETED)
+  estimatedCostUsd  Decimal?          @db.Decimal(12, 6) // ESTIMADO, ver ocr-pricing.ts
+  pricingVersion    String?
+  createdAt         DateTime          @default(now())
+
+  @@index([createdAt])
+  @@index([ocrJobId])
+  @@index([model, createdAt])
+  @@map("ocr_run_metrics")
+}
+
 model Fee {
   id          String  @id @default(uuid())
   billId      String

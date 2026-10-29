@@ -1,15 +1,30 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { BillStatus, OcrJob, OcrJobStatus, Prisma } from '@prisma/client';
+import {
+  BillStatus,
+  OcrJob,
+  OcrJobStatus,
+  OcrRunOutcome,
+  Prisma,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { MetricsService } from '../observability/metrics.service';
 import { OcrResultDto } from './dto/ocr-result.dto';
 import { OcrService } from './ocr.service';
 import { StorageService } from '../storage/storage.service';
+import {
+  OcrFailure,
+  OcrInvalidResultError,
+  buildOcrFailure,
+  classifyOcrError,
+} from './ocr-error-category';
+import { OpenAiCallMetrics, recordOcrRunMetric } from './ocr-run-metrics';
 
 // Identifica uma execução do job: `token` é o valor de `attempts` logo após o claim
 // e `imageKey` é a imagem que está sendo lida.
 type OcrExecution = { token: number; imageKey: string | null };
+
+type FailOutcome = 'retry_scheduled' | 'failed_final' | 'ignored';
 
 type PersistOutcome =
   | 'saved'
@@ -255,6 +270,7 @@ export class OcrQueueService {
       attempts: claimed.attempts - 1,
       claimToken: claimed.attempts,
       imageKey: claimed.imageKey,
+      startedAt: claimed.startedAt,
     };
   }
 
@@ -265,6 +281,7 @@ export class OcrQueueService {
     availableAt: Date;
     imageKey?: string | null;
     claimToken?: number;
+    startedAt?: Date | null;
     bill: { id: string; imageUrl: string | null; imageKey: string | null };
   }) {
     const jobStartedAt = Date.now();
@@ -273,10 +290,47 @@ export class OcrQueueService {
       token: job.claimToken ?? job.attempts + 1,
       imageKey: job.imageKey !== undefined ? job.imageKey : job.bill.imageKey,
     };
+    // Medição da chamada ao provedor, entregue pela OcrService (sucesso ou falha)
+    const run: { call: OpenAiCallMetrics | null } = { call: null };
+
+    // Fecha a execução: o MESMO totalMs alimenta o log OCR_METRIC e a linha
+    // persistida (melhor esforço: gravar a métrica nunca falha o job).
+    const finish = async (result: {
+      outcome: OcrRunOutcome;
+      status: 'completed' | 'failed' | 'discarded';
+      failure?: OcrFailure | null;
+      items?: number | null;
+    }) => {
+      const totalMs = Date.now() - jobStartedAt;
+
+      this.logJobMetric(
+        job,
+        queueWaitMs,
+        totalMs,
+        result.items ?? 0,
+        result.status,
+        result.failure?.category ?? null,
+      );
+
+      await recordOcrRunMetric(this.prisma, this.logger, {
+        ocrJobId: job.id,
+        billId: job.billId,
+        attempt: job.attempts + 1,
+        startedAt: job.startedAt ?? new Date(jobStartedAt),
+        outcome: result.outcome,
+        failure: result.failure,
+        queueWaitMs,
+        totalMs,
+        items: result.items,
+        call: run.call,
+      });
+    };
+
     const imageUrl = await this.getProcessableImageUrl(job.bill);
 
     if (!imageUrl) {
-      await this.failJob(
+      const failure = buildOcrFailure('IMAGE_MISSING');
+      const outcome = await this.failJob(
         job.id,
         job.billId,
         'Bill has no image URL for OCR.',
@@ -284,16 +338,25 @@ export class OcrQueueService {
         0,
         execution,
       );
-      this.logJobMetric(job, queueWaitMs, jobStartedAt, 0, 'failed');
+      await finish({
+        outcome: this.toRunOutcome(outcome),
+        status: 'failed',
+        failure,
+      });
       return;
     }
 
     const startedAt = Date.now();
     this.metrics.recordOcrStarted();
 
+    let result: Parameters<typeof finish>[0];
+
     try {
       const ocrResult = await this.ocrService.processImage(imageUrl, {
         jobId: job.id,
+        onOpenAiCall: (metrics) => {
+          run.call = metrics;
+        },
       });
       const outcome = await this.persistOcrResult(
         job.id,
@@ -306,30 +369,28 @@ export class OcrQueueService {
         this.logger.warn(
           `OCR result for bill ${job.billId} discarded (${outcome}).`,
         );
-        this.logJobMetric(job, queueWaitMs, jobStartedAt, 0, 'discarded');
-        return;
+        result = { outcome: OcrRunOutcome.DISCARDED, status: 'discarded' };
+      } else {
+        const durationMs = Date.now() - startedAt;
+        this.metrics.recordOcrCompleted(durationMs);
+
+        this.logger.log(
+          `OCR completed for bill ${job.billId} in ${durationMs}ms.`,
+        );
+        result = {
+          outcome: OcrRunOutcome.COMPLETED,
+          status: 'completed',
+          items: ocrResult.items.length,
+        };
       }
-
-      const durationMs = Date.now() - startedAt;
-      this.metrics.recordOcrCompleted(durationMs);
-
-      this.logger.log(
-        `OCR completed for bill ${job.billId} in ${durationMs}ms.`,
-      );
-      this.logJobMetric(
-        job,
-        queueWaitMs,
-        jobStartedAt,
-        ocrResult.items.length,
-        'completed',
-      );
     } catch (error) {
       const durationMs = Date.now() - startedAt;
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown OCR processing error';
       const shouldRetry = job.attempts + 1 < this.maxAttempts;
+      const failure = classifyOcrError(error);
 
-      await this.failJob(
+      const outcome = await this.failJob(
         job.id,
         job.billId,
         errorMessage,
@@ -337,17 +398,35 @@ export class OcrQueueService {
         durationMs,
         execution,
       );
-      this.logJobMetric(job, queueWaitMs, jobStartedAt, 0, 'failed');
+      result = {
+        outcome: this.toRunOutcome(outcome),
+        status: 'failed',
+        failure,
+      };
+    }
+
+    await finish(result);
+  }
+
+  private toRunOutcome(outcome: FailOutcome): OcrRunOutcome {
+    switch (outcome) {
+      case 'retry_scheduled':
+        return OcrRunOutcome.RETRY_SCHEDULED;
+      case 'failed_final':
+        return OcrRunOutcome.FAILED_FINAL;
+      default:
+        return OcrRunOutcome.DISCARDED;
     }
   }
 
-  // Métrica da POC: apenas números, ids e status (sem dados da conta)
+  // Métrica da POC: apenas números, ids, status e categoria (sem dados da conta)
   private logJobMetric(
     job: { id: string; billId: string; attempts: number },
     queueWaitMs: number,
-    jobStartedAt: number,
+    totalMs: number,
     items: number,
     status: 'completed' | 'failed' | 'discarded',
+    errorCategory: string | null,
   ) {
     this.logger.log(
       `OCR_METRIC ${JSON.stringify({
@@ -356,9 +435,10 @@ export class OcrQueueService {
         billId: job.billId,
         attempt: job.attempts + 1,
         queueWaitMs,
-        totalMs: Date.now() - jobStartedAt,
+        totalMs,
         items,
         status,
+        errorCategory,
       })}`,
     );
   }
@@ -447,7 +527,7 @@ export class OcrQueueService {
         data: { ocrRawText: ocrResult.rawText },
       });
 
-      throw new Error('OCR returned invalid structured data.');
+      throw new OcrInvalidResultError();
     }
 
     const items = ocrResult.items.map((item) => ({
@@ -518,7 +598,7 @@ export class OcrQueueService {
     shouldRetry: boolean,
     durationMs: number,
     execution: OcrExecution,
-  ) {
+  ): Promise<FailOutcome> {
     if (shouldRetry) {
       const rescheduled = await this.prisma.ocrJob.updateMany({
         where: this.executionWhere(jobId, execution),
@@ -534,7 +614,7 @@ export class OcrQueueService {
         this.logger.warn(
           `OCR retry for bill ${billId} skipped: job was claimed by another execution.`,
         );
-        return;
+        return 'ignored';
       }
 
       this.metrics.recordOcrRetry();
@@ -542,7 +622,7 @@ export class OcrQueueService {
       this.logger.warn(
         `OCR failed for bill ${billId}. Scheduled retry. Error: ${errorMessage}`,
       );
-      return;
+      return 'retry_scheduled';
     }
 
     const finalized = await this.prisma.$transaction(async (tx) => {
@@ -581,11 +661,12 @@ export class OcrQueueService {
       this.logger.warn(
         `OCR failure for bill ${billId} ignored: job was claimed by another execution.`,
       );
-      return;
+      return 'ignored';
     }
 
     this.metrics.recordOcrFailed(durationMs, errorMessage);
     this.logger.error(`OCR failed for bill ${billId}: ${errorMessage}`);
+    return 'failed_final';
   }
 
   async getQueueSnapshot() {

@@ -19,6 +19,13 @@ import {
 } from './ocr-number.util';
 import { normalizeMeasurementUnit } from '../common/measurement-unit';
 import { MAX_MONEY_VALUE } from '../common/numeric-limits';
+import {
+  OcrEmptyResponseError,
+  attachOcrFailure,
+  classifyOcrError,
+  toSafeCode,
+} from './ocr-error-category';
+import { OpenAiCallMetrics } from './ocr-run-metrics';
 
 @Injectable()
 export class OcrService {
@@ -55,12 +62,29 @@ export class OcrService {
    */
   async processImage(
     imageUrl: string,
-    context?: { jobId?: string },
+    context?: {
+      jobId?: string;
+      /** Recebe a medição da chamada ao provedor (uma vez, no sucesso ou na falha). */
+      onOpenAiCall?: (metrics: OpenAiCallMetrics) => void;
+    },
   ): Promise<OcrResult> {
+    let openaiCalls = 0;
+    const openaiStartedAt = Date.now();
+    let callReported = false;
+
+    // Entrega a medição à fila sem nunca deixar um erro do callback virar falha do OCR
+    const reportCall = (metrics: OpenAiCallMetrics) => {
+      if (callReported) return;
+      callReported = true;
+      try {
+        context?.onOpenAiCall?.(metrics);
+      } catch {
+        // medição é só observabilidade
+      }
+    };
+
     try {
       // 1. Fazer OCR da imagem com retry
-      let openaiCalls = 0;
-      const openaiStartedAt = Date.now();
       const response = await this.retryWithBackoff(async () => {
         openaiCalls += 1;
         return await this.openaiClient.chat.completions.create({
@@ -87,23 +111,37 @@ export class OcrService {
         });
       }, imageUrl);
 
-      // Métrica da POC: apenas números, ids e nome do modelo (sem conteúdo)
+      // Métrica da POC: apenas números, ids e nome do modelo (sem conteúdo).
+      // O mesmo objeto alimenta o log e a persistência feita pela fila.
+      const callMetrics: OpenAiCallMetrics = {
+        provider: 'openai',
+        model: this.model,
+        openaiMs: Date.now() - openaiStartedAt,
+        openaiCalls,
+        promptTokens: response.usage?.prompt_tokens ?? null,
+        completionTokens: response.usage?.completion_tokens ?? null,
+        totalTokens: response.usage?.total_tokens ?? null,
+        providerRequestId: toSafeCode(
+          (response as { _request_id?: string | null })._request_id,
+        ),
+      };
       this.logger.log(
         `OCR_METRIC ${JSON.stringify({
           stage: 'openai',
           jobId: context?.jobId ?? null,
-          model: this.model,
-          openaiMs: Date.now() - openaiStartedAt,
-          attempts: openaiCalls,
-          promptTokens: response.usage?.prompt_tokens ?? null,
-          completionTokens: response.usage?.completion_tokens ?? null,
+          model: callMetrics.model,
+          openaiMs: callMetrics.openaiMs,
+          attempts: callMetrics.openaiCalls,
+          promptTokens: callMetrics.promptTokens,
+          completionTokens: callMetrics.completionTokens,
         })}`,
       );
+      reportCall(callMetrics);
 
       const responseContent = response.choices[0]?.message?.content || '';
 
       if (!responseContent || responseContent.trim().length === 0) {
-        throw new Error('Nenhum dado extraído da imagem');
+        throw new OcrEmptyResponseError();
       }
 
       // 2. Processar e validar resposta JSON
@@ -196,7 +234,23 @@ export class OcrService {
     } catch (error) {
       // Capturar e tratar erros específicos da API OpenAI
       const ocrError = this.handleOpenAiError(error, imageUrl);
-      throw ocrError;
+
+      // A chamada falhou antes de haver resposta: sem tokens, só duração e chamadas
+      reportCall({
+        provider: 'openai',
+        model: this.model,
+        openaiMs: Date.now() - openaiStartedAt,
+        openaiCalls,
+        promptTokens: null,
+        completionTokens: null,
+        totalTokens: null,
+        providerRequestId: toSafeCode(
+          (error as { requestID?: unknown })?.requestID,
+        ),
+      });
+
+      // Anexa a classificação do erro ORIGINAL (a exceção devolvida não muda)
+      throw attachOcrFailure(ocrError, classifyOcrError(error));
     }
   }
 
