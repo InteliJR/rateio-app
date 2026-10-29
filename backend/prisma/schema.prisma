@@ -212,6 +212,7 @@ model OcrJob {
   finishedAt  DateTime?
   lastError   String?      @db.Text
   imageKey    String? // Imagem alvo/processada por este job (null = jobs anteriores à coluna)
+  creditRun   Int          @default(1) // Execução de cobrança: +1 a cada recriação do job (chave do crédito = jobId, ou jobId:n para n > 1)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 

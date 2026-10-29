@@ -141,13 +141,27 @@ export class CreditsService {
    * Reserva um crédito antes de enfileirar a leitura. A reserva já sai do saldo
    * disponível, então duas requisições simultâneas não conseguem gastar o mesmo
    * crédito: a linha do usuário é travada enquanto o saldo é conferido.
+   *
+   * `client` (opcional): transação já aberta pelo chamador, por exemplo a que
+   * cria a conta e o trabalho de OCR, para que uma reserva recusada desfaça tudo.
+   * Sem ele o comportamento é o de sempre (transação própria).
    */
-  async reserve(userId: string, ocrJobId: string): Promise<ReserveResult> {
+  async reserve(
+    userId: string,
+    ocrJobId: string,
+    client?: Prisma.TransactionClient,
+  ): Promise<ReserveResult> {
     await this.ensureFreeGrant(userId);
 
-    return this.prisma.$transaction(async (tx) => {
+    const reserveWithin = async (
+      tx: Prisma.TransactionClient,
+    ): Promise<ReserveResult> => {
+      // FOR NO KEY UPDATE (e não FOR UPDATE): não conflita com o FOR KEY SHARE que
+      // as chaves estrangeiras (conta, trabalho de OCR) seguram nesta linha na
+      // mesma transação, mas ainda serializa reservas do mesmo usuário.
+      // NÃO VALIDADO em Postgres real (deadlock e serialização só se provam lá).
       const [user] = await tx.$queryRaw<{ creditPolicy: CreditPolicy }[]>`
-        SELECT "creditPolicy" FROM "users" WHERE "id" = ${userId} FOR UPDATE
+        SELECT "creditPolicy" FROM "users" WHERE "id" = ${userId} FOR NO KEY UPDATE
       `;
 
       const policy = user?.creditPolicy ?? CreditPolicy.METERED;
@@ -198,7 +212,11 @@ export class CreditsService {
       });
 
       return { reserved: true, policy };
-    });
+    };
+
+    return client
+      ? reserveWithin(client)
+      : this.prisma.$transaction(reserveWithin);
   }
 
   /**

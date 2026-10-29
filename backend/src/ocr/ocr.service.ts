@@ -155,6 +155,7 @@ export class OcrService {
 
         return {
           rawText: responseContent,
+          source: 'MODEL_JSON',
           ...parsedData,
         };
       } catch (error) {
@@ -174,6 +175,7 @@ export class OcrService {
           const parsedData = this.parseReceiptText(responseContent);
           return {
             rawText: responseContent,
+            source: 'TEXT_FALLBACK',
             ...parsedData,
           };
         } else if (
@@ -202,6 +204,7 @@ export class OcrService {
               );
               return {
                 rawText: responseContent,
+                source: 'JSON_UNVALIDATED',
                 ...parsedData,
               };
             }
@@ -215,6 +218,7 @@ export class OcrService {
           const parsedData = this.parseReceiptText(responseContent);
           return {
             rawText: responseContent,
+            source: 'TEXT_FALLBACK',
             ...parsedData,
           };
         } else {
@@ -227,6 +231,7 @@ export class OcrService {
           const parsedData = this.parseReceiptText(responseContent);
           return {
             rawText: responseContent,
+            source: 'TEXT_FALLBACK',
             ...parsedData,
           };
         }

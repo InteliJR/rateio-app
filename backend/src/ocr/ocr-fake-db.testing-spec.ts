@@ -1,4 +1,5 @@
 import { BillStatus, OcrJobStatus } from '@prisma/client';
+import { InsufficientCreditsError } from '../credits/credits.service';
 
 /**
  * Banco FALSO em memória, só para os specs de idempotência da fila de OCR.
@@ -71,6 +72,15 @@ export class FakeOcrDb {
   items: Row[] = [];
   idempotencyKeys: Row[] = [];
   runMetrics: Row[] = [];
+  /** Ledger FALSO de créditos (ver fakeCredits). */
+  creditTransactions: Row[] = [];
+  creditReservations: Row[] = [];
+  unlimitedUsers = new Set<string>();
+  /** Se definidos, a próxima chamada correspondente falha com este erro. */
+  failConsumeWith: Error | null = null;
+  failReleaseWith: Error | null = null;
+  failBalanceWith: Error | null = null;
+  private userLocks = new Map<string, Promise<void>>();
   /** Se definido, a próxima gravação de métrica falha com este erro (teste de melhor esforço). */
   failRunMetricWith: Error | null = null;
   private seq = 0;
@@ -152,6 +162,7 @@ export class FakeOcrDb {
               finishedAt: null,
               lastError: null,
               imageKey: null,
+              creditRun: 1,
               createdAt: db.tick(),
               updatedAt: new Date(),
               ...input,
@@ -296,12 +307,19 @@ export class FakeOcrDb {
       ocrRunMetric,
       $transaction: async (callback: (tx: any) => Promise<unknown>) => {
         const txJournal: Undo[] = [];
+        const ends: Array<() => void> = [];
+        const txClient = db.client(txJournal);
+        // Gancho para travas que duram até o fim da transação (ver fakeCredits)
+        txClient.__journal = txJournal;
+        txClient.__onEnd = (fn: () => void) => ends.push(fn);
         try {
-          return await callback(db.client(txJournal));
+          return await callback(txClient);
         } catch (error) {
           // Rollback: desfaz só as escritas desta transação
           txJournal.reverse().forEach((undo) => undo());
           throw error;
+        } finally {
+          ends.forEach((fn) => fn());
         }
       },
     };
@@ -340,12 +358,132 @@ export class FakeOcrDb {
       finishedAt: null,
       lastError: null,
       imageKey: null,
+      creditRun: 1,
       createdAt: this.tick(),
       updatedAt: new Date(),
       ...data,
     };
     this.jobs.push(row);
     return row;
+  }
+
+  /** Dá créditos ao usuário (linha FREE_GRANT no ledger falso). */
+  grantCredits(userId: string, amount: number) {
+    this.creditTransactions.push({
+      userId,
+      type: 'FREE_GRANT',
+      amount,
+      idempotencyKey: `grant:${userId}:${this.creditTransactions.length}`,
+      ocrJobId: null,
+      reason: null,
+    });
+  }
+
+  availableCredits(userId: string): number {
+    return this.creditTransactions
+      .filter((t) => t.userId === userId)
+      .reduce((sum, t) => sum + t.amount, 0);
+  }
+
+  /** Trava por usuário, mantida até o fim da transação (como o FOR NO KEY UPDATE). */
+  private async lockUser(userId: string): Promise<() => void> {
+    const previous = this.userLocks.get(userId) ?? Promise.resolve();
+    let release!: () => void;
+    const mine = new Promise<void>((resolve) => (release = resolve));
+    this.userLocks.set(
+      userId,
+      previous.then(() => mine),
+    );
+    await previous;
+    return release;
+  }
+
+  /**
+   * Ledger FALSO com a mesma semântica observável do CreditsService: reserva
+   * única por chave, saldo = soma das linhas, consume só troca o status, release
+   * devolve +1, liquidar duas vezes não tem efeito. A reserva dentro de uma
+   * transação do banco falso é desfeita junto com ela.
+   *
+   * NÃO PROVA: locks reais do Postgres, deadlock, unicidade real nem saldo
+   * nunca negativo sob concorrência real.
+   */
+  fakeCredits() {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const db = this;
+
+    return {
+      getBalance: jest.fn(async (userId: string) => {
+        if (db.failBalanceWith) throw db.failBalanceWith;
+        const available = db.availableCredits(userId);
+        return {
+          balance: available,
+          held: 0,
+          available,
+          policy: db.unlimitedUsers.has(userId) ? 'UNLIMITED' : 'METERED',
+          freeGrantTotal: 3,
+          resetsAt: null,
+        };
+      }),
+      reserve: jest.fn(async (userId: string, key: string, tx?: any) => {
+        const release = await db.lockUser(userId);
+        if (tx?.__onEnd) tx.__onEnd(release);
+        else release();
+
+        const journal: Undo[] | undefined = tx?.__journal;
+        const policy = db.unlimitedUsers.has(userId) ? 'UNLIMITED' : 'METERED';
+        if (policy === 'UNLIMITED') return { reserved: false, policy };
+
+        const existing = db.creditReservations.find((r) => r.ocrJobId === key);
+        if (existing) {
+          return { reserved: existing.status === 'HELD', policy };
+        }
+
+        const available = db.availableCredits(userId);
+        if (available < 1) throw new InsufficientCreditsError(available);
+
+        db.insert(
+          db.creditTransactions,
+          {
+            userId,
+            type: 'RESERVE',
+            amount: -1,
+            idempotencyKey: `reserve:${key}`,
+            ocrJobId: key,
+            reason: null,
+          },
+          journal,
+        );
+        db.insert(
+          db.creditReservations,
+          { userId, ocrJobId: key, status: 'HELD' },
+          journal,
+        );
+        return { reserved: true, policy };
+      }),
+      consume: jest.fn(async (key: string) => {
+        if (db.failConsumeWith) throw db.failConsumeWith;
+        const reservation = db.creditReservations.find(
+          (r) => r.ocrJobId === key && r.status === 'HELD',
+        );
+        if (reservation) reservation.status = 'CONSUMED';
+      }),
+      release: jest.fn(async (key: string, reason?: string) => {
+        if (db.failReleaseWith) throw db.failReleaseWith;
+        const reservation = db.creditReservations.find(
+          (r) => r.ocrJobId === key && r.status === 'HELD',
+        );
+        if (!reservation) return;
+        reservation.status = 'RELEASED';
+        db.creditTransactions.push({
+          userId: reservation.userId,
+          type: 'RELEASE',
+          amount: 1,
+          idempotencyKey: `release:${key}`,
+          ocrJobId: key,
+          reason: reason ?? null,
+        });
+      }),
+    };
   }
 
   addItem(billId: string, data: Row = {}): Row {
