@@ -279,18 +279,23 @@ export class CreditsService {
     reason: string,
   ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
-      const reservation = await tx.creditReservation.findUnique({
-        where: { ocrJobId },
+      // Fecha a reserva em uma única operação condicional: o próprio UPDATE
+      // confere que ela ainda está em HELD. Ler antes e atualizar depois deixa
+      // uma brecha em que um consume e um release simultâneos passam os dois
+      // pela checagem, a reserva fica consumida e o crédito volta assim mesmo,
+      // ou seja, a leitura sai de graça.
+      const fechada = await tx.creditReservation.updateMany({
+        where: { ocrJobId, status: CreditReservationStatus.HELD },
+        data: { status },
       });
 
-      if (!reservation || reservation.status !== CreditReservationStatus.HELD) {
-        // Conta isenta, ou reserva já fechada. Fechar duas vezes não muda o saldo.
+      if (fechada.count === 0) {
+        // Conta isenta, ou outra chamada já fechou esta reserva.
         return;
       }
 
-      await tx.creditReservation.update({
+      const reservation = await tx.creditReservation.findUniqueOrThrow({
         where: { ocrJobId },
-        data: { status },
       });
 
       if (amount !== 0) {
