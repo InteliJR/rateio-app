@@ -1,11 +1,21 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { BillStatus, OcrJobStatus } from '@prisma/client';
+import { BillStatus, OcrJob, OcrJobStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { MetricsService } from '../observability/metrics.service';
 import { OcrResultDto } from './dto/ocr-result.dto';
 import { OcrService } from './ocr.service';
 import { StorageService } from '../storage/storage.service';
+
+// Identifica uma execução do job: `token` é o valor de `attempts` logo após o claim
+// e `imageKey` é a imagem que está sendo lida.
+type OcrExecution = { token: number; imageKey: string | null };
+
+type PersistOutcome =
+  | 'saved'
+  | 'discarded_stale_execution'
+  | 'discarded_bill_changed'
+  | 'requeued_new_image';
 
 @Injectable()
 export class OcrQueueService {
@@ -35,15 +45,66 @@ export class OcrQueueService {
     private readonly storage: StorageService,
   ) {}
 
-  async enqueue(billId: string, userId: string) {
-    await this.prisma.ocrJob.upsert({
-      where: { billId },
-      create: {
-        billId,
-        userId,
-        status: OcrJobStatus.PENDING,
-      },
-      update: {
+  /**
+   * Enfileira a leitura de uma conta sem reiniciar um job ativo:
+   * - sem job: cria;
+   * - FAILED: recria;
+   * - COMPLETED: recria só se a imagem mudou (ou em `reprocess`, pedido explícito);
+   * - PENDING: mantém e apenas aponta para a imagem mais recente;
+   * - RUNNING: não muda; o resultado é conferido quando o job terminar.
+   * `enqueued` diz se há trabalho novo (criado ou recriado) e não apenas reaproveitado.
+   */
+  async enqueue(
+    billId: string,
+    userId: string,
+    options: {
+      imageKey?: string | null;
+      reprocess?: boolean;
+      tx?: Prisma.TransactionClient;
+    } = {},
+  ): Promise<{ job: OcrJob; enqueued: boolean }> {
+    const client: Pick<Prisma.TransactionClient, 'ocrJob' | 'bill'> =
+      options.tx ?? this.prisma;
+    const imageKey =
+      options.imageKey !== undefined
+        ? options.imageKey
+        : ((
+            await client.bill.findUnique({
+              where: { id: billId },
+              select: { imageKey: true },
+            })
+          )?.imageKey ?? null);
+
+    // createMany + skipDuplicates (ON CONFLICT DO NOTHING) não derruba a transação
+    // quando o job já existe, ao contrário de um create que lança erro de unicidade.
+    const created = await client.ocrJob.createMany({
+      data: [{ billId, userId, status: OcrJobStatus.PENDING, imageKey }],
+      skipDuplicates: true,
+    });
+
+    if (created.count === 1) {
+      this.metrics.recordOcrQueued();
+      return {
+        job: await client.ocrJob.findUniqueOrThrow({ where: { billId } }),
+        enqueued: true,
+      };
+    }
+
+    const requeueConditions: Prisma.OcrJobWhereInput[] = [
+      { status: OcrJobStatus.FAILED },
+    ];
+    if (options.reprocess) {
+      requeueConditions.push({ status: OcrJobStatus.COMPLETED });
+    } else if (imageKey !== null) {
+      requeueConditions.push({
+        status: OcrJobStatus.COMPLETED,
+        OR: [{ imageKey: null }, { imageKey: { not: imageKey } }],
+      });
+    }
+
+    const requeued = await client.ocrJob.updateMany({
+      where: { billId, OR: requeueConditions },
+      data: {
         userId,
         status: OcrJobStatus.PENDING,
         attempts: 0,
@@ -52,10 +113,33 @@ export class OcrQueueService {
         finishedAt: null,
         lastError: null,
         availableAt: new Date(),
+        imageKey,
       },
     });
 
-    this.metrics.recordOcrQueued();
+    if (requeued.count === 1) {
+      this.metrics.recordOcrQueued();
+      return {
+        job: await client.ocrJob.findUniqueOrThrow({ where: { billId } }),
+        enqueued: true,
+      };
+    }
+
+    if (imageKey !== null) {
+      await client.ocrJob.updateMany({
+        where: {
+          billId,
+          status: OcrJobStatus.PENDING,
+          OR: [{ imageKey: null }, { imageKey: { not: imageKey } }],
+        },
+        data: { imageKey },
+      });
+    }
+
+    return {
+      job: await client.ocrJob.findUniqueOrThrow({ where: { billId } }),
+      enqueued: false,
+    };
   }
 
   @Cron(CronExpression.EVERY_10_SECONDS)
@@ -142,25 +226,36 @@ export class OcrQueueService {
       return null;
     }
 
-    const updated = await this.prisma.ocrJob.updateMany({
-      where: {
-        id: job.id,
-        status: OcrJobStatus.PENDING,
-      },
-      data: {
-        status: OcrJobStatus.RUNNING,
-        attempts: { increment: 1 },
-        lockedAt: new Date(),
-        startedAt: new Date(),
-        lastError: null,
-      },
-    });
-
-    if (updated.count === 0) {
-      return null;
+    let claimed: OcrJob;
+    try {
+      // Reivindicação atômica: só um processador vence; o outro não encontra o job PENDING.
+      claimed = await this.prisma.ocrJob.update({
+        where: { id: job.id, status: OcrJobStatus.PENDING },
+        data: {
+          status: OcrJobStatus.RUNNING,
+          attempts: { increment: 1 },
+          lockedAt: new Date(),
+          startedAt: new Date(),
+          lastError: null,
+          // A imagem lida é a que a conta aponta agora
+          imageKey: job.bill.imageKey ?? job.imageKey,
+        },
+      });
+    } catch (error) {
+      if ((error as { code?: string }).code === 'P2025') {
+        return null;
+      }
+      throw error;
     }
 
-    return job;
+    // `attempts` segue com o valor anterior ao claim (semântica de retentativa e das
+    // métricas); `claimToken` é o valor novo e identifica esta execução.
+    return {
+      ...job,
+      attempts: claimed.attempts - 1,
+      claimToken: claimed.attempts,
+      imageKey: claimed.imageKey,
+    };
   }
 
   private async runJob(job: {
@@ -168,10 +263,16 @@ export class OcrQueueService {
     billId: string;
     attempts: number;
     availableAt: Date;
+    imageKey?: string | null;
+    claimToken?: number;
     bill: { id: string; imageUrl: string | null; imageKey: string | null };
   }) {
     const jobStartedAt = Date.now();
     const queueWaitMs = jobStartedAt - job.availableAt.getTime();
+    const execution: OcrExecution = {
+      token: job.claimToken ?? job.attempts + 1,
+      imageKey: job.imageKey !== undefined ? job.imageKey : job.bill.imageKey,
+    };
     const imageUrl = await this.getProcessableImageUrl(job.bill);
 
     if (!imageUrl) {
@@ -181,6 +282,7 @@ export class OcrQueueService {
         'Bill has no image URL for OCR.',
         false,
         0,
+        execution,
       );
       this.logJobMetric(job, queueWaitMs, jobStartedAt, 0, 'failed');
       return;
@@ -193,20 +295,23 @@ export class OcrQueueService {
       const ocrResult = await this.ocrService.processImage(imageUrl, {
         jobId: job.id,
       });
-      await this.persistOcrResult(job.billId, ocrResult);
+      const outcome = await this.persistOcrResult(
+        job.id,
+        job.billId,
+        execution,
+        ocrResult,
+      );
+
+      if (outcome !== 'saved') {
+        this.logger.warn(
+          `OCR result for bill ${job.billId} discarded (${outcome}).`,
+        );
+        this.logJobMetric(job, queueWaitMs, jobStartedAt, 0, 'discarded');
+        return;
+      }
 
       const durationMs = Date.now() - startedAt;
       this.metrics.recordOcrCompleted(durationMs);
-
-      await this.prisma.ocrJob.update({
-        where: { id: job.id },
-        data: {
-          status: OcrJobStatus.COMPLETED,
-          lockedAt: null,
-          finishedAt: new Date(),
-          lastError: null,
-        },
-      });
 
       this.logger.log(
         `OCR completed for bill ${job.billId} in ${durationMs}ms.`,
@@ -230,6 +335,7 @@ export class OcrQueueService {
         errorMessage,
         shouldRetry,
         durationMs,
+        execution,
       );
       this.logJobMetric(job, queueWaitMs, jobStartedAt, 0, 'failed');
     }
@@ -241,7 +347,7 @@ export class OcrQueueService {
     queueWaitMs: number,
     jobStartedAt: number,
     items: number,
-    status: 'completed' | 'failed',
+    status: 'completed' | 'failed' | 'discarded',
   ) {
     this.logger.log(
       `OCR_METRIC ${JSON.stringify({
@@ -268,17 +374,77 @@ export class OcrQueueService {
     return bill.imageUrl;
   }
 
-  private async persistOcrResult(
+  /**
+   * Condição para sair de RUNNING: `attempts` só aumenta no claim, então a igualdade
+   * prova que ninguém reivindicou o job depois desta execução. PENDING também vale
+   * (lock liberado por releaseStaleLocks sem novo claim) para não perder um
+   * resultado já pago.
+   */
+  private executionWhere(
+    jobId: string,
+    execution: OcrExecution,
+  ): Prisma.OcrJobWhereInput {
+    return {
+      id: jobId,
+      attempts: execution.token,
+      status: { in: [OcrJobStatus.RUNNING, OcrJobStatus.PENDING] },
+    };
+  }
+
+  // Se a conta passou a apontar para outra imagem enquanto esta era lida, o job volta
+  // para a fila com a imagem nova (e o resultado antigo não é gravado).
+  private async requeueIfImageChanged(
+    tx: Prisma.TransactionClient,
+    jobId: string,
     billId: string,
+    processedImageKey: string | null,
+  ): Promise<boolean> {
+    const bill = await tx.bill.findUnique({
+      where: { id: billId },
+      select: { status: true, imageKey: true },
+    });
+
+    if (
+      !bill ||
+      bill.status !== BillStatus.PENDING_OCR ||
+      bill.imageKey === processedImageKey
+    ) {
+      return false;
+    }
+
+    await tx.ocrJob.updateMany({
+      where: { id: jobId },
+      data: {
+        status: OcrJobStatus.PENDING,
+        attempts: 0,
+        lockedAt: null,
+        startedAt: null,
+        finishedAt: null,
+        lastError: null,
+        availableAt: new Date(),
+        imageKey: bill.imageKey,
+      },
+    });
+
+    return true;
+  }
+
+  private async persistOcrResult(
+    jobId: string,
+    billId: string,
+    execution: OcrExecution,
     ocrResult: Awaited<ReturnType<OcrService['processImage']>>,
-  ) {
+  ): Promise<PersistOutcome> {
     if (!OcrResultDto.validateOcrResult(ocrResult)) {
-      await this.prisma.bill.update({
-        where: { id: billId },
-        data: {
-          status: BillStatus.OCR_FAILED,
-          ocrRawText: ocrResult.rawText,
+      // A conta só vira OCR_FAILED na falha final (failJob), nunca enquanto
+      // houver retentativa. Aqui só guarda o texto bruto para diagnóstico.
+      await this.prisma.bill.updateMany({
+        where: {
+          id: billId,
+          status: BillStatus.PENDING_OCR,
+          imageKey: execution.imageKey,
         },
+        data: { ocrRawText: ocrResult.rawText },
       });
 
       throw new Error('OCR returned invalid structured data.');
@@ -293,15 +459,29 @@ export class OcrQueueService {
       totalPrice: item.totalPrice,
     }));
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.billItem.deleteMany({ where: { billId } });
+    return this.prisma.$transaction(async (tx): Promise<PersistOutcome> => {
+      // Gravação única: só quem ainda é o dono da execução conclui o job
+      const completed = await tx.ocrJob.updateMany({
+        where: this.executionWhere(jobId, execution),
+        data: {
+          status: OcrJobStatus.COMPLETED,
+          lockedAt: null,
+          finishedAt: new Date(),
+          lastError: null,
+        },
+      });
 
-      if (items.length > 0) {
-        await tx.billItem.createMany({ data: items });
+      if (completed.count === 0) {
+        return 'discarded_stale_execution';
       }
 
-      await tx.bill.update({
-        where: { id: billId },
+      // O resultado só vale para a imagem certa e para uma conta ainda aguardando OCR
+      const billUpdated = await tx.bill.updateMany({
+        where: {
+          id: billId,
+          status: BillStatus.PENDING_OCR,
+          imageKey: execution.imageKey,
+        },
         data: {
           status: BillStatus.REVIEWING,
           ocrRawText: ocrResult.rawText,
@@ -309,6 +489,25 @@ export class OcrQueueService {
           establishmentName: ocrResult.establishmentName,
         },
       });
+
+      if (billUpdated.count === 0) {
+        return (await this.requeueIfImageChanged(
+          tx,
+          jobId,
+          billId,
+          execution.imageKey,
+        ))
+          ? 'requeued_new_image'
+          : 'discarded_bill_changed';
+      }
+
+      await tx.billItem.deleteMany({ where: { billId } });
+
+      if (items.length > 0) {
+        await tx.billItem.createMany({ data: items });
+      }
+
+      return 'saved';
     });
   }
 
@@ -318,12 +517,11 @@ export class OcrQueueService {
     errorMessage: string,
     shouldRetry: boolean,
     durationMs: number,
+    execution: OcrExecution,
   ) {
     if (shouldRetry) {
-      this.metrics.recordOcrRetry();
-
-      await this.prisma.ocrJob.update({
-        where: { id: jobId },
+      const rescheduled = await this.prisma.ocrJob.updateMany({
+        where: this.executionWhere(jobId, execution),
         data: {
           status: OcrJobStatus.PENDING,
           lockedAt: null,
@@ -332,22 +530,24 @@ export class OcrQueueService {
         },
       });
 
+      if (rescheduled.count === 0) {
+        this.logger.warn(
+          `OCR retry for bill ${billId} skipped: job was claimed by another execution.`,
+        );
+        return;
+      }
+
+      this.metrics.recordOcrRetry();
+
       this.logger.warn(
         `OCR failed for bill ${billId}. Scheduled retry. Error: ${errorMessage}`,
       );
       return;
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.bill.update({
-        where: { id: billId },
-        data: {
-          status: BillStatus.OCR_FAILED,
-        },
-      });
-
-      await tx.ocrJob.update({
-        where: { id: jobId },
+    const finalized = await this.prisma.$transaction(async (tx) => {
+      const failed = await tx.ocrJob.updateMany({
+        where: this.executionWhere(jobId, execution),
         data: {
           status: OcrJobStatus.FAILED,
           lockedAt: null,
@@ -355,7 +555,34 @@ export class OcrQueueService {
           lastError: errorMessage,
         },
       });
+
+      if (failed.count === 0) {
+        return false;
+      }
+
+      // A conta só vira OCR_FAILED aqui, na falha final, e se ainda espera esta imagem
+      const billFailed = await tx.bill.updateMany({
+        where: {
+          id: billId,
+          status: BillStatus.PENDING_OCR,
+          imageKey: execution.imageKey,
+        },
+        data: { status: BillStatus.OCR_FAILED },
+      });
+
+      if (billFailed.count === 0) {
+        await this.requeueIfImageChanged(tx, jobId, billId, execution.imageKey);
+      }
+
+      return true;
     });
+
+    if (!finalized) {
+      this.logger.warn(
+        `OCR failure for bill ${billId} ignored: job was claimed by another execution.`,
+      );
+      return;
+    }
 
     this.metrics.recordOcrFailed(durationMs, errorMessage);
     this.logger.error(`OCR failed for bill ${billId}: ${errorMessage}`);

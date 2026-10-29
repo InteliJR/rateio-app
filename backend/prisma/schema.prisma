@@ -108,6 +108,8 @@ model Bill {
   fees         Fee[]
   ocrJob       OcrJob?
 
+  idempotencyKeys IdempotencyKey[]
+
   @@index([userId])
   @@index([status])
   @@index([createdAt])
@@ -206,6 +208,7 @@ model OcrJob {
   startedAt   DateTime?
   finishedAt  DateTime?
   lastError   String?      @db.Text
+  imageKey    String? // Imagem alvo/processada por este job (null = jobs anteriores à coluna)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
@@ -216,6 +219,26 @@ model OcrJob {
   @@index([userId])
   @@index([lockedAt])
   @@map("ocr_jobs")
+}
+
+/// Chave de idempotência (cabeçalho Idempotency-Key) por usuário e operação de OCR.
+/// userId não tem relação com User de propósito: a exclusão em cascata vem pela conta.
+model IdempotencyKey {
+  id          String   @id @default(uuid())
+  userId      String
+  key         String // UUID enviado pelo cliente
+  operation   String // CREATE_WITH_IMAGE | ATTACH_IMAGE | RETRY_OCR
+  requestHash String // sha256 do payload relevante da operação
+  billId      String
+  ocrJobId    String?
+  createdAt   DateTime @default(now())
+
+  bill Bill @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([billId])
+  @@index([createdAt])
+  @@map("idempotency_keys")
 }
 
 model Fee {

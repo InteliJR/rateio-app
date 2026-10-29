@@ -12,8 +12,12 @@ import {
   UploadedFile,
   BadRequestException,
   Query,
+  Headers,
+  Res,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
+import { parseIdempotencyKey } from './bill-idempotency';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { BillsService } from './bills.service';
 import { CreateBillDto } from './dto/create-bill.dto';
@@ -29,6 +33,21 @@ import {
   AttachUploadedImageDto,
   PresignedUploadDto,
 } from './dto/presigned-upload.dto';
+
+// Cabeçalho opcional: sem ele, o comportamento anterior é preservado
+const IDEMPOTENCY_KEY_HEADER = 'idempotency-key';
+
+// Marca respostas que repetem o resultado de uma requisição anterior com a mesma chave
+function flagIdempotentReplay<T extends { idempotentReplay?: boolean }>(
+  res: Response,
+  result: T,
+): T {
+  if (result.idempotentReplay) {
+    res.setHeader('Idempotency-Replayed', 'true');
+  }
+
+  return result;
+}
 
 @Controller('bills')
 @UseGuards(JwtAuthGuard)
@@ -128,9 +147,18 @@ export class BillsController {
     @UploadedFile() file: Express.Multer.File | undefined,
     @Body() createBillDto: CreateBillDto,
     @Request() req: any,
+    @Headers(IDEMPOTENCY_KEY_HEADER) idempotencyKeyHeader: string | undefined,
+    @Res({ passthrough: true }) res: Response,
   ) {
     // if (!file) check removed to allow manual creation
-    return this.billsService.create(file, req.user.id, createBillDto);
+    const result = await this.billsService.create(
+      file,
+      req.user.id,
+      createBillDto,
+      parseIdempotencyKey(idempotencyKeyHeader),
+    );
+
+    return flagIdempotentReplay(res, result as { idempotentReplay?: boolean } & typeof result);
   }
 
   /**
@@ -152,11 +180,20 @@ export class BillsController {
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File | undefined,
     @Request() req: any,
+    @Headers(IDEMPOTENCY_KEY_HEADER) idempotencyKeyHeader: string | undefined,
+    @Res({ passthrough: true }) res: Response,
   ) {
     if (!file) {
       throw new BadRequestException('Imagem obrigatória');
     }
-    return this.billsService.uploadImage(id, file, req.user.id);
+    const result = await this.billsService.uploadImage(
+      id,
+      file,
+      req.user.id,
+      parseIdempotencyKey(idempotencyKeyHeader),
+    );
+
+    return flagIdempotentReplay(res, result as { idempotentReplay?: boolean } & typeof result);
   }
 
   /**
@@ -167,12 +204,17 @@ export class BillsController {
     @Param('id') id: string,
     @Body() attachUploadedImageDto: AttachUploadedImageDto,
     @Request() req: any,
+    @Headers(IDEMPOTENCY_KEY_HEADER) idempotencyKeyHeader: string | undefined,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    return this.billsService.attachUploadedImage(
+    const result = await this.billsService.attachUploadedImage(
       id,
       attachUploadedImageDto,
       req.user.id,
+      parseIdempotencyKey(idempotencyKeyHeader),
     );
+
+    return flagIdempotentReplay(res, result as { idempotentReplay?: boolean } & typeof result);
   }
 
   @Post(':id/items')
@@ -265,8 +307,19 @@ export class BillsController {
    */
   @Throttle({ default: { limit: 1, ttl: 300000 } })
   @Post(':id/retry-ocr')
-  retryOcr(@Param('id') id: string, @Request() req: any) {
-    return this.billsService.retryOcr(id, req.user.id);
+  async retryOcr(
+    @Param('id') id: string,
+    @Request() req: any,
+    @Headers(IDEMPOTENCY_KEY_HEADER) idempotencyKeyHeader: string | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.billsService.retryOcr(
+      id,
+      req.user.id,
+      parseIdempotencyKey(idempotencyKeyHeader),
+    );
+
+    return flagIdempotentReplay(res, result as { idempotentReplay?: boolean } & typeof result);
   }
 
   /**

@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { Logger } from '@nestjs/common';
-import { OcrJobStatus } from '@prisma/client';
+import { BillStatus, OcrJobStatus } from '@prisma/client';
 import { OcrQueueService } from './ocr-queue.service';
 
 /**
@@ -108,12 +108,15 @@ describe('OcrQueueService OCR_METRIC (job)', () => {
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
         createMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
-      bill: { update: jest.fn().mockResolvedValue({}) },
-      ocrJob: { update: jest.fn().mockResolvedValue({}) },
+      bill: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
+      ocrJob: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
     };
     prisma = {
-      ocrJob: { update: jest.fn().mockResolvedValue({}) },
-      bill: { update: jest.fn().mockResolvedValue({}) },
+      ocrJob: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      bill: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       $transaction: jest.fn(async (callback: (t: typeof tx) => unknown) =>
         callback(tx),
       ),
@@ -190,12 +193,14 @@ describe('OcrQueueService OCR_METRIC (job)', () => {
     expect(metrics.recordOcrRetry).toHaveBeenCalledTimes(1);
     expect(metrics.recordOcrFailed).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
-    expect(prisma.ocrJob.update).toHaveBeenCalledWith(
+    expect(prisma.ocrJob.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'job-1' },
+        where: expect.objectContaining({ id: 'job-1', attempts: 1 }),
         data: expect.objectContaining({ status: OcrJobStatus.PENDING }),
       }),
     );
+    // R5: a conta não vira OCR_FAILED enquanto há retentativa agendada
+    expect(prisma.tx.bill.updateMany).not.toHaveBeenCalled();
     expectNoSensitiveData(lines);
   });
 
@@ -215,9 +220,16 @@ describe('OcrQueueService OCR_METRIC (job)', () => {
     expect(metrics.recordOcrFailed).toHaveBeenCalledTimes(1);
     expect(metrics.recordOcrRetry).not.toHaveBeenCalled();
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-    expect(prisma.tx.ocrJob.update).toHaveBeenCalledWith(
+    expect(prisma.tx.ocrJob.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: expect.objectContaining({ id: 'job-1', attempts: 3 }),
         data: expect.objectContaining({ status: OcrJobStatus.FAILED }),
+      }),
+    );
+    // Falha final: só aqui a conta vira OCR_FAILED
+    expect(prisma.tx.bill.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { status: BillStatus.OCR_FAILED },
       }),
     );
     expectNoSensitiveData(lines);

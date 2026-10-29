@@ -7,6 +7,13 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { OcrQueueService } from '../ocr/ocr-queue.service';
+import {
+  IDEMPOTENCY_OPERATIONS,
+  IdempotencyOperation,
+  findIdempotentReplay,
+  hashIdempotentRequest,
+  isUniqueViolation,
+} from './bill-idempotency';
 import { CreateBillDto } from './dto/create-bill.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
 import { FinalizeBillDto } from './dto/finalize-bill.dto';
@@ -159,6 +166,12 @@ const buildFeeDistribution = (
   return distributeEvenly(round2(Number(fee.value)), feePayers);
 };
 
+type IdempotencyContext = {
+  key: string;
+  operation: IdempotencyOperation;
+  requestHash: string;
+};
+
 @Injectable()
 export class BillsService {
   constructor(
@@ -190,10 +203,138 @@ export class BillsService {
     );
   }
 
+  /**
+   * Replay de uma operação idempotente: devolve a conta atual quando a chave já foi
+   * usada com a mesma requisição (422 se foi usada com outra). Sem chave, não faz nada.
+   */
+  private async replayIdempotent(
+    userId: string,
+    idempotency: IdempotencyContext | undefined,
+  ) {
+    if (!idempotency) {
+      return null;
+    }
+
+    const record = await findIdempotentReplay(
+      this.prisma,
+      userId,
+      idempotency.key,
+      idempotency.operation,
+      idempotency.requestHash,
+    );
+
+    if (!record) {
+      return null;
+    }
+
+    const bill = await this.prisma.bill.findUnique({
+      where: { id: record.billId },
+    });
+
+    if (!bill) {
+      return null;
+    }
+
+    return {
+      ...bill,
+      message: 'Requisição repetida: resultado anterior devolvido.',
+      idempotentReplay: true,
+    };
+  }
+
+  // Duas requisições simultâneas com a mesma chave: a perdedora recebe violação de
+  // unicidade, e então devolve o resultado da vencedora.
+  private async resolveIdempotentConflict(
+    error: unknown,
+    userId: string,
+    idempotency: IdempotencyContext | undefined,
+  ) {
+    if (idempotency && isUniqueViolation(error)) {
+      const replay = await this.replayIdempotent(userId, idempotency);
+      if (replay) {
+        return replay;
+      }
+    }
+
+    throw error;
+  }
+
+  private buildIdempotency(
+    key: string | undefined,
+    operation: IdempotencyOperation,
+    payload: Record<string, string | number | null | undefined>,
+  ): IdempotencyContext | undefined {
+    if (!key) {
+      return undefined;
+    }
+
+    return {
+      key,
+      operation,
+      requestHash: hashIdempotentRequest(operation, payload),
+    };
+  }
+
+  // Cria a conta, o job e o registro da chave na mesma transação
+  private async createBillWithImage(
+    userId: string,
+    image: { imageUrl: string; imageKey: string },
+    establishmentName: string | undefined,
+    idempotency: IdempotencyContext | undefined,
+  ) {
+    let created: { bill: Prisma.BillGetPayload<object>; enqueued: boolean };
+
+    try {
+      created = await this.prisma.$transaction(async (tx) => {
+        const bill = await tx.bill.create({
+          data: {
+            userId,
+            imageUrl: image.imageUrl,
+            imageKey: image.imageKey,
+            status: BillStatus.PENDING_OCR,
+            establishmentName,
+          },
+        });
+
+        const { job, enqueued } = await this.ocrQueue.enqueue(bill.id, userId, {
+          imageKey: image.imageKey,
+          tx,
+        });
+
+        if (idempotency) {
+          await tx.idempotencyKey.create({
+            data: {
+              userId,
+              key: idempotency.key,
+              operation: idempotency.operation,
+              requestHash: idempotency.requestHash,
+              billId: bill.id,
+              ocrJobId: job.id,
+            },
+          });
+        }
+
+        return { bill, enqueued };
+      });
+    } catch (error) {
+      return this.resolveIdempotentConflict(error, userId, idempotency);
+    }
+
+    if (created.enqueued) {
+      this.triggerOcrProcessing();
+    }
+
+    return {
+      ...created.bill,
+      message: 'Conta criada. OCR enfileirado para processamento.',
+    };
+  }
+
   private async enqueueUploadedImageBill(
     userId: string,
     imageKey: string,
     establishmentName?: string,
+    idempotencyKey?: string,
   ) {
     if (!this.storage.isOwnedObjectKey(imageKey, 'bills', userId)) {
       throw new BadRequestException(
@@ -201,24 +342,24 @@ export class BillsService {
       );
     }
 
+    const idempotency = this.buildIdempotency(
+      idempotencyKey,
+      IDEMPOTENCY_OPERATIONS.CREATE_WITH_IMAGE,
+      { imageKey, establishmentName },
+    );
+    const replay = await this.replayIdempotent(userId, idempotency);
+    if (replay) {
+      return replay;
+    }
+
     const imageUrl = await this.storage.getFileUrl(imageKey);
-    const bill = await this.prisma.bill.create({
-      data: {
-        userId,
-        imageUrl,
-        imageKey,
-        status: BillStatus.PENDING_OCR,
-        establishmentName,
-      },
-    });
 
-    await this.ocrQueue.enqueue(bill.id, userId);
-    this.triggerOcrProcessing();
-
-    return {
-      ...bill,
-      message: 'Conta criada. OCR enfileirado para processamento.',
-    };
+    return this.createBillWithImage(
+      userId,
+      { imageUrl, imageKey },
+      establishmentName,
+      idempotency,
+    );
   }
 
   /**
@@ -228,12 +369,14 @@ export class BillsService {
     file: Express.Multer.File | undefined,
     userId: string,
     createBillDto: CreateBillDto,
+    idempotencyKey?: string,
   ) {
     if (createBillDto.imageKey) {
       return this.enqueueUploadedImageBill(
         userId,
         createBillDto.imageKey,
         createBillDto.establishmentName,
+        idempotencyKey,
       );
     }
 
@@ -250,27 +393,32 @@ export class BillsService {
         throw new BadRequestException('Tamanho máximo: 10MB');
       }
 
-      // 2. Upload da imagem para S3
+      // 2. Consultar a chave ANTES do upload ao S3 (evita enviar o arquivo de novo).
+      // O hash cobre só metadados (nome do estabelecimento, tipo e tamanho), não os bytes.
+      const idempotency = this.buildIdempotency(
+        idempotencyKey,
+        IDEMPOTENCY_OPERATIONS.CREATE_WITH_IMAGE,
+        {
+          establishmentName: createBillDto.establishmentName,
+          mimetype: file.mimetype,
+          size: file.size,
+        },
+      );
+      const replay = await this.replayIdempotent(userId, idempotency);
+      if (replay) {
+        return replay;
+      }
+
+      // 3. Upload da imagem para S3
       const { key, url } = await this.storage.uploadFile(file, 'bills');
 
-      // 3. Criar registro da conta (status: PENDING_OCR)
-      const bill = await this.prisma.bill.create({
-        data: {
-          userId,
-          imageUrl: url,
-          imageKey: key,
-          status: BillStatus.PENDING_OCR,
-          establishmentName: createBillDto.establishmentName,
-        },
-      });
-
-      await this.ocrQueue.enqueue(bill.id, userId);
-      this.triggerOcrProcessing();
-
-      return {
-        ...bill,
-        message: 'Conta criada. OCR enfileirado para processamento.',
-      };
+      // 4. Criar a conta (PENDING_OCR) e enfileirar na mesma transação
+      return this.createBillWithImage(
+        userId,
+        { imageUrl: url, imageKey: key },
+        createBillDto.establishmentName,
+        idempotency,
+      );
     }
 
     // Fluxo manual (sem imagem)
@@ -394,10 +542,67 @@ export class BillsService {
     }
   }
 
+  // Troca a imagem da conta, volta para PENDING_OCR e enfileira na mesma transação
+  private async attachImageToBill(
+    billId: string,
+    userId: string,
+    image: { imageUrl: string; imageKey: string },
+    message: string,
+    idempotency: IdempotencyContext | undefined,
+  ) {
+    let attached: { bill: Prisma.BillGetPayload<object>; enqueued: boolean };
+
+    try {
+      attached = await this.prisma.$transaction(async (tx) => {
+        const bill = await tx.bill.update({
+          where: { id: billId },
+          data: {
+            imageUrl: image.imageUrl,
+            imageKey: image.imageKey,
+            status: BillStatus.PENDING_OCR,
+          },
+        });
+
+        const { job, enqueued } = await this.ocrQueue.enqueue(bill.id, userId, {
+          imageKey: image.imageKey,
+          tx,
+        });
+
+        if (idempotency) {
+          await tx.idempotencyKey.create({
+            data: {
+              userId,
+              key: idempotency.key,
+              operation: idempotency.operation,
+              requestHash: idempotency.requestHash,
+              billId: bill.id,
+              ocrJobId: job.id,
+            },
+          });
+        }
+
+        return { bill, enqueued };
+      });
+    } catch (error) {
+      return this.resolveIdempotentConflict(error, userId, idempotency);
+    }
+
+    if (attached.enqueued) {
+      this.triggerOcrProcessing();
+    }
+
+    return { ...attached.bill, message };
+  }
+
   /**
    * Upload de imagem para conta existente + OCR
    */
-  async uploadImage(billId: string, file: Express.Multer.File, userId: string) {
+  async uploadImage(
+    billId: string,
+    file: Express.Multer.File,
+    userId: string,
+    idempotencyKey?: string,
+  ) {
     const bill = await this.prisma.bill.findFirst({
       where: { id: billId, userId },
     });
@@ -421,32 +626,36 @@ export class BillsService {
       throw new BadRequestException('Tamanho máximo: 10MB');
     }
 
-    // 2. Upload da imagem para o S3
+    // 2. Consultar a chave ANTES do upload ao S3. O hash cobre a conta e os
+    // metadados do arquivo (tipo e tamanho), não os bytes.
+    const idempotency = this.buildIdempotency(
+      idempotencyKey,
+      IDEMPOTENCY_OPERATIONS.ATTACH_IMAGE,
+      { billId, mimetype: file.mimetype, size: file.size },
+    );
+    const replay = await this.replayIdempotent(userId, idempotency);
+    if (replay) {
+      return replay;
+    }
+
+    // 3. Upload da imagem para o S3
     const { url, key } = await this.storage.uploadFile(file, 'bills');
 
-    // 3. Atualizar conta com imagem e status pendente
-    const updatedBill = await this.prisma.bill.update({
-      where: { id: billId },
-      data: {
-        imageUrl: url,
-        imageKey: key,
-        status: BillStatus.PENDING_OCR,
-      },
-    });
-
-    await this.ocrQueue.enqueue(updatedBill.id, userId);
-    this.triggerOcrProcessing();
-
-    return {
-      ...updatedBill,
-      message: 'Imagem enviada. OCR enfileirado para processamento.',
-    };
+    // 4. Atualizar a conta com a imagem e enfileirar
+    return this.attachImageToBill(
+      billId,
+      userId,
+      { imageUrl: url, imageKey: key },
+      'Imagem enviada. OCR enfileirado para processamento.',
+      idempotency,
+    );
   }
 
   async attachUploadedImage(
     billId: string,
     dto: AttachUploadedImageDto,
     userId: string,
+    idempotencyKey?: string,
   ) {
     const bill = await this.prisma.bill.findFirst({
       where: { id: billId, userId },
@@ -462,35 +671,48 @@ export class BillsService {
       );
     }
 
+    const idempotency = this.buildIdempotency(
+      idempotencyKey,
+      IDEMPOTENCY_OPERATIONS.ATTACH_IMAGE,
+      { billId, imageKey: dto.imageKey },
+    );
+    const replay = await this.replayIdempotent(userId, idempotency);
+    if (replay) {
+      return replay;
+    }
+
     const imageUrl = await this.storage.getFileUrl(dto.imageKey);
-    const updatedBill = await this.prisma.bill.update({
-      where: { id: billId },
-      data: {
-        imageUrl,
-        imageKey: dto.imageKey,
-        status: BillStatus.PENDING_OCR,
-      },
-    });
 
-    await this.ocrQueue.enqueue(updatedBill.id, userId);
-    this.triggerOcrProcessing();
-
-    return {
-      ...updatedBill,
-      message: 'Imagem enviada. OCR enfileirado para processamento.',
-    };
+    return this.attachImageToBill(
+      billId,
+      userId,
+      { imageUrl, imageKey: dto.imageKey },
+      'Imagem enviada. OCR enfileirado para processamento.',
+      idempotency,
+    );
   }
 
   /**
    * Reprocessar OCR de uma conta que falhou anteriormente
    */
-  async retryOcr(billId: string, userId: string) {
+  async retryOcr(billId: string, userId: string, idempotencyKey?: string) {
     const bill = await this.prisma.bill.findFirst({
       where: { id: billId, userId },
     });
 
     if (!bill) {
       throw new NotFoundException('Conta não encontrada');
+    }
+
+    // Replay antes de checar o status: depois do primeiro pedido a conta já não está em OCR_FAILED
+    const idempotency = this.buildIdempotency(
+      idempotencyKey,
+      IDEMPOTENCY_OPERATIONS.RETRY_OCR,
+      { billId },
+    );
+    const replay = await this.replayIdempotent(userId, idempotency);
+    if (replay) {
+      return replay;
     }
 
     if (bill.status !== BillStatus.OCR_FAILED) {
@@ -503,20 +725,59 @@ export class BillsService {
       throw new BadRequestException('Conta não possui imagem para reprocessar');
     }
 
-    // Remover itens existentes (pode haver itens parciais de tentativa anterior)
-    await this.prisma.billItem.deleteMany({ where: { billId } });
+    let retried: { bill: Prisma.BillGetPayload<object>; enqueued: boolean };
 
-    // Resetar status para PENDING_OCR
-    const updatedBill = await this.prisma.bill.update({
-      where: { id: billId },
-      data: { status: BillStatus.PENDING_OCR },
-    });
+    try {
+      retried = await this.prisma.$transaction(async (tx) => {
+        // Atômico: só um pedido consegue tirar a conta de OCR_FAILED
+        const flipped = await tx.bill.updateMany({
+          where: { id: billId, userId, status: BillStatus.OCR_FAILED },
+          data: { status: BillStatus.PENDING_OCR },
+        });
 
-    await this.ocrQueue.enqueue(billId, userId);
-    this.triggerOcrProcessing();
+        if (flipped.count === 0) {
+          throw new BadRequestException(
+            'Reprocessamento OCR só é permitido para contas com status OCR_FAILED',
+          );
+        }
+
+        // Remover itens existentes (pode haver itens parciais de tentativa anterior)
+        await tx.billItem.deleteMany({ where: { billId } });
+
+        const { job, enqueued } = await this.ocrQueue.enqueue(billId, userId, {
+          imageKey: bill.imageKey ?? null,
+          reprocess: true,
+          tx,
+        });
+
+        if (idempotency) {
+          await tx.idempotencyKey.create({
+            data: {
+              userId,
+              key: idempotency.key,
+              operation: idempotency.operation,
+              requestHash: idempotency.requestHash,
+              billId,
+              ocrJobId: job.id,
+            },
+          });
+        }
+
+        return {
+          bill: await tx.bill.findUniqueOrThrow({ where: { id: billId } }),
+          enqueued,
+        };
+      });
+    } catch (error) {
+      return this.resolveIdempotentConflict(error, userId, idempotency);
+    }
+
+    if (retried.enqueued) {
+      this.triggerOcrProcessing();
+    }
 
     return {
-      ...updatedBill,
+      ...retried.bill,
       message: 'OCR reenfileirado para processamento.',
     };
   }
