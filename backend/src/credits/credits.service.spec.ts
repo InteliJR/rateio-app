@@ -16,8 +16,9 @@ type TxMock = {
   };
   creditReservation: {
     findUnique: jest.Mock;
+    findUniqueOrThrow: jest.Mock;
     create: jest.Mock;
-    update: jest.Mock;
+    updateMany: jest.Mock;
   };
 };
 
@@ -40,8 +41,13 @@ describe('CreditsService', () => {
       },
       creditReservation: {
         findUnique: jest.fn().mockResolvedValue(null),
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          ocrJobId,
+          userId,
+          status: CreditReservationStatus.HELD,
+        }),
         create: jest.fn().mockResolvedValue({}),
-        update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
     };
 
@@ -192,22 +198,28 @@ describe('CreditsService', () => {
   });
 
   describe('consume e release', () => {
-    beforeEach(() => {
-      tx.creditReservation.findUnique.mockResolvedValue({
-        ocrJobId,
-        userId,
-        status: CreditReservationStatus.HELD,
-      });
-    });
-
     it('consume fecha a reserva sem mexer no saldo', async () => {
       await service.consume(ocrJobId);
 
-      expect(tx.creditReservation.update).toHaveBeenCalledWith({
-        where: { ocrJobId },
+      expect(tx.creditReservation.updateMany).toHaveBeenCalledWith({
+        where: { ocrJobId, status: CreditReservationStatus.HELD },
         data: { status: CreditReservationStatus.CONSUMED },
       });
       expect(tx.creditTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('fecha a reserva em uma operação condicional, não lendo antes de atualizar', async () => {
+      // Se a leitura viesse primeiro, um consume e um release simultâneos
+      // passariam os dois pela checagem e o crédito voltaria numa leitura
+      // que foi entregue.
+      await service.release(ocrJobId);
+
+      expect(tx.creditReservation.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { ocrJobId, status: CreditReservationStatus.HELD },
+        }),
+      );
+      expect(tx.creditReservation.findUnique).not.toHaveBeenCalled();
     });
 
     it('release devolve o crédito ao usuário', async () => {
@@ -225,22 +237,19 @@ describe('CreditsService', () => {
     });
 
     it('fechar a mesma reserva duas vezes não devolve crédito duas vezes', async () => {
-      tx.creditReservation.findUnique.mockResolvedValue({
-        ocrJobId,
-        userId,
-        status: CreditReservationStatus.RELEASED,
-      });
+      // A reserva já saiu de HELD, então o UPDATE condicional não pega nada.
+      tx.creditReservation.updateMany.mockResolvedValue({ count: 0 });
 
       await service.release(ocrJobId);
 
       expect(tx.creditTransaction.create).not.toHaveBeenCalled();
-      expect(tx.creditReservation.update).not.toHaveBeenCalled();
     });
 
     it('não falha quando não existe reserva, como numa conta isenta', async () => {
-      tx.creditReservation.findUnique.mockResolvedValue(null);
+      tx.creditReservation.updateMany.mockResolvedValue({ count: 0 });
 
       await expect(service.consume(ocrJobId)).resolves.toBeUndefined();
+      expect(tx.creditTransaction.create).not.toHaveBeenCalled();
     });
   });
 
