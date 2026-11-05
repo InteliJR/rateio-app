@@ -11,7 +11,8 @@ import {
  *   pending-...        compra pendente
  *   canceled-...       compra cancelada
  *   other-account-...  compra vinculada a outra conta
- *   qualquer outro     compra paga
+ *   qty<N>-...         compra paga de N unidades (ex.: qty3-abc)
+ *   qualquer outro     compra paga de 1 unidade
  *
  * Nunca é ligada em produção (ver createGooglePlayVerifier).
  */
@@ -41,7 +42,13 @@ export class FakeGooglePlayVerifier extends GooglePlayVerifier {
         consumed,
       };
     }
-    return { state: 'PURCHASED', orderId, consumed };
+    const quantity = purchaseToken.match(/^qty(\d+)-/)?.[1];
+    return {
+      state: 'PURCHASED',
+      orderId,
+      consumed,
+      quantity: quantity ? Number(quantity) : undefined,
+    };
   }
 
   async consumeProductPurchase(

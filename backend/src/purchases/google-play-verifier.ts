@@ -7,6 +7,8 @@ export interface GooglePurchaseInfo {
   obfuscatedAccountId?: string;
   /** Se a Google já registrou o consumo desta compra. */
   consumed: boolean;
+  /** Unidades compradas na transação. Ausente equivale a 1. */
+  quantity?: number;
 }
 
 /**

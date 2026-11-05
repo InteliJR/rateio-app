@@ -111,6 +111,71 @@ describe('PurchasesService', () => {
     expect(prisma.rows.get('token-1').consumedAt).toBeInstanceOf(Date);
   });
 
+  it('credita créditos por unidade vezes a quantidade comprada', async () => {
+    verifier.info = { state: 'PURCHASED', consumed: false, quantity: 3 };
+
+    const result = await service.verifyGooglePurchase('user-1', dto);
+
+    expect(result.credits).toBe(30);
+    expect(granter.grant).toHaveBeenCalledWith({
+      userId: 'user-1',
+      credits: 30,
+      reference: 'p1',
+    });
+    expect(prisma.rows.get('token-1').credits).toBe(30);
+  });
+
+  it('retorna o total creditado quando o token se repete', async () => {
+    verifier.info = { state: 'PURCHASED', consumed: false, quantity: 3 };
+    await service.verifyGooglePurchase('user-1', dto);
+
+    const result = await service.verifyGooglePurchase('user-1', dto);
+
+    expect(result.alreadyCredited).toBe(true);
+    expect(result.credits).toBe(30);
+    expect(granter.grant).toHaveBeenCalledTimes(1);
+  });
+
+  it('usa a quantidade confirmada quando a compra pendente é paga', async () => {
+    verifier.info = { state: 'PENDING', consumed: false, quantity: 2 };
+    await service.verifyGooglePurchase('user-1', dto);
+
+    verifier.info = { state: 'PURCHASED', consumed: false, quantity: 2 };
+    const reconciled = await service.reconcile('user-1');
+
+    expect(reconciled[0].credits).toBe(20);
+    expect(granter.grant).toHaveBeenCalledWith({
+      userId: 'user-1',
+      credits: 20,
+      reference: 'p1',
+    });
+  });
+
+  it.each([0, -1, 1.5])(
+    'rejeita quantidade inválida (%s) sem creditar',
+    async (quantity) => {
+      verifier.info = { state: 'PURCHASED', consumed: false, quantity };
+
+      await expect(
+        service.verifyGooglePurchase('user-1', dto),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(granter.grant).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejeita quantidade que estoura o limite de créditos', async () => {
+    verifier.info = {
+      state: 'PURCHASED',
+      consumed: false,
+      quantity: 1_000_000_000,
+    };
+
+    await expect(
+      service.verifyGooglePurchase('user-1', dto),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(granter.grant).not.toHaveBeenCalled();
+  });
+
   it('não credita de novo quando o token se repete', async () => {
     await service.verifyGooglePurchase('user-1', dto);
     const result = await service.verifyGooglePurchase('user-1', dto);

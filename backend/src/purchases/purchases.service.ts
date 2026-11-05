@@ -11,6 +11,9 @@ import { CreditsGranter } from './credits-granter';
 import { getProductCredits } from './purchase-products';
 import { VerifyGooglePurchaseDto } from './dto/verify-google-purchase.dto';
 
+/** Limite da coluna Int (32 bits) onde os créditos são gravados. */
+const MAX_CREDITS = 2_147_483_647;
+
 export interface PurchaseResult {
   status: PurchaseStatus;
   productId: string;
@@ -126,11 +129,13 @@ export class PurchasesService {
       throw new BadRequestException('Compra cancelada');
     }
 
+    const credits = this.totalCredits(purchase, info.quantity);
+
     // O ledger deve ser idempotente por `reference`; assim, requisições
     // concorrentes com o mesmo token não somam créditos duas vezes.
     await this.credits.grant({
       userId,
-      credits: purchase.credits,
+      credits,
       reference: purchase.id,
     });
 
@@ -138,6 +143,7 @@ export class PurchasesService {
       where: { id: purchase.id },
       data: {
         status: PurchaseStatus.CREDITED,
+        credits,
         orderId: info.orderId ?? purchase.orderId,
         consumedAt: info.consumed ? new Date() : purchase.consumedAt,
       },
@@ -148,6 +154,24 @@ export class PurchasesService {
     }
 
     return this.toResult(credited, false);
+  }
+
+  /**
+   * Créditos da compra: valor por unidade do catálogo vezes a quantidade que a
+   * Google registrou. Enquanto não creditada, `purchase.credits` guarda só o
+   * valor por unidade; ao creditar, passa a guardar o total.
+   */
+  private totalCredits(purchase: Purchase, quantity = 1): number {
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      throw new BadRequestException('Quantidade da compra inválida');
+    }
+
+    const perUnit = getProductCredits(purchase.productId) ?? purchase.credits;
+    const total = perUnit * quantity;
+    if (!Number.isSafeInteger(total) || total > MAX_CREDITS) {
+      throw new BadRequestException('Quantidade da compra inválida');
+    }
+    return total;
   }
 
   /** Consumir libera o produto para nova compra; falha aqui não desfaz o crédito. */
