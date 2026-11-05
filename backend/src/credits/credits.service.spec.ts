@@ -61,6 +61,7 @@ describe('CreditsService', () => {
       creditTransaction: {
         aggregate: jest.fn().mockResolvedValue({ _sum: { amount: 3 } }),
         create: jest.fn().mockResolvedValue({}),
+        findMany: jest.fn().mockResolvedValue([]),
       },
       creditReservation: {
         count: jest.fn().mockResolvedValue(0),
@@ -268,6 +269,92 @@ describe('CreditsService', () => {
       const released = await service.releaseExpired();
 
       expect(released).toBe(2);
+    });
+  });
+
+  describe('getHistory', () => {
+    const linha = (id: string) => ({
+      id,
+      type: CreditTransactionType.FREE_GRANT,
+      amount: 3,
+      reason: 'Cota gratuita inicial',
+      ocrJobId: null,
+      createdAt: new Date('2026-11-05T12:00:00Z'),
+    });
+
+    it('devolve a página sem o item extra usado para detectar a próxima', async () => {
+      prisma.creditTransaction.findMany.mockResolvedValue([
+        linha('a'),
+        linha('b'),
+        linha('c'),
+      ]);
+
+      const pagina = await service.getHistory(userId, { limit: 2 });
+
+      expect(pagina.entries).toHaveLength(2);
+      expect(pagina.nextCursor).toBe('b');
+    });
+
+    it('não devolve cursor quando acabou', async () => {
+      prisma.creditTransaction.findMany.mockResolvedValue([linha('a')]);
+
+      const pagina = await service.getHistory(userId, { limit: 5 });
+
+      expect(pagina.entries).toHaveLength(1);
+      expect(pagina.nextCursor).toBeNull();
+    });
+
+    it('limita o tamanho da página pedido pelo cliente', async () => {
+      prisma.creditTransaction.findMany.mockResolvedValue([]);
+
+      await service.getHistory(userId, { limit: 5000 });
+
+      expect(prisma.creditTransaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 101 }),
+      );
+    });
+  });
+
+  describe('adminAdjust', () => {
+    it('registra autor, motivo e o tipo de ajuste', async () => {
+      await service.adminAdjust({
+        userId,
+        amount: -2,
+        reason: 'Estorno combinado com o suporte',
+        actorId: 'admin-1',
+      });
+
+      expect(prisma.creditTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            userId,
+            amount: -2,
+            type: CreditTransactionType.ADMIN_ADJUST,
+            reason: 'Estorno combinado com o suporte',
+            actorId: 'admin-1',
+          }),
+        }),
+      );
+    });
+
+    it('repetir a mesma referência não ajusta duas vezes', async () => {
+      prisma.creditTransaction.create.mockRejectedValueOnce(
+        new Prisma.PrismaClientKnownRequestError('duplicada', {
+          code: 'P2002',
+          clientVersion: '6.0.0',
+        }),
+      );
+
+      const resultado = await service.adminAdjust({
+        userId,
+        amount: 5,
+        reason: 'Compensação por falha',
+        actorId: 'admin-1',
+        reference: '8f1d1a4e-0000-4000-8000-000000000000',
+      });
+
+      expect(resultado.applied).toBe(false);
+      expect(resultado.balance).toBeDefined();
     });
   });
 });

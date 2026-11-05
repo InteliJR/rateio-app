@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import {
   CreditPolicy,
@@ -36,6 +37,24 @@ export interface ReserveResult {
   reserved: boolean;
   policy: CreditPolicy;
 }
+
+export interface CreditHistoryEntry {
+  id: string;
+  type: CreditTransactionType;
+  amount: number;
+  reason: string | null;
+  ocrJobId: string | null;
+  createdAt: string;
+}
+
+export interface CreditHistoryPage {
+  entries: CreditHistoryEntry[];
+  /** Passar em `cursor` para buscar a página seguinte. Nulo quando acabou. */
+  nextCursor: string | null;
+}
+
+const HISTORY_PAGE_SIZE = 20;
+const HISTORY_MAX_PAGE_SIZE = 100;
 
 /** Erro de domínio: o usuário não tem créditos disponíveis. */
 export class InsufficientCreditsError extends Error {
@@ -252,23 +271,95 @@ export class CreditsService {
     return expired.length;
   }
 
-  /** Ajuste manual do suporte. Fica registrado com autor e motivo. */
-  async adminAdjust(
+  /**
+   * Histórico de movimentações, da mais recente para a mais antiga.
+   *
+   * É a mesma fonte que explica o saldo: somar `amount` de todas as páginas
+   * devolve exatamente o saldo disponível.
+   */
+  async getHistory(
     userId: string,
-    amount: number,
-    reason: string,
-    actorId: string,
-  ): Promise<void> {
-    await this.prisma.creditTransaction.create({
-      data: {
-        userId,
-        type: CreditTransactionType.ADMIN_ADJUST,
-        amount,
-        idempotencyKey: `admin:${userId}:${Date.now()}`,
-        reason,
-        actorId,
+    options: { cursor?: string; limit?: number } = {},
+  ): Promise<CreditHistoryPage> {
+    const limit = Math.min(
+      Math.max(options.limit ?? HISTORY_PAGE_SIZE, 1),
+      HISTORY_MAX_PAGE_SIZE,
+    );
+
+    // Busca um a mais para saber se existe página seguinte sem fazer count
+    const rows = await this.prisma.creditTransaction.findMany({
+      where: { userId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+      ...(options.cursor ? { cursor: { id: options.cursor }, skip: 1 } : {}),
+      select: {
+        id: true,
+        type: true,
+        amount: true,
+        reason: true,
+        ocrJobId: true,
+        createdAt: true,
       },
     });
+
+    const temMais = rows.length > limit;
+    const pagina = temMais ? rows.slice(0, limit) : rows;
+
+    return {
+      entries: pagina.map((row) => ({
+        id: row.id,
+        type: row.type,
+        amount: row.amount,
+        reason: row.reason,
+        ocrJobId: row.ocrJobId,
+        createdAt: row.createdAt.toISOString(),
+      })),
+      nextCursor: temMais ? pagina[pagina.length - 1].id : null,
+    };
+  }
+
+  /**
+   * Ajuste manual do suporte. Fica registrado com autor, motivo e data, como
+   * pede o critério de aceite do EPIC-02.
+   *
+   * `reference` permite que o suporte repita a chamada sem medo: a mesma
+   * referência não ajusta o saldo duas vezes.
+   */
+  async adminAdjust(input: {
+    userId: string;
+    amount: number;
+    reason: string;
+    actorId: string;
+    reference?: string;
+  }): Promise<{ applied: boolean; balance: CreditBalance }> {
+    const idempotencyKey =
+      input.reference ?? `admin:${input.userId}:${randomUUID()}`;
+
+    let applied = true;
+
+    try {
+      await this.prisma.creditTransaction.create({
+        data: {
+          userId: input.userId,
+          type: CreditTransactionType.ADMIN_ADJUST,
+          amount: input.amount,
+          idempotencyKey,
+          reason: input.reason,
+          actorId: input.actorId,
+        },
+      });
+    } catch (error) {
+      if (!this.isUniqueViolation(error)) {
+        throw error;
+      }
+      applied = false;
+    }
+
+    this.logger.log(
+      `Ajuste administrativo de ${input.amount} em ${input.userId} por ${input.actorId}: ${input.reason}`,
+    );
+
+    return { applied, balance: await this.getBalance(input.userId) };
   }
 
   private async settle(
