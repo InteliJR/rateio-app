@@ -106,6 +106,7 @@ export class PurchasesService {
     const info = await this.verifier.getProductPurchase(
       purchase.productId,
       purchase.purchaseToken,
+      userId,
     );
 
     if (info.obfuscatedAccountId && info.obfuscatedAccountId !== userId) {
@@ -127,6 +128,17 @@ export class PurchasesService {
         data: { status: PurchaseStatus.CANCELED },
       });
       throw new BadRequestException('Compra cancelada');
+    }
+
+    if (!info.obfuscatedAccountId) {
+      // O app deve enviar o id do usuário (obfuscatedAccountId) ao iniciar a
+      // compra; sem ele não há como provar de quem ela é. A Google reembolsa
+      // compras não consumidas, então o usuário não fica sem o dinheiro.
+      await this.prisma.purchase.update({
+        where: { id: purchase.id },
+        data: { status: PurchaseStatus.REJECTED },
+      });
+      throw new BadRequestException('Compra sem identificação da conta');
     }
 
     const credits = this.totalCredits(purchase, info.quantity);
