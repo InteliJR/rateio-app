@@ -6,18 +6,26 @@ import {
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreditsService, InsufficientCreditsError } from './credits.service';
+import { NotFoundException } from '@nestjs/common';
+import {
+  AdjustReferenceConflictError,
+  CreditsService,
+  InsufficientCreditsError,
+  NegativeBalanceError,
+} from './credits.service';
 
 type TxMock = {
   $queryRaw: jest.Mock;
   creditTransaction: {
     aggregate: jest.Mock;
     create: jest.Mock;
+    findUnique: jest.Mock;
   };
   creditReservation: {
     findUnique: jest.Mock;
+    findUniqueOrThrow: jest.Mock;
     create: jest.Mock;
-    update: jest.Mock;
+    updateMany: jest.Mock;
   };
 };
 
@@ -37,11 +45,17 @@ describe('CreditsService', () => {
       creditTransaction: {
         aggregate: jest.fn().mockResolvedValue({ _sum: { amount: 3 } }),
         create: jest.fn().mockResolvedValue({}),
+        findUnique: jest.fn().mockResolvedValue(null),
       },
       creditReservation: {
         findUnique: jest.fn().mockResolvedValue(null),
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          ocrJobId,
+          userId,
+          status: CreditReservationStatus.HELD,
+        }),
         create: jest.fn().mockResolvedValue({}),
-        update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
     };
 
@@ -55,6 +69,8 @@ describe('CreditsService', () => {
       creditTransaction: {
         aggregate: jest.fn().mockResolvedValue({ _sum: { amount: 3 } }),
         create: jest.fn().mockResolvedValue({}),
+        findMany: jest.fn().mockResolvedValue([]),
+        findUniqueOrThrow: jest.fn(),
       },
       creditReservation: {
         count: jest.fn().mockResolvedValue(0),
@@ -192,22 +208,28 @@ describe('CreditsService', () => {
   });
 
   describe('consume e release', () => {
-    beforeEach(() => {
-      tx.creditReservation.findUnique.mockResolvedValue({
-        ocrJobId,
-        userId,
-        status: CreditReservationStatus.HELD,
-      });
-    });
-
     it('consume fecha a reserva sem mexer no saldo', async () => {
       await service.consume(ocrJobId);
 
-      expect(tx.creditReservation.update).toHaveBeenCalledWith({
-        where: { ocrJobId },
+      expect(tx.creditReservation.updateMany).toHaveBeenCalledWith({
+        where: { ocrJobId, status: CreditReservationStatus.HELD },
         data: { status: CreditReservationStatus.CONSUMED },
       });
       expect(tx.creditTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('fecha a reserva em uma operação condicional, não lendo antes de atualizar', async () => {
+      // Se a leitura viesse primeiro, um consume e um release simultâneos
+      // passariam os dois pela checagem e o crédito voltaria numa leitura
+      // que foi entregue.
+      await service.release(ocrJobId);
+
+      expect(tx.creditReservation.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { ocrJobId, status: CreditReservationStatus.HELD },
+        }),
+      );
+      expect(tx.creditReservation.findUnique).not.toHaveBeenCalled();
     });
 
     it('release devolve o crédito ao usuário', async () => {
@@ -225,22 +247,19 @@ describe('CreditsService', () => {
     });
 
     it('fechar a mesma reserva duas vezes não devolve crédito duas vezes', async () => {
-      tx.creditReservation.findUnique.mockResolvedValue({
-        ocrJobId,
-        userId,
-        status: CreditReservationStatus.RELEASED,
-      });
+      // A reserva já saiu de HELD, então o UPDATE condicional não pega nada.
+      tx.creditReservation.updateMany.mockResolvedValue({ count: 0 });
 
       await service.release(ocrJobId);
 
       expect(tx.creditTransaction.create).not.toHaveBeenCalled();
-      expect(tx.creditReservation.update).not.toHaveBeenCalled();
     });
 
     it('não falha quando não existe reserva, como numa conta isenta', async () => {
-      tx.creditReservation.findUnique.mockResolvedValue(null);
+      tx.creditReservation.updateMany.mockResolvedValue({ count: 0 });
 
       await expect(service.consume(ocrJobId)).resolves.toBeUndefined();
+      expect(tx.creditTransaction.create).not.toHaveBeenCalled();
     });
   });
 
@@ -259,6 +278,205 @@ describe('CreditsService', () => {
       const released = await service.releaseExpired();
 
       expect(released).toBe(2);
+    });
+  });
+
+  describe('getHistory', () => {
+    const linha = (id: string) => ({
+      id,
+      type: CreditTransactionType.FREE_GRANT,
+      amount: 3,
+      reason: 'Cota gratuita inicial',
+      ocrJobId: null,
+      createdAt: new Date('2026-11-05T12:00:00Z'),
+    });
+
+    it('devolve a página sem o item extra usado para detectar a próxima', async () => {
+      prisma.creditTransaction.findMany.mockResolvedValue([
+        linha('a'),
+        linha('b'),
+        linha('c'),
+      ]);
+
+      const pagina = await service.getHistory(userId, { limit: 2 });
+
+      expect(pagina.entries).toHaveLength(2);
+      expect(pagina.nextCursor).toBe('b');
+    });
+
+    it('não devolve cursor quando acabou', async () => {
+      prisma.creditTransaction.findMany.mockResolvedValue([linha('a')]);
+
+      const pagina = await service.getHistory(userId, { limit: 5 });
+
+      expect(pagina.entries).toHaveLength(1);
+      expect(pagina.nextCursor).toBeNull();
+    });
+
+    it('limita o tamanho da página pedido pelo cliente', async () => {
+      prisma.creditTransaction.findMany.mockResolvedValue([]);
+
+      await service.getHistory(userId, { limit: 5000 });
+
+      expect(prisma.creditTransaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 101 }),
+      );
+    });
+  });
+
+  describe('adminAdjust', () => {
+    const reference = '8f1d1a4e-0000-4000-8000-000000000000';
+
+    it('registra autor, motivo e o tipo de ajuste', async () => {
+      await service.adminAdjust({
+        userId,
+        amount: -2,
+        reason: 'Estorno combinado com o suporte',
+        actorId: 'admin-1',
+      });
+
+      expect(tx.creditTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            userId,
+            amount: -2,
+            type: CreditTransactionType.ADMIN_ADJUST,
+            reason: 'Estorno combinado com o suporte',
+            actorId: 'admin-1',
+          }),
+        }),
+      );
+    });
+
+    it('trava a linha do usuário antes de conferir o saldo', async () => {
+      await service.adminAdjust({
+        userId,
+        amount: 1,
+        reason: 'Compensação por falha',
+        actorId: 'admin-1',
+      });
+
+      expect(tx.$queryRaw).toHaveBeenCalled();
+    });
+
+    it('repetir a mesma referência não ajusta duas vezes', async () => {
+      tx.creditTransaction.findUnique.mockResolvedValue({
+        userId,
+        type: CreditTransactionType.ADMIN_ADJUST,
+        amount: 5,
+      });
+
+      const resultado = await service.adminAdjust({
+        userId,
+        amount: 5,
+        reason: 'Compensação por falha',
+        actorId: 'admin-1',
+        reference,
+      });
+
+      expect(resultado.applied).toBe(false);
+      expect(resultado.balance).toBeDefined();
+      expect(tx.creditTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('a mesma referência enviada ao mesmo tempo também não ajusta duas vezes', async () => {
+      tx.creditTransaction.create.mockRejectedValueOnce(
+        new Prisma.PrismaClientKnownRequestError('duplicada', {
+          code: 'P2002',
+          clientVersion: '6.0.0',
+        }),
+      );
+      prisma.creditTransaction.findUniqueOrThrow.mockResolvedValue({
+        userId,
+        type: CreditTransactionType.ADMIN_ADJUST,
+        amount: 5,
+      });
+
+      const resultado = await service.adminAdjust({
+        userId,
+        amount: 5,
+        reason: 'Compensação por falha',
+        actorId: 'admin-1',
+        reference,
+      });
+
+      expect(resultado.applied).toBe(false);
+    });
+
+    it('recusa reusar a referência com outro valor', async () => {
+      tx.creditTransaction.findUnique.mockResolvedValue({
+        userId,
+        type: CreditTransactionType.ADMIN_ADJUST,
+        amount: 5,
+      });
+
+      await expect(
+        service.adminAdjust({
+          userId,
+          amount: 7,
+          reason: 'Compensação por falha',
+          actorId: 'admin-1',
+          reference,
+        }),
+      ).rejects.toBeInstanceOf(AdjustReferenceConflictError);
+    });
+
+    it('recusa reusar a referência para outro usuário', async () => {
+      tx.creditTransaction.findUnique.mockResolvedValue({
+        userId: 'user-2',
+        type: CreditTransactionType.ADMIN_ADJUST,
+        amount: 5,
+      });
+
+      await expect(
+        service.adminAdjust({
+          userId,
+          amount: 5,
+          reason: 'Compensação por falha',
+          actorId: 'admin-1',
+          reference,
+        }),
+      ).rejects.toBeInstanceOf(AdjustReferenceConflictError);
+    });
+
+    it('recusa retirada maior que o saldo disponível', async () => {
+      tx.creditTransaction.aggregate.mockResolvedValue({ _sum: { amount: 3 } });
+
+      await expect(
+        service.adminAdjust({
+          userId,
+          amount: -4,
+          reason: 'Estorno combinado com o suporte',
+          actorId: 'admin-1',
+        }),
+      ).rejects.toBeInstanceOf(NegativeBalanceError);
+      expect(tx.creditTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('aceita retirada que zera o saldo', async () => {
+      tx.creditTransaction.aggregate.mockResolvedValue({ _sum: { amount: 3 } });
+
+      const resultado = await service.adminAdjust({
+        userId,
+        amount: -3,
+        reason: 'Estorno combinado com o suporte',
+        actorId: 'admin-1',
+      });
+
+      expect(resultado.applied).toBe(true);
+    });
+
+    it('recusa usuário inexistente', async () => {
+      tx.$queryRaw.mockResolvedValue([]);
+
+      await expect(
+        service.adminAdjust({
+          userId,
+          amount: 1,
+          reason: 'Compensação por falha',
+          actorId: 'admin-1',
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 });

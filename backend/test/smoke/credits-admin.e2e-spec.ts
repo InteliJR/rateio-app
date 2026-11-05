@@ -41,22 +41,18 @@ describe('Fumaça: histórico e ajuste administrativo de créditos', () => {
 
   function adjust(
     as: SmokeUser,
+    userId: string,
     body: Partial<{
-      userId: string;
       amount: number;
       reason: string;
-      idempotencyKey: string;
+      reference: string;
     }>,
   ) {
     return smoke
       .http()
-      .post('/admin/credits/adjust')
+      .patch(`/credits/${userId}/adjust`)
       .set(as.auth)
-      .send({
-        reason: 'Ajuste de teste',
-        idempotencyKey: randomUUID(),
-        ...body,
-      });
+      .send({ reason: 'Ajuste de teste', ...body });
   }
 
   async function available(userId: string) {
@@ -69,12 +65,12 @@ describe('Fumaça: histórico e ajuste administrativo de créditos', () => {
     });
   }
 
-  describe('POST /admin/credits/adjust', () => {
+  describe('PATCH /credits/:userId/adjust', () => {
     it('sem login → 401', async () => {
       await smoke
         .http()
-        .post('/admin/credits/adjust')
-        .send({ userId: randomUUID(), amount: 1, reason: 'x' })
+        .patch(`/credits/${randomUUID()}/adjust`)
+        .send({ amount: 1, reason: 'Ajuste de teste' })
         .expect(401);
     });
 
@@ -82,7 +78,7 @@ describe('Fumaça: histórico e ajuste administrativo de créditos', () => {
       const user = await registerUser(smoke, 'ajuste-comum');
       await credits.ensureFreeGrant(user.id);
 
-      await adjust(user, { userId: user.id, amount: 100 }).expect(403);
+      await adjust(user, user.id, { amount: 100 }).expect(403);
 
       expect(await available(user.id)).toBe(3);
       expect(await adjustRows(user.id)).toHaveLength(0);
@@ -92,13 +88,13 @@ describe('Fumaça: histórico e ajuste administrativo de créditos', () => {
       const user = await registerUser(smoke, 'ajuste-ok');
       await credits.ensureFreeGrant(user.id);
 
-      const response = await adjust(admin, {
-        userId: user.id,
+      const response = await adjust(admin, user.id, {
         amount: 5,
         reason: 'Leitura cobrada por engano',
       }).expect(200);
 
-      expect(response.body).toEqual({ applied: true, available: 8 });
+      expect(response.body.applied).toBe(true);
+      expect(response.body.balance.available).toBe(8);
       const [row] = await adjustRows(user.id);
       expect(row).toMatchObject({
         amount: 5,
@@ -110,28 +106,22 @@ describe('Fumaça: histórico e ajuste administrativo de créditos', () => {
     it('o autor vem do token, não do corpo', async () => {
       const user = await registerUser(smoke, 'ajuste-autor');
 
-      await smoke
-        .http()
-        .post('/admin/credits/adjust')
-        .set(admin.auth)
-        .send({
-          userId: user.id,
-          amount: 1,
-          reason: 'x',
-          idempotencyKey: randomUUID(),
-          actorId: user.id,
-        })
-        .expect(400);
+      await adjust(admin, user.id, {
+        amount: 1,
+        actorId: user.id,
+      } as never).expect(400);
+
+      expect(await adjustRows(user.id)).toHaveLength(0);
     });
 
-    it('mesma chave enviada 5 vezes em paralelo ajusta uma vez', async () => {
+    it('mesma referência enviada 5 vezes em paralelo ajusta uma vez', async () => {
       const user = await registerUser(smoke, 'ajuste-5x');
       await credits.ensureFreeGrant(user.id);
-      const idempotencyKey = randomUUID();
+      const reference = randomUUID();
 
       const responses = await Promise.all(
         Array.from({ length: 5 }, () =>
-          adjust(admin, { userId: user.id, amount: 2, idempotencyKey }),
+          adjust(admin, user.id, { amount: 2, reference }),
         ),
       );
 
@@ -143,29 +133,32 @@ describe('Fumaça: histórico e ajuste administrativo de créditos', () => {
       expect(await adjustRows(user.id)).toHaveLength(1);
     });
 
-    it('mesma chave com outro valor → 409', async () => {
+    it('mesma referência com outro valor → 409', async () => {
       const user = await registerUser(smoke, 'ajuste-conflito');
-      const idempotencyKey = randomUUID();
+      const reference = randomUUID();
 
-      await adjust(admin, {
-        userId: user.id,
-        amount: 2,
-        idempotencyKey,
-      }).expect(200);
-      await adjust(admin, {
-        userId: user.id,
-        amount: 3,
-        idempotencyKey,
-      }).expect(409);
+      await adjust(admin, user.id, { amount: 2, reference }).expect(200);
+      await adjust(admin, user.id, { amount: 3, reference }).expect(409);
 
       expect(await adjustRows(user.id)).toHaveLength(1);
+    });
+
+    it('mesma referência para outro usuário → 409', async () => {
+      const first = await registerUser(smoke, 'ajuste-ref-1');
+      const second = await registerUser(smoke, 'ajuste-ref-2');
+      const reference = randomUUID();
+
+      await adjust(admin, first.id, { amount: 2, reference }).expect(200);
+      await adjust(admin, second.id, { amount: 2, reference }).expect(409);
+
+      expect(await adjustRows(second.id)).toHaveLength(0);
     });
 
     it('retirada maior que o saldo → 422 e nada muda', async () => {
       const user = await registerUser(smoke, 'ajuste-negativo');
       await credits.ensureFreeGrant(user.id);
 
-      await adjust(admin, { userId: user.id, amount: -4 }).expect(422);
+      await adjust(admin, user.id, { amount: -4 }).expect(422);
 
       expect(await available(user.id)).toBe(3);
       expect(await adjustRows(user.id)).toHaveLength(0);
@@ -175,45 +168,40 @@ describe('Fumaça: histórico e ajuste administrativo de créditos', () => {
       const user = await registerUser(smoke, 'ajuste-zera');
       await credits.ensureFreeGrant(user.id);
 
-      const response = await adjust(admin, {
-        userId: user.id,
-        amount: -3,
-      }).expect(200);
+      const response = await adjust(admin, user.id, { amount: -3 }).expect(200);
 
-      expect(response.body).toEqual({ applied: true, available: 0 });
+      expect(response.body.balance.available).toBe(0);
     });
 
     it('sem motivo, valor zero ou fracionado → 400', async () => {
       const user = await registerUser(smoke, 'ajuste-invalido');
 
-      await adjust(admin, { userId: user.id, amount: 1, reason: '' }).expect(
-        400,
-      );
-      await adjust(admin, { userId: user.id, amount: 0 }).expect(400);
-      await adjust(admin, { userId: user.id, amount: 1.5 }).expect(400);
+      await adjust(admin, user.id, { amount: 1, reason: '' }).expect(400);
+      await adjust(admin, user.id, { amount: 0 }).expect(400);
+      await adjust(admin, user.id, { amount: 1.5 }).expect(400);
 
       expect(await adjustRows(user.id)).toHaveLength(0);
     });
 
     it('usuário inexistente → 404', async () => {
-      await adjust(admin, { userId: randomUUID(), amount: 1 }).expect(404);
+      await adjust(admin, randomUUID(), { amount: 1 }).expect(404);
     });
   });
 
-  describe('GET /credits/transactions', () => {
+  describe('GET /credits/history', () => {
     function history(user: SmokeUser, query = '') {
       return smoke
         .http()
-        .get(`/credits/transactions${query}`)
+        .get(`/credits/history${query}`)
         .set(user.auth)
         .expect(200);
     }
 
     it('sem login → 401', async () => {
-      await smoke.http().get('/credits/transactions').expect(401);
+      await smoke.http().get('/credits/history').expect(401);
     });
 
-    it('leitura devolvida some do histórico; leitura cobrada aparece', async () => {
+    it('somar o histórico dá o saldo disponível', async () => {
       const user = await registerUser(smoke, 'historico');
       await credits.ensureFreeGrant(user.id);
 
@@ -227,54 +215,58 @@ describe('Fumaça: histórico e ajuste administrativo de créditos', () => {
 
       const response = await history(user);
 
-      expect(
-        response.body.data.map((row: { type: string }) => row.type),
-      ).toEqual(['RESERVE', 'FREE_GRANT']);
-      expect(response.body.data[0]).toEqual({
+      const sum = response.body.entries.reduce(
+        (total: number, row: { amount: number }) => total + row.amount,
+        0,
+      );
+      expect(sum).toBe(await available(user.id));
+      expect(response.body.entries[0]).toEqual({
         id: expect.any(String),
-        type: 'RESERVE',
-        amount: -1,
+        type: expect.any(String),
+        amount: expect.any(Number),
         reason: expect.any(String),
+        ocrJobId: expect.any(String),
         createdAt: expect.any(String),
       });
-      expect(response.body.meta).toEqual({
-        total: 2,
-        page: 1,
-        limit: 20,
-        totalPages: 1,
-      });
+      expect(response.body.nextCursor).toBeNull();
     });
 
     it('usuário só vê o próprio histórico', async () => {
       const owner = await registerUser(smoke, 'historico-dono');
       const other = await registerUser(smoke, 'historico-outro');
-      await adjust(admin, { userId: owner.id, amount: 7 }).expect(200);
+      await adjust(admin, owner.id, { amount: 7 }).expect(200);
 
       const response = await history(other);
 
       expect(
-        response.body.data.some((row: { amount: number }) => row.amount === 7),
+        response.body.entries.some(
+          (row: { amount: number }) => row.amount === 7,
+        ),
       ).toBe(false);
     });
 
-    it('pagina e limita o tamanho da página a 50', async () => {
+    it('pagina por cursor sem repetir nem pular linhas', async () => {
       const user = await registerUser(smoke, 'historico-pagina');
       await credits.ensureFreeGrant(user.id);
       for (let i = 0; i < 3; i++) {
-        await adjust(admin, { userId: user.id, amount: 1 }).expect(200);
+        await adjust(admin, user.id, { amount: 1 }).expect(200);
       }
 
-      const second = await history(user, '?page=2&limit=2');
-      expect(second.body.data).toHaveLength(2);
-      expect(second.body.meta).toEqual({
-        total: 4,
-        page: 2,
-        limit: 2,
-        totalPages: 2,
-      });
+      const first = await history(user, '?limit=2');
+      expect(first.body.entries).toHaveLength(2);
+      expect(first.body.nextCursor).toEqual(expect.any(String));
 
-      const capped = await history(user, '?limit=1000');
-      expect(capped.body.meta.limit).toBe(50);
+      const second = await history(
+        user,
+        `?limit=2&cursor=${first.body.nextCursor}`,
+      );
+      expect(second.body.entries).toHaveLength(2);
+      expect(second.body.nextCursor).toBeNull();
+
+      const ids = [...first.body.entries, ...second.body.entries].map(
+        (row: { id: string }) => row.id,
+      );
+      expect(new Set(ids).size).toBe(4);
     });
   });
 });

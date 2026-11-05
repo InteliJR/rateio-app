@@ -176,46 +176,42 @@ describe('Fumaça: ledger de créditos', () => {
       expect(await available(user.id)).toBe(3);
     });
 
-    // BUG-015: settle lê a reserva sem trava. consume e release simultâneos
-    // passam os dois pela checagem de HELD; a reserva fica CONSUMED e o crédito
-    // volta mesmo assim (leitura de graça).
-    it.failing(
-      'consume e release simultâneos: só um tem efeito (BUG-015)',
-      async () => {
-        const user = await registerUser(smoke, 'settle-race');
-        const outcomes: string[] = [];
+    // BUG-015 (corrigido): settle fecha a reserva num UPDATE condicional, então
+    // consume e release simultâneos não passam os dois pela checagem de HELD.
+    it('consume e release simultâneos: só um tem efeito (BUG-015)', async () => {
+      const user = await registerUser(smoke, 'settle-race');
+      const outcomes: string[] = [];
 
-        for (let round = 0; round < 50; round += 1) {
-          const ocrJobId = randomUUID();
-          await credits.reserve(user.id, ocrJobId);
-          const before = await available(user.id);
+      for (let round = 0; round < 50; round += 1) {
+        const ocrJobId = randomUUID();
+        await credits.reserve(user.id, ocrJobId);
+        const before = await available(user.id);
 
-          await Promise.allSettled([
-            credits.consume(ocrJobId),
-            credits.release(ocrJobId),
-          ]);
+        await Promise.allSettled([
+          credits.consume(ocrJobId),
+          credits.release(ocrJobId),
+        ]);
 
-          const reservation =
-            await smoke.prisma.creditReservation.findUniqueOrThrow({
-              where: { ocrJobId },
-            });
-          const after = await available(user.id);
-          outcomes.push(`${reservation.status}:${after - before}`);
-
-          // Libera a próxima rodada sem depender do resultado desta.
-          await credits.grant({
-            userId: user.id,
-            credits: 1,
-            reference: `topup:${ocrJobId}`,
+        const reservation =
+          await smoke.prisma.creditReservation.findUniqueOrThrow({
+            where: { ocrJobId },
           });
-        }
+        const after = await available(user.id);
+        outcomes.push(`${reservation.status}:${after - before}`);
 
-        // Consumido não devolve nada; liberado devolve exatamente 1.
-        for (const outcome of outcomes) {
-          expect(['CONSUMED:0', 'RELEASED:1']).toContain(outcome);
-        }
-      },
-    );
+        // Libera a próxima rodada sem depender do resultado desta.
+        await credits.grant({
+          userId: user.id,
+          credits: 1,
+          reference: `topup:${ocrJobId}`,
+        });
+      }
+
+      // Consumido não devolve nada; liberado devolve exatamente 1.
+      for (const outcome of outcomes) {
+        expect(['CONSUMED:0', 'RELEASED:1']).toContain(outcome);
+      }
+    });
 
     // releaseExpired passa pelo mesmo settle do BUG-015, então em paralelo com
     // um consume herda a corrida. Lá a janela é pequena (findMany antes) e o
@@ -347,7 +343,6 @@ describe('Fumaça: ledger de créditos', () => {
           amount: -3,
           reason: 'zerar saldo do teste',
           actorId: 'smoke',
-          idempotencyKey: randomUUID(),
         });
         smoke.ocr.processImage.mockResolvedValue(fakeOcrResult());
 

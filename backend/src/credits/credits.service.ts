@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   CreditPolicy,
@@ -37,35 +38,23 @@ export interface ReserveResult {
   policy: CreditPolicy;
 }
 
-/** Linha do histórico exibida ao usuário. Não expõe chave, token nem autor. */
 export interface CreditHistoryEntry {
   id: string;
   type: CreditTransactionType;
   amount: number;
   reason: string | null;
-  createdAt: Date;
+  ocrJobId: string | null;
+  createdAt: string;
 }
 
 export interface CreditHistoryPage {
-  data: CreditHistoryEntry[];
-  meta: { total: number; page: number; limit: number; totalPages: number };
+  entries: CreditHistoryEntry[];
+  /** Passar em `cursor` para buscar a página seguinte. Nulo quando acabou. */
+  nextCursor: string | null;
 }
 
-export interface AdminAdjustInput {
-  userId: string;
-  /** Positivo concede, negativo retira. Nunca zero. */
-  amount: number;
-  reason: string;
-  actorId: string;
-  /** Enviada pelo cliente: repetir o mesmo pedido não ajusta duas vezes. */
-  idempotencyKey: string;
-}
-
-export interface AdminAdjustResult {
-  /** Falso quando a chave já tinha sido usada: nada mudou. */
-  applied: boolean;
-  available: number;
-}
+const HISTORY_PAGE_SIZE = 20;
+const HISTORY_MAX_PAGE_SIZE = 100;
 
 /** Erro de domínio: o usuário não tem créditos disponíveis. */
 export class InsufficientCreditsError extends Error {
@@ -83,16 +72,15 @@ export class NegativeBalanceError extends Error {
   }
 }
 
-/** Erro de domínio: a chave de idempotência já foi usada em outro ajuste. */
-export class IdempotencyKeyConflictError extends Error {
+/** Erro de domínio: a referência já foi usada em outro ajuste. */
+export class AdjustReferenceConflictError extends Error {
   constructor() {
-    super('Chave de idempotência já usada em outro ajuste');
-    this.name = 'IdempotencyKeyConflictError';
+    super('Referência já usada em outro ajuste');
+    this.name = 'AdjustReferenceConflictError';
   }
 }
 
 const UNIQUE_VIOLATION = 'P2002';
-const MAX_HISTORY_LIMIT = 50;
 
 @Injectable()
 export class CreditsService {
@@ -300,74 +288,76 @@ export class CreditsService {
   }
 
   /**
-   * Histórico do usuário. Reserva e devolução da mesma leitura se anulam e não
-   * aparecem: para o usuário, uma leitura que falhou não custou nada.
+   * Histórico de movimentações, da mais recente para a mais antiga.
+   *
+   * É a mesma fonte que explica o saldo: somar `amount` de todas as páginas
+   * devolve exatamente o saldo disponível.
    */
   async getHistory(
     userId: string,
-    page = 1,
-    limit = 20,
+    options: { cursor?: string; limit?: number } = {},
   ): Promise<CreditHistoryPage> {
-    const validPage = Math.max(1, Math.floor(page) || 1);
-    const validLimit = Math.max(
-      1,
-      Math.min(MAX_HISTORY_LIMIT, Math.floor(limit) || 20),
+    const limit = Math.min(
+      Math.max(options.limit ?? HISTORY_PAGE_SIZE, 1),
+      HISTORY_MAX_PAGE_SIZE,
     );
 
-    const released = await this.prisma.creditTransaction.findMany({
-      where: { userId, type: CreditTransactionType.RELEASE },
-      select: { ocrJobId: true },
-    });
-    const releasedJobIds = released
-      .map((row) => row.ocrJobId)
-      .filter((id): id is string => id !== null);
-
-    const where: Prisma.CreditTransactionWhereInput = {
-      userId,
-      type: { not: CreditTransactionType.RELEASE },
-      NOT: {
-        type: CreditTransactionType.RESERVE,
-        ocrJobId: { in: releasedJobIds },
+    // Busca um a mais para saber se existe página seguinte sem fazer count
+    const rows = await this.prisma.creditTransaction.findMany({
+      where: { userId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+      ...(options.cursor ? { cursor: { id: options.cursor }, skip: 1 } : {}),
+      select: {
+        id: true,
+        type: true,
+        amount: true,
+        reason: true,
+        ocrJobId: true,
+        createdAt: true,
       },
-    };
+    });
 
-    const [total, data] = await Promise.all([
-      this.prisma.creditTransaction.count({ where }),
-      this.prisma.creditTransaction.findMany({
-        where,
-        select: {
-          id: true,
-          type: true,
-          amount: true,
-          reason: true,
-          createdAt: true,
-        },
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        skip: (validPage - 1) * validLimit,
-        take: validLimit,
-      }),
-    ]);
+    const temMais = rows.length > limit;
+    const pagina = temMais ? rows.slice(0, limit) : rows;
 
     return {
-      data,
-      meta: {
-        total,
-        page: validPage,
-        limit: validLimit,
-        totalPages: Math.ceil(total / validLimit),
-      },
+      entries: pagina.map((row) => ({
+        id: row.id,
+        type: row.type,
+        amount: row.amount,
+        reason: row.reason,
+        ocrJobId: row.ocrJobId,
+        createdAt: row.createdAt.toISOString(),
+      })),
+      nextCursor: temMais ? pagina[pagina.length - 1].id : null,
     };
   }
 
   /**
-   * Ajuste manual do suporte. Fica registrado com autor e motivo, não deixa o
-   * saldo disponível negativo e é idempotente pela chave enviada pelo cliente.
+   * Ajuste manual do suporte. Fica registrado com autor, motivo e data, como
+   * pede o critério de aceite do EPIC-02.
+   *
+   * `reference` permite que o suporte repita a chamada sem medo: a mesma
+   * referência não ajusta o saldo duas vezes. Reusar a referência em outro
+   * ajuste é erro, para o suporte não achar que ajustou quando nada mudou.
+   *
+   * Não deixa o saldo disponível negativo.
    */
-  async adminAdjust(input: AdminAdjustInput): Promise<AdminAdjustResult> {
-    const idempotencyKey = `admin:${input.idempotencyKey}`;
+  async adminAdjust(input: {
+    userId: string;
+    amount: number;
+    reason: string;
+    actorId: string;
+    reference?: string;
+  }): Promise<{ applied: boolean; balance: CreditBalance }> {
+    const idempotencyKey =
+      input.reference ?? `admin:${input.userId}:${randomUUID()}`;
+
+    let applied: boolean;
 
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      applied = await this.prisma.$transaction(async (tx) => {
         // Mesma trava da reserva: ajuste e leitura simultâneos não furam o saldo.
         const [user] = await tx.$queryRaw<{ id: string }[]>`
           SELECT "id" FROM "users" WHERE "id" = ${input.userId} FOR UPDATE
@@ -380,7 +370,8 @@ export class CreditsService {
           where: { idempotencyKey },
         });
         if (existing) {
-          return this.repeatedAdjust(tx, existing, input);
+          this.assertSameAdjust(existing, input);
+          return false;
         }
 
         const sum = await tx.creditTransaction.aggregate({
@@ -403,45 +394,41 @@ export class CreditsService {
             actorId: input.actorId,
           },
         });
-
-        this.logger.log(
-          `Ajuste administrativo de ${input.amount} crédito(s) no usuário ${input.userId} por ${input.actorId}.`,
-        );
-
-        return { applied: true, available: available + input.amount };
+        return true;
       });
     } catch (error) {
-      if (this.isUniqueViolation(error)) {
-        // Pedido repetido ao mesmo tempo: o outro já gravou.
-        return this.prisma.$transaction(async (tx) => {
-          const existing = await tx.creditTransaction.findUniqueOrThrow({
-            where: { idempotencyKey },
-          });
-          return this.repeatedAdjust(tx, existing, input);
-        });
+      if (!this.isUniqueViolation(error)) {
+        throw error;
       }
-      throw error;
+      // Mesma referência ao mesmo tempo para outro usuário: o outro já gravou.
+      const existing = await this.prisma.creditTransaction.findUniqueOrThrow({
+        where: { idempotencyKey },
+      });
+      this.assertSameAdjust(existing, input);
+      applied = false;
     }
+
+    if (applied) {
+      // O motivo fica só no ledger: é texto livre e pode ter dado pessoal.
+      this.logger.log(
+        `Ajuste administrativo de ${input.amount} em ${input.userId} por ${input.actorId}`,
+      );
+    }
+
+    return { applied, balance: await this.getBalance(input.userId) };
   }
 
-  private async repeatedAdjust(
-    tx: Prisma.TransactionClient,
+  private assertSameAdjust(
     existing: { userId: string; type: CreditTransactionType; amount: number },
-    input: AdminAdjustInput,
-  ): Promise<AdminAdjustResult> {
+    input: { userId: string; amount: number },
+  ): void {
     if (
       existing.type !== CreditTransactionType.ADMIN_ADJUST ||
       existing.userId !== input.userId ||
       existing.amount !== input.amount
     ) {
-      throw new IdempotencyKeyConflictError();
+      throw new AdjustReferenceConflictError();
     }
-
-    const sum = await tx.creditTransaction.aggregate({
-      where: { userId: input.userId },
-      _sum: { amount: true },
-    });
-    return { applied: false, available: sum._sum.amount ?? 0 };
   }
 
   private async settle(
@@ -452,18 +439,23 @@ export class CreditsService {
     reason: string,
   ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
-      const reservation = await tx.creditReservation.findUnique({
-        where: { ocrJobId },
+      // Fecha a reserva em uma única operação condicional: o próprio UPDATE
+      // confere que ela ainda está em HELD. Ler antes e atualizar depois deixa
+      // uma brecha em que um consume e um release simultâneos passam os dois
+      // pela checagem, a reserva fica consumida e o crédito volta assim mesmo,
+      // ou seja, a leitura sai de graça.
+      const fechada = await tx.creditReservation.updateMany({
+        where: { ocrJobId, status: CreditReservationStatus.HELD },
+        data: { status },
       });
 
-      if (!reservation || reservation.status !== CreditReservationStatus.HELD) {
-        // Conta isenta, ou reserva já fechada. Fechar duas vezes não muda o saldo.
+      if (fechada.count === 0) {
+        // Conta isenta, ou outra chamada já fechou esta reserva.
         return;
       }
 
-      await tx.creditReservation.update({
+      const reservation = await tx.creditReservation.findUniqueOrThrow({
         where: { ocrJobId },
-        data: { status },
       });
 
       if (amount !== 0) {

@@ -1,12 +1,11 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
-import { AdminCreditsController } from './admin-credits.controller';
 import { CreditsController } from './credits.controller';
 import { CreditsService } from './credits.service';
 
 @Module({
   imports: [PrismaModule],
-  controllers: [CreditsController, AdminCreditsController],
+  controllers: [CreditsController],
   providers: [CreditsService],
   exports: [CreditsService],
 })
