@@ -30,13 +30,15 @@ export class AppController {
       this.ocrQueue.getQueueSnapshot(),
     ]);
 
+    const isDatabaseDown = dbStatus.status !== 'connected';
+    const isStrict = process.env.HEALTH_STRICT_STATUS === 'true';
+
     return {
-      status: 'ok',
+      status: isDatabaseDown && isStrict ? 'error' : 'ok',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       database: dbStatus,
       ocrQueue: queueStatus,
-      metrics: this.metrics.getSnapshot(),
       version: packageJson.version,
     };
   }
@@ -53,17 +55,11 @@ export class AppController {
         status: 'connected',
         responseTime: Math.round(responseTime),
       };
-    } catch (error) {
-      let errorMessage = 'Failed to connect to database.';
-
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      }
-
+    } catch {
+      // Não vaza detalhes de conexão ou mensagens cruas de erro do driver
       return {
         status: 'disconnected',
         responseTime: -1,
-        error: errorMessage,
       };
     }
   }
