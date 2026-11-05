@@ -86,9 +86,9 @@ export class MailService {
         subject: 'Recuperação de senha — Rateio App',
         html,
       });
-      this.logger.log(`Password reset email sent to ${email}`);
+      this.logger.log(JSON.stringify({ event: 'password_reset_mail', ok: true }));
     } catch (error) {
-      this.logger.error(`Failed to send password reset email to ${email}`, error);
+      this.logger.error(JSON.stringify({ event: 'password_reset_mail', ok: false }));
       throw error;
     }
   }

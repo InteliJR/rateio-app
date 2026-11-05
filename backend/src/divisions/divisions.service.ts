@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -13,13 +14,14 @@ import { UpdateDivisionDto } from './dto/update-division.dto';
 
 @Injectable()
 export class DivisionsService {
+  private readonly logger = new Logger(DivisionsService.name);
   constructor(private prisma: PrismaService) {}
 
   /**
    * Validar que o item pertence a uma conta do usuário
    */
   private async validateBillItemOwnership(billItemId: string, userId: string) {
-    console.log('[DivisionsService] Validating bill item ownership:', { billItemId, userId });
+    this.logger.debug(JSON.stringify({ event: 'validate_bill_item_ownership', billItemId, userId }));
     
     const billItem = await this.prisma.billItem.findUnique({
       where: { id: billItemId },
@@ -27,20 +29,14 @@ export class DivisionsService {
     });
 
     if (!billItem) {
-      console.error('[DivisionsService] Bill item not found:', billItemId);
+      this.logger.warn(JSON.stringify({ event: 'bill_item_not_found', billItemId }));
       throw new NotFoundException('Item não encontrado');
     }
 
-    console.log('[DivisionsService] Bill item found:', { 
-      id: billItem.id, 
-      name: billItem.name, 
-      billId: billItem.billId,
-      billUserId: billItem.bill.userId,
-      requestUserId: userId
-    });
+    this.logger.debug(JSON.stringify({ event: 'bill_item_ownership_checked', billItemId: billItem.id, billId: billItem.billId }));
 
     if (billItem.bill.userId !== userId) {
-      console.error('[DivisionsService] User does not own this bill item');
+      this.logger.warn(JSON.stringify({ event: 'bill_item_access_denied', billItemId, userId }));
       throw new ForbiddenException('Você não tem acesso a este item');
     }
 

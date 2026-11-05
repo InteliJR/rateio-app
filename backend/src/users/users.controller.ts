@@ -14,6 +14,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
 import { UsersService } from './users.service';
 import { StorageService } from '../storage/storage.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -28,6 +29,8 @@ import {
   IsEnum,
   IsBoolean,
   IsOptional,
+  IsPositive,
+  Max,
 } from 'class-validator';
 
 // DTOs
@@ -84,6 +87,11 @@ class PresignedAvatarUploadDto {
   @IsString()
   @Matches(/^image\/(jpeg|jpg|png|webp|gif)$/)
   mimeType: string;
+
+  @IsOptional()
+  @IsPositive()
+  @Max(10 * 1024 * 1024)
+  size?: number;
 }
 
 class AttachAvatarDto {
@@ -166,6 +174,7 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('me/avatar/upload-url')
   createAvatarUploadUrl(
     @Request() req: any,
@@ -176,6 +185,7 @@ export class UsersController {
       req.user.id,
       dto.filename,
       dto.mimeType,
+      dto.size,
     );
   }
 
@@ -195,7 +205,12 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard)
   @Post('me/avatar')
-  @UseInterceptors(FileInterceptor('avatar'))
+  @Throttle({ default: { limit: 2, ttl: 60000 } })
+  @UseInterceptors(
+    FileInterceptor('avatar', {
+      limits: { fileSize: 10 * 1024 * 1024, files: 1, fields: 20 },
+    }),
+  )
   async uploadAvatar(
     @Request() req: any,
     @UploadedFile() file: Express.Multer.File,
