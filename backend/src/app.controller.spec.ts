@@ -46,19 +46,25 @@ describe('AppController', () => {
 
     it('quando o banco está fora e HEALTH_STRICT_STATUS=true deve retornar 503 e status error', async () => {
       process.env.HEALTH_STRICT_STATUS = 'true';
-      prismaService.$queryRaw.mockRejectedValue(new Error('Connection refused'));
+      prismaService.$queryRaw.mockRejectedValue(
+        new Error('Connection refused'),
+      );
 
       const mockRes: any = { status: jest.fn() };
       const response = await appController.healthCheck(mockRes);
 
       expect(response.status).toBe('error');
       expect(response.database).toEqual({ status: 'disconnected' });
-      expect(mockRes.status).toHaveBeenCalledWith(HttpStatus.SERVICE_UNAVAILABLE);
+      expect(mockRes.status).toHaveBeenCalledWith(
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
     });
 
     it('quando o banco está fora e HEALTH_STRICT_STATUS=false deve manter HTTP 200 para retrocompatibilidade', async () => {
       process.env.HEALTH_STRICT_STATUS = 'false';
-      prismaService.$queryRaw.mockRejectedValue(new Error('Connection refused'));
+      prismaService.$queryRaw.mockRejectedValue(
+        new Error('Connection refused'),
+      );
 
       const mockRes: any = { status: jest.fn() };
       const response = await appController.healthCheck(mockRes);

@@ -44,7 +44,8 @@ describe('redact utility', () => {
   });
 
   it('deve mascarar URLs assinadas do S3', () => {
-    const url = 'https://bucket.s3.amazonaws.com/bills/receipt.jpg?X-Amz-Signature=abcdef123456&X-Amz-Credential=test';
+    const url =
+      'https://bucket.s3.amazonaws.com/bills/receipt.jpg?X-Amz-Signature=abcdef123456&X-Amz-Credential=test';
     const sanitized = sanitizeString(url);
 
     expect(sanitized).toBe('[SIGNED_URL_REDACTED]');
@@ -58,5 +59,39 @@ describe('redact utility', () => {
     const result = redact(obj);
     expect(result.self).toBe('[CIRCULAR]');
   });
-});
 
+  it('deve preservar códigos técnicos e nomes de erro, redigindo apenas códigos de recuperação e nomes de pessoas', () => {
+    const technicalLog = {
+      code: 'P2002',
+      prismaCode: 'P2002',
+      name: 'PrismaClientKnownRequestError',
+      errorName: 'PrismaClientKnownRequestError',
+      status: 409,
+      statusCode: 409,
+      durationMs: 42,
+      billId: 'bill-uuid-1',
+      jobId: 'job-uuid-2',
+    };
+
+    const redactedTech = redact(technicalLog);
+    expect(redactedTech.code).toBe('P2002');
+    expect(redactedTech.prismaCode).toBe('P2002');
+    expect(redactedTech.name).toBe('PrismaClientKnownRequestError');
+    expect(redactedTech.errorName).toBe('PrismaClientKnownRequestError');
+    expect(redactedTech.statusCode).toBe(409);
+    expect(redactedTech.durationMs).toBe(42);
+
+    const userPiiLog = {
+      code: '123456',
+      resetCode: '654321',
+      name: 'João Silva',
+      userName: 'joao.silva',
+    };
+
+    const redactedPii = redact(userPiiLog);
+    expect(redactedPii.code).toBe('[REDACTED]');
+    expect(redactedPii.resetCode).toBe('[REDACTED]');
+    expect(redactedPii.name).toBe('[REDACTED]');
+    expect(redactedPii.userName).toBe('[REDACTED]');
+  });
+});

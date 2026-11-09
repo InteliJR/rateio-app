@@ -54,13 +54,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
         status = HttpStatus.BAD_REQUEST;
         message = 'Referência de dados inválida';
         errorType = 'BadRequest';
-      } else if (err?.name === 'MulterError' && err?.code === 'LIMIT_FILE_SIZE') {
+      } else if (
+        err?.name === 'MulterError' &&
+        err?.code === 'LIMIT_FILE_SIZE'
+      ) {
         status = HttpStatus.PAYLOAD_TOO_LARGE;
         message = 'Arquivo excede o tamanho limite permitido';
         errorType = 'PayloadTooLarge';
       } else {
-        // Erro não mapeado: em desenvolvimento pode manter mensagem para debug, mas em produção esconde
-        if (process.env.NODE_ENV !== 'production' && err?.message) {
+        // Erro não mapeado: apenas em desenvolvimento explícito expõe a mensagem para debug
+        if (process.env.NODE_ENV === 'development' && err?.message) {
           message = err.message;
         }
       }
@@ -91,4 +94,3 @@ export class AllExceptionsFilter implements ExceptionFilter {
     });
   }
 }
-

@@ -54,7 +54,11 @@ describe('BillsService - validateFinalize', () => {
     const maliciousDto: any = {
       divisions: [
         { billItemId: 'item-1', participantId: 'part-1', shareAmount: 50 },
-        { billItemId: 'item-from-other-bill', participantId: 'part-1', shareAmount: 10 },
+        {
+          billItemId: 'item-from-other-bill',
+          participantId: 'part-1',
+          shareAmount: 10,
+        },
       ],
       fees: [],
     };
@@ -84,7 +88,11 @@ describe('BillsService - validateFinalize', () => {
 
     const maliciousDto: any = {
       divisions: [
-        { billItemId: 'item-1', participantId: 'participant-from-other-bill', shareAmount: 50 },
+        {
+          billItemId: 'item-1',
+          participantId: 'participant-from-other-bill',
+          shareAmount: 50,
+        },
       ],
       fees: [],
     };
@@ -94,7 +102,9 @@ describe('BillsService - validateFinalize', () => {
     ).rejects.toThrow(BadRequestException);
     await expect(
       service.validateFinalize('bill-1', 'user-1', maliciousDto),
-    ).rejects.toThrow('Divisão referencia participante inválido ou de outra conta');
+    ).rejects.toThrow(
+      'Divisão referencia participante inválido ou de outra conta',
+    );
   });
 
   it('deve aceitar divisões válidas quando pertencem à própria conta', async () => {
@@ -124,4 +134,3 @@ describe('BillsService - validateFinalize', () => {
     ).resolves.not.toThrow();
   });
 });
-

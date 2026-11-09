@@ -57,4 +57,3 @@ export class CreateBillItemDto {
   @Max(MAX_MONEY_VALUE, { message: 'O preço total excede o limite permitido' })
   totalPrice: number;
 }
-

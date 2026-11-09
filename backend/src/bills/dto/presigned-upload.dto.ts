@@ -1,4 +1,10 @@
-import { IsOptional, IsPositive, IsString, Matches, Max } from 'class-validator';
+import {
+  IsOptional,
+  IsPositive,
+  IsString,
+  Matches,
+  Max,
+} from 'class-validator';
 
 export class PresignedUploadDto {
   @IsString()

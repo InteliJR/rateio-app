@@ -113,13 +113,15 @@ export class BillsController {
   /**
    * Upload de foto da conta + OCR automático
    */
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('upload-url')
   createUploadUrl(
     @Body() presignedUploadDto: PresignedUploadDto,
     @Request() req: any,
   ) {
-    return this.billsService.createImageUploadUrl(req.user.id, presignedUploadDto);
+    return this.billsService.createImageUploadUrl(
+      req.user.id,
+      presignedUploadDto,
+    );
   }
 
   @Throttle({ default: { limit: 2, ttl: 60000 } })
@@ -202,7 +204,11 @@ export class BillsController {
     @Body() batchUpdateDto: BatchUpdateBillItemsDto,
     @Request() req: any,
   ) {
-    return this.billsService.batchUpdateItems(billId, req.user.id, batchUpdateDto);
+    return this.billsService.batchUpdateItems(
+      billId,
+      req.user.id,
+      batchUpdateDto,
+    );
   }
 
   /**

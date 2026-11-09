@@ -141,8 +141,7 @@ export class OcrService {
             // Se conseguiu extrair pelo menos alguns itens, usar esses dados
             if (parsedData.items && parsedData.items.length > 0) {
               this.logger.warn(
-                'Dados extraídos do JSON apesar da validação falhar. Itens encontrados:',
-                parsedData.items.length,
+                `Dados extraídos do JSON apesar da validação falhar. Itens encontrados: ${parsedData.items.length}`,
               );
               return {
                 rawText: responseContent,
@@ -592,14 +591,12 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
     const validationErrors = errors.map((err) => {
       const error: any = {
         property: err.property,
-        value: err.value,
         constraints: err.constraints,
       };
 
       if (err.children && err.children.length > 0) {
         error.children = err.children.map((child) => ({
           property: child.property,
-          value: child.value,
           constraints: child.constraints,
         }));
       }
@@ -607,17 +604,15 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
       return error;
     });
 
-    this.logger.error(
-      'Erros de validação:',
-      JSON.stringify(validationErrors, null, 2),
-    );
+    const redactedErrors = redact(validationErrors);
+
+    this.logger.error(`Erros de validação: ${JSON.stringify(redactedErrors)}`);
 
     this.logError(
       'VALIDATION_ERROR',
       'Erro de validação do JSON retornado pela OpenAI',
       {
-        imageUrl,
-        errors: validationErrors,
+        errors: redactedErrors,
         errorCount: validationErrors.length,
       },
     );
@@ -798,18 +793,15 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
 
     if (status === 'falhou_apos_todas_tentativas') {
       this.logger.error(
-        `[OCR_RETRY] Tentativa ${attempt}/${this.maxRetries} falhou após todas as tentativas:`,
-        JSON.stringify(redact(logData), null, 2),
+        `[OCR_RETRY] Tentativa ${attempt}/${this.maxRetries} falhou após todas as tentativas: ${JSON.stringify(redact(logData))}`,
       );
     } else if (status === 'falhou_tentando_novamente') {
       this.logger.warn(
-        `[OCR_RETRY] Tentativa ${attempt}/${this.maxRetries} falhou, tentando novamente em ${delayMs}ms:`,
-        JSON.stringify(redact(logData), null, 2),
+        `[OCR_RETRY] Tentativa ${attempt}/${this.maxRetries} falhou, tentando novamente em ${delayMs}ms: ${JSON.stringify(redact(logData))}`,
       );
     } else if (status === 'sucesso' && attempt > 1) {
       this.logger.log(
-        `[OCR_RETRY] Tentativa ${attempt}/${this.maxRetries} bem-sucedida após retry:`,
-        JSON.stringify(redact(logData), null, 2),
+        `[OCR_RETRY] Tentativa ${attempt}/${this.maxRetries} bem-sucedida após retry: ${JSON.stringify(redact(logData))}`,
       );
     } else if (status === 'iniciando' && attempt === 1) {
       // Não loga a primeira tentativa inicial para não poluir os logs
@@ -834,13 +826,11 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
 
     if (level === 'error') {
       this.logger.error(
-        `[OCR_ERROR] ${errorType}:`,
-        JSON.stringify(redact(logData), null, 2),
+        `[OCR_ERROR] ${errorType}: ${JSON.stringify(redact(logData))}`,
       );
     } else {
       this.logger.warn(
-        `[OCR_WARN] ${errorType}:`,
-        JSON.stringify(redact(logData), null, 2),
+        `[OCR_WARN] ${errorType}: ${JSON.stringify(redact(logData))}`,
       );
     }
   }

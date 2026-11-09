@@ -28,7 +28,10 @@ describe('AllExceptionsFilter', () => {
   });
 
   it('deve repassar status e resposta de uma HttpException', () => {
-    const exception = new HttpException('Acesso proibido', HttpStatus.FORBIDDEN);
+    const exception = new HttpException(
+      'Acesso proibido',
+      HttpStatus.FORBIDDEN,
+    );
 
     filter.catch(exception, mockHost);
 
@@ -69,7 +72,9 @@ describe('AllExceptionsFilter', () => {
 
     filter.catch(multerError, mockHost);
 
-    expect(mockResponse.status).toHaveBeenCalledWith(HttpStatus.PAYLOAD_TOO_LARGE);
+    expect(mockResponse.status).toHaveBeenCalledWith(
+      HttpStatus.PAYLOAD_TOO_LARGE,
+    );
     expect(mockResponse.json).toHaveBeenCalledWith(
       expect.objectContaining({
         statusCode: HttpStatus.PAYLOAD_TOO_LARGE,
@@ -79,17 +84,39 @@ describe('AllExceptionsFilter', () => {
   });
 
   it('deve ocultar erro desconhecido em 500 sem expor stack trace', () => {
-    const unknownError = new Error('Database connection failed violently password=123');
+    const unknownError = new Error(
+      'Database connection failed violently password=123',
+    );
 
     filter.catch(unknownError, mockHost);
 
-    expect(mockResponse.status).toHaveBeenCalledWith(HttpStatus.INTERNAL_SERVER_ERROR);
+    expect(mockResponse.status).toHaveBeenCalledWith(
+      HttpStatus.INTERNAL_SERVER_ERROR,
+    );
     expect(mockResponse.json).toHaveBeenCalledWith(
       expect.objectContaining({
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Erro interno do servidor',
         error: 'InternalServerError',
       }),
     );
   });
-});
 
+  it('deve expor mensagem de erro apenas quando NODE_ENV === "development"', () => {
+    const originalEnv = process.env.NODE_ENV;
+    try {
+      process.env.NODE_ENV = 'development';
+      const debugError = new Error('Detalhe técnico para debug');
+      filter.catch(debugError, mockHost);
+
+      expect(mockResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+          message: 'Detalhe técnico para debug',
+        }),
+      );
+    } finally {
+      process.env.NODE_ENV = originalEnv;
+    }
+  });
+});

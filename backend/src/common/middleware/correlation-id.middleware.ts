@@ -7,10 +7,12 @@ export const REQUEST_ID_HEADER = 'X-Request-Id';
 @Injectable()
 export class CorrelationIdMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction): void {
-    const rawHeader = req.headers['x-request-id'] || req.headers['X-Request-Id'];
-    const incomingId = typeof rawHeader === 'string' && rawHeader.trim().length > 0
-      ? rawHeader.trim()
-      : undefined;
+    const rawHeader =
+      req.headers['x-request-id'] || req.headers['X-Request-Id'];
+    const incomingId =
+      typeof rawHeader === 'string' && rawHeader.trim().length > 0
+        ? rawHeader.trim()
+        : undefined;
 
     const requestId = incomingId || randomUUID();
 
@@ -22,4 +24,3 @@ export class CorrelationIdMiddleware implements NestMiddleware {
     next();
   }
 }
-

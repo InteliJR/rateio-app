@@ -12,7 +12,10 @@ const SENSITIVE_KEYS = new Set([
   'refreshtoken',
   'purchasetoken',
   'authorization',
-  'code',
+  'resetcode',
+  'recoverycode',
+  'verificationcode',
+  'authcode',
   'codehash',
   'secret',
   'cronsecret',
@@ -24,7 +27,6 @@ const SENSITIVE_KEYS = new Set([
   'cpf',
   'phone',
   'telefone',
-  'name',
   'username',
   'imageurl',
   'avatarurl',
@@ -35,9 +37,25 @@ const SENSITIVE_KEYS = new Set([
   'base64',
 ]);
 
+const TECHNICAL_PRESERVED_KEYS = new Set([
+  'billid',
+  'jobid',
+  'prismacode',
+  'errorname',
+  'errortype',
+  'statuscode',
+  'requestid',
+  'durationms',
+  'status',
+  'method',
+  'url',
+]);
+
 const EMAIL_REGEX = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
-const JWT_REGEX = /\beyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\b/g;
-const SIGNED_URL_REGEX = /https?:\/\/[^\s"']*(?:X-Amz-Signature|X-Amz-Credential|sig=|Signature=)[^\s"']*/gi;
+const JWT_REGEX =
+  /\beyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\b/g;
+const SIGNED_URL_REGEX =
+  /https?:\/\/[^\s"']*(?:X-Amz-Signature|X-Amz-Credential|sig=|Signature=)[^\s"']*/gi;
 const BEARER_REGEX = /Bearer\s+[A-Za-z0-9._~+/-]+=*/gi;
 
 /**
@@ -91,8 +109,26 @@ export function redact<T>(data: T, seen = new WeakSet()): T {
   for (const [key, value] of Object.entries(data)) {
     const lowerKey = key.toLowerCase();
 
-    if (SENSITIVE_KEYS.has(lowerKey)) {
+    if (TECHNICAL_PRESERVED_KEYS.has(lowerKey)) {
+      result[key] = redact(value, seen);
+    } else if (SENSITIVE_KEYS.has(lowerKey)) {
       result[key] = '[REDACTED]';
+    } else if (lowerKey === 'code') {
+      // Se for código numérico de 4 a 8 dígitos (ex: reset code "123456"), redige; se for código técnico (ex: 'P2002', 'LIMIT_FILE_SIZE'), preserva
+      const isOtpOrSecretCode =
+        typeof value === 'number'
+          ? value >= 1000 && value <= 99999999
+          : typeof value === 'string' && /^\d{4,8}$/.test(value.trim());
+      result[key] = isOtpOrSecretCode ? '[REDACTED]' : redact(value, seen);
+    } else if (lowerKey === 'name') {
+      // Se for nome de erro ou componente técnico (ex: 'PrismaClientKnownRequestError', 'MulterError'), preserva; se for nome de usuário/pessoa, redige
+      const isTechnicalName =
+        typeof value === 'string' &&
+        (/(Error|Exception|Filter|Service|Controller|Module|Interceptor|Guard|Strategy)$/.test(
+          value,
+        ) ||
+          ['Error', 'TypeError', 'RangeError', 'SyntaxError'].includes(value));
+      result[key] = isTechnicalName ? value : '[REDACTED]';
     } else if (lowerKey === 'stack' && process.env.NODE_ENV === 'production') {
       result[key] = '[STACK_REDACTED]';
     } else {

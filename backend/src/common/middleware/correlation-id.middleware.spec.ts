@@ -1,4 +1,7 @@
-import { CorrelationIdMiddleware, REQUEST_ID_HEADER } from './correlation-id.middleware';
+import {
+  CorrelationIdMiddleware,
+  REQUEST_ID_HEADER,
+} from './correlation-id.middleware';
 
 describe('CorrelationIdMiddleware', () => {
   let middleware: CorrelationIdMiddleware;
@@ -16,7 +19,10 @@ describe('CorrelationIdMiddleware', () => {
 
     expect(req.requestId).toBe('custom-req-id-123');
     expect(req.id).toBe('custom-req-id-123');
-    expect(res.setHeader).toHaveBeenCalledWith(REQUEST_ID_HEADER, 'custom-req-id-123');
+    expect(res.setHeader).toHaveBeenCalledWith(
+      REQUEST_ID_HEADER,
+      'custom-req-id-123',
+    );
     expect(next).toHaveBeenCalled();
   });
 
@@ -30,8 +36,10 @@ describe('CorrelationIdMiddleware', () => {
     expect(req.requestId).toBeDefined();
     expect(typeof req.requestId).toBe('string');
     expect(req.requestId.length).toBeGreaterThan(10);
-    expect(res.setHeader).toHaveBeenCalledWith(REQUEST_ID_HEADER, req.requestId);
+    expect(res.setHeader).toHaveBeenCalledWith(
+      REQUEST_ID_HEADER,
+      req.requestId,
+    );
     expect(next).toHaveBeenCalled();
   });
 });
-

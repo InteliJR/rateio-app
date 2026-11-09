@@ -62,17 +62,25 @@ export function detectImageSignature(buffer: Buffer): DetectedImage | null {
 }
 
 /**
- * Valida os magic bytes do buffer e lança BadRequestException caso inválido
+ * Valida os magic bytes do buffer.
+ * Se a flag UPLOAD_SIGNATURE_ENFORCE for true (ou se enforce = true for passado),
+ * lança BadRequestException caso os magic bytes não correspondam a uma imagem válida.
+ * Se enforce for false (default), retorna null sem bloquear, permitindo registrar aviso de mismatch.
  */
-export function assertImageSignature(buffer: Buffer): DetectedImage {
+export function assertImageSignature(
+  buffer: Buffer,
+  enforce: boolean = process.env.UPLOAD_SIGNATURE_ENFORCE === 'true',
+): DetectedImage | null {
   const detected = detectImageSignature(buffer);
 
   if (!detected) {
-    throw new BadRequestException(
-      'Assinatura do arquivo inválida. Apenas imagens reais JPEG, PNG, WebP e GIF são permitidas.',
-    );
+    if (enforce) {
+      throw new BadRequestException(
+        'Assinatura do arquivo inválida. Apenas imagens reais JPEG, PNG, WebP e GIF são permitidas.',
+      );
+    }
+    return null;
   }
 
   return detected;
 }
-

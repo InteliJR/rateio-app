@@ -14,7 +14,6 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { Throttle } from '@nestjs/throttler';
 import { UsersService } from './users.service';
 import { StorageService } from '../storage/storage.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -174,7 +173,6 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('me/avatar/upload-url')
   createAvatarUploadUrl(
     @Request() req: any,
@@ -195,8 +193,16 @@ export class UsersController {
     @Request() req: any,
     @Body(ValidationPipe) dto: AttachAvatarDto,
   ) {
-    if (!this.storageService.isOwnedObjectKey(dto.imageKey, 'avatars', req.user.id)) {
-      throw new BadRequestException('Chave de avatar invalida para este usuario');
+    if (
+      !this.storageService.isOwnedObjectKey(
+        dto.imageKey,
+        'avatars',
+        req.user.id,
+      )
+    ) {
+      throw new BadRequestException(
+        'Chave de avatar invalida para este usuario',
+      );
     }
 
     const avatarUrl = await this.storageService.getFileUrl(dto.imageKey);
@@ -205,7 +211,6 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard)
   @Post('me/avatar')
-  @Throttle({ default: { limit: 2, ttl: 60000 } })
   @UseInterceptors(
     FileInterceptor('avatar', {
       limits: { fileSize: 10 * 1024 * 1024, files: 1, fields: 20 },
@@ -220,7 +225,9 @@ export class UsersController {
     }
 
     if (!this.storageService.validateFileType(file.mimetype)) {
-      throw new BadRequestException('Apenas imagens sao permitidas (JPEG, PNG, WebP, GIF)');
+      throw new BadRequestException(
+        'Apenas imagens sao permitidas (JPEG, PNG, WebP, GIF)',
+      );
     }
 
     if (!this.storageService.validateFileSize(file.size)) {
@@ -235,8 +242,8 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   @Delete('me/avatar')
   async removeAvatar(@Request() req: any) {
-    const user = await this.usersService.findById(req.user.id) as any;
-    
+    const user = (await this.usersService.findById(req.user.id)) as any;
+
     if (user?.avatarUrl) {
       const key = this.storageService.extractStorageKeyFromUrl(user.avatarUrl);
       if (key) {

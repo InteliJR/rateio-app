@@ -5,7 +5,9 @@ import { AllExceptionsFilter } from '../filters/all-exceptions.filter';
 
 export function configureApp(app: INestApplication): void {
   const correlationMiddleware = new CorrelationIdMiddleware();
-  app.use((req: any, res: any, next: any) => correlationMiddleware.use(req, res, next));
+  app.use((req: any, res: any, next: any) =>
+    correlationMiddleware.use(req, res, next),
+  );
 
   app.useGlobalFilters(new AllExceptionsFilter());
 

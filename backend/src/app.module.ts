@@ -37,9 +37,7 @@ function getRateLimitConfig() {
     }),
     ScheduleModule.forRoot(),
     // Global rate limiting should be lenient enough for normal app usage.
-    ThrottlerModule.forRoot([
-      getRateLimitConfig(),
-    ]),
+    ThrottlerModule.forRoot([getRateLimitConfig()]),
     ObservabilityModule,
     PrismaModule,
     AuthModule,

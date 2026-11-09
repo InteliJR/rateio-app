@@ -1035,14 +1035,20 @@ export class BillsService {
 
     for (const division of finalizeBillDto.divisions) {
       if (!validItemIds.has(division.billItemId)) {
-        throw new BadRequestException('Divisão referencia item inválido ou de outra conta');
+        throw new BadRequestException(
+          'Divisão referencia item inválido ou de outra conta',
+        );
       }
       if (!validParticipantIds.has(division.participantId)) {
-        throw new BadRequestException('Divisão referencia participante inválido ou de outra conta');
+        throw new BadRequestException(
+          'Divisão referencia participante inválido ou de outra conta',
+        );
       }
       const pairKey = `${division.billItemId}:${division.participantId}`;
       if (seenPairs.has(pairKey)) {
-        throw new BadRequestException('Divisão duplicada para o mesmo item e participante');
+        throw new BadRequestException(
+          'Divisão duplicada para o mesmo item e participante',
+        );
       }
       seenPairs.add(pairKey);
     }

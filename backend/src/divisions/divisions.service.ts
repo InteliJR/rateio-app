@@ -21,22 +21,42 @@ export class DivisionsService {
    * Validar que o item pertence a uma conta do usuário
    */
   private async validateBillItemOwnership(billItemId: string, userId: string) {
-    this.logger.debug(JSON.stringify({ event: 'validate_bill_item_ownership', billItemId, userId }));
-    
+    this.logger.debug(
+      JSON.stringify({
+        event: 'validate_bill_item_ownership',
+        billItemId,
+        userId,
+      }),
+    );
+
     const billItem = await this.prisma.billItem.findUnique({
       where: { id: billItemId },
       include: { bill: true },
     });
 
     if (!billItem) {
-      this.logger.warn(JSON.stringify({ event: 'bill_item_not_found', billItemId }));
+      this.logger.warn(
+        JSON.stringify({ event: 'bill_item_not_found', billItemId }),
+      );
       throw new NotFoundException('Item não encontrado');
     }
 
-    this.logger.debug(JSON.stringify({ event: 'bill_item_ownership_checked', billItemId: billItem.id, billId: billItem.billId }));
+    this.logger.debug(
+      JSON.stringify({
+        event: 'bill_item_ownership_checked',
+        billItemId: billItem.id,
+        billId: billItem.billId,
+      }),
+    );
 
     if (billItem.bill.userId !== userId) {
-      this.logger.warn(JSON.stringify({ event: 'bill_item_access_denied', billItemId, userId }));
+      this.logger.warn(
+        JSON.stringify({
+          event: 'bill_item_access_denied',
+          billItemId,
+          userId,
+        }),
+      );
       throw new ForbiddenException('Você não tem acesso a este item');
     }
 
