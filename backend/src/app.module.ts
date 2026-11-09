@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
@@ -17,6 +18,7 @@ import { ParticipantsModule } from './participants/participants.module';
 import { DivisionsModule } from './divisions/divisions.module';
 import { FeesModule } from './fees/fees.module';
 import { PurchasesModule } from './purchases/purchases.module';
+import { CreditsModule } from './credits/credits.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { MetricsInterceptor } from './observability/metrics.interceptor';
 
@@ -32,6 +34,9 @@ function getRateLimitConfig() {
 
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
     ScheduleModule.forRoot(),
     // Global rate limiting should be lenient enough for normal app usage.
     ThrottlerModule.forRoot([
@@ -51,6 +56,7 @@ function getRateLimitConfig() {
     DivisionsModule,
     FeesModule,
     PurchasesModule,
+    CreditsModule,
   ],
   controllers: [AppController],
   providers: [

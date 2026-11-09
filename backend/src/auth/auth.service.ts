@@ -5,6 +5,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
 import { TokenRevocationService } from '../token-revocation/token-revocation.service';
 import { MailService } from '../mail/mail.service';
@@ -21,7 +22,16 @@ export class AuthService {
     private mailService: MailService,
     private prisma: PrismaService,
     private googleTokenService: GoogleTokenService,
+    private configService: ConfigService,
   ) { }
+
+  private getRefreshSecret(): string {
+    const refreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET');
+    if (!refreshSecret) {
+      throw new Error('JWT_REFRESH_SECRET environment variable is missing.');
+    }
+    return refreshSecret;
+  }
 
   /**
    * Registro de usuário
@@ -154,7 +164,7 @@ export class AuthService {
     const accessToken = await this.jwtService.signAsync(payload);
 
     const refreshToken = await this.jwtService.signAsync(payload, {
-      secret: process.env.JWT_REFRESH_SECRET || 'refresh-secret-key',
+      secret: this.getRefreshSecret(),
       expiresIn: '30d',
     });
 
@@ -194,7 +204,7 @@ export class AuthService {
       }
 
       const payload = await this.jwtService.verifyAsync(refreshToken, {
-        secret: process.env.JWT_REFRESH_SECRET || 'refresh-secret-key',
+        secret: this.getRefreshSecret(),
       });
 
       // Verificar se usuário ainda está ativo
@@ -212,7 +222,7 @@ export class AuthService {
   async logout(userId: string, refreshToken: string) {
     try {
       const decoded = await this.jwtService.verifyAsync(refreshToken, {
-        secret: process.env.JWT_REFRESH_SECRET || 'refresh-secret-key',
+        secret: this.getRefreshSecret(),
       });
 
       const expiresAt = new Date(decoded.exp * 1000);

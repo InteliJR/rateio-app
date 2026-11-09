@@ -132,6 +132,8 @@ logs/
 .dockerignore
 Dockerfile.prod
 
+#planejamento de correção de bugs e problemas de segurança
+.kiro
 
 
 

@@ -1,5 +1,6 @@
 import { Injectable, UnauthorizedException, Inject, forwardRef } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
+import { ConfigService } from '@nestjs/config';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { AuthService } from '../auth.service';
 import { TokenRevocationService } from '../../token-revocation/token-revocation.service';
@@ -10,12 +11,18 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     @Inject(forwardRef(() => AuthService))
     private authService: AuthService,
     private tokenRevocationService: TokenRevocationService,
+    private configService: ConfigService,
   ) {
+    const jwtSecret = configService.get<string>('JWT_SECRET');
+    if (!jwtSecret) {
+      throw new Error('JWT_SECRET environment variable is missing.');
+    }
+
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey:
-        process.env.JWT_SECRET || 'your-secret-key-change-in-production',
+      secretOrKey: jwtSecret,
+      algorithms: ['HS256'],
       passReqToCallback: true,
     });
   }
