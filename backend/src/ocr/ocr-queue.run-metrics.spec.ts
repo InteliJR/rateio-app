@@ -452,13 +452,20 @@ describe('OcrQueueService: métricas por execução (banco falso)', () => {
       gateA.resolve(okResult());
       await runA;
 
-      const byAttempt = Object.fromEntries(
-        db.runMetrics.map((r) => [r.attempt, r]),
+      // O lock vencido grava a sua própria linha (TIMEOUT) com o attempt da
+      // execução perdida: por isso as linhas se distinguem por `outcome`, não por attempt.
+      const byOutcome = Object.fromEntries(
+        db.runMetrics.map((r) => [r.outcome, r]),
       );
-      expect(db.runMetrics).toHaveLength(2);
-      expect(byAttempt[2]).toMatchObject({ outcome: OcrRunOutcome.COMPLETED });
+      expect(db.runMetrics).toHaveLength(3);
+      expect(byOutcome[OcrRunOutcome.RETRY_SCHEDULED]).toMatchObject({
+        attempt: 1,
+        errorCategory: OcrErrorCategory.TIMEOUT,
+      });
+      expect(byOutcome[OcrRunOutcome.COMPLETED]).toMatchObject({ attempt: 2 });
       // O custo da execução descartada foi real e fica registrado
-      expect(byAttempt[1]).toMatchObject({
+      expect(byOutcome[OcrRunOutcome.DISCARDED]).toMatchObject({
+        attempt: 1,
         outcome: OcrRunOutcome.DISCARDED,
         promptTokens: 2000,
         completionTokens: 100,
@@ -469,7 +476,7 @@ describe('OcrQueueService: métricas por execução (banco falso)', () => {
         jobLines()
           .map((l) => l.status)
           .sort(),
-      ).toEqual(['completed', 'discarded']);
+      ).toEqual(['completed', 'discarded', 'failed']); // 'failed' = lock vencido
     });
 
     it('falha tardia de uma execução que perdeu o job também vira DISCARDED, com a categoria', async () => {
@@ -503,7 +510,13 @@ describe('OcrQueueService: métricas por execução (banco falso)', () => {
       gateB.resolve(undefined);
       await runB;
 
-      expect(db.runMetrics.find((r) => r.attempt === 1)).toMatchObject({
+      // attempt 1 tem duas linhas (a do lock vencido e a desta falha tardia):
+      // distinguir por outcome
+      expect(
+        db.runMetrics.find(
+          (r) => r.attempt === 1 && r.outcome === OcrRunOutcome.DISCARDED,
+        ),
+      ).toMatchObject({
         outcome: OcrRunOutcome.DISCARDED,
         errorCategory: OcrErrorCategory.TIMEOUT,
       });

@@ -186,6 +186,18 @@ export class FakeOcrDb {
           .sort((a, b) => a.createdAt - b.createdAt)[0];
         return found ? db.jobWithBill(found, include) : null;
       },
+      findMany: async ({ where, select }: Row = {}) =>
+        db.jobs
+          .filter((j) => matches(j, where))
+          .map((j) =>
+            select
+              ? Object.fromEntries(
+                  Object.keys(select)
+                    .filter((field) => select[field])
+                    .map((field) => [field, j[field]]),
+                )
+              : { ...j },
+          ),
       updateMany: async ({ where, data }: Row) => {
         const rows = db.jobs.filter((j) => matches(j, where));
         rows.forEach((row) => db.update(db.jobs, row, data, journal));

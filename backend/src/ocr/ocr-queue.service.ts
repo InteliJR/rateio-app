@@ -36,7 +36,17 @@ import {
 // e `imageKey` é a imagem que está sendo lida.
 type OcrExecution = { token: number; imageKey: string | null };
 
-type FailOutcome = 'retry_scheduled' | 'failed_final' | 'ignored';
+// `lastError` quando o lock vence: texto/código fixo, nunca mensagem de erro
+const LOCK_EXPIRED_REQUEUED_ERROR = 'OCR job lock expired; returned to queue.';
+const LOCK_EXPIRED_EXHAUSTED_ERROR = 'OCR_LOCK_EXPIRED_EXHAUSTED';
+
+// `requeued_new_image`: a falha final coincidiu com a troca da imagem da conta e o
+// job voltou à fila com a imagem nova (a mesma reserva de crédito segue valendo).
+type FailOutcome =
+  | 'retry_scheduled'
+  | 'failed_final'
+  | 'requeued_new_image'
+  | 'ignored';
 
 // O que fazer com o crédito reservado quando a execução termina.
 type CreditSettlement =
@@ -263,25 +273,219 @@ export class OcrQueueService {
     return { processed, activeWorkers: this.activeWorkers };
   }
 
+  /**
+   * Trata os jobs RUNNING com lock vencido, um a um:
+   * - ainda restam tentativas: volta a PENDING (como sempre) e grava uma linha de
+   *   métrica TIMEOUT / RETRY_SCHEDULED;
+   * - `attempts >= maxAttempts` (a última tentativa permitida já foi reivindicada
+   *   e não terminou): vira FAILED, sem novo laço e sem nova chamada à OpenAI.
+   *
+   * Cada job é tratado com uma escrita condicional (id + attempts + RUNNING + lock
+   * vencido): se a execução terminou ou foi reivindicada no meio do caminho, a
+   * escrita não pega nada e o job é deixado em paz. Assim, vários crons
+   * simultâneos geram uma única transição, uma única linha e uma única liquidação.
+   *
+   * Linhas de `ocr_run_metrics` geradas aqui podem repetir o `attempt` de outra
+   * linha do MESMO job: a execução lenta, se terminar depois, grava ainda a sua
+   * própria linha DISCARDED com o mesmo `attempt`, e um job recriado recomeça em 1.
+   * As consultas devem filtrar por `outcome` e nunca contar linhas por `attempt`.
+   */
   private async releaseStaleLocks() {
     const staleBefore = new Date(Date.now() - this.lockTimeoutMs);
 
-    const released = await this.prisma.ocrJob.updateMany({
+    const stale = await this.prisma.ocrJob.findMany({
       where: {
         status: OcrJobStatus.RUNNING,
         lockedAt: { lt: staleBefore },
       },
-      data: {
-        status: OcrJobStatus.PENDING,
-        lockedAt: null,
-        availableAt: new Date(),
-        lastError: 'OCR job lock expired; returned to queue.',
+      select: {
+        id: true,
+        billId: true,
+        attempts: true,
+        availableAt: true,
+        startedAt: true,
+        imageKey: true,
+        creditRun: true,
       },
     });
 
-    if (released.count > 0) {
-      this.logger.warn(`Released ${released.count} stale OCR job lock(s).`);
+    let released = 0;
+
+    for (const job of stale) {
+      try {
+        if (await this.expireStaleJob(job, staleBefore)) {
+          released += 1;
+        }
+      } catch (error) {
+        // Um job com problema não trava os demais; continua RUNNING e será
+        // tratado de novo no próximo tick. Só o nome do erro vai para o log.
+        this.logger.error(
+          `STALE_LOCK_FAILED ${JSON.stringify({ jobId: job.id, errorName: this.errorName(error) })}`,
+        );
+      }
     }
+
+    if (released > 0) {
+      this.logger.warn(`Released ${released} stale OCR job lock(s).`);
+    }
+  }
+
+  /** Devolve `true` se este chamador foi quem tirou o job de RUNNING. */
+  private async expireStaleJob(
+    job: {
+      id: string;
+      billId: string;
+      attempts: number;
+      availableAt: Date;
+      startedAt: Date | null;
+      imageKey: string | null;
+      creditRun: number;
+    },
+    staleBefore: Date,
+  ): Promise<boolean> {
+    const stillStale: Prisma.OcrJobWhereInput = {
+      id: job.id,
+      attempts: job.attempts,
+      status: OcrJobStatus.RUNNING,
+      lockedAt: { lt: staleBefore },
+    };
+    const exhausted = job.attempts >= this.maxAttempts;
+
+    if (!exhausted) {
+      const requeued = await this.prisma.ocrJob.updateMany({
+        where: stillStale,
+        data: {
+          status: OcrJobStatus.PENDING,
+          lockedAt: null,
+          availableAt: new Date(),
+          lastError: LOCK_EXPIRED_REQUEUED_ERROR,
+        },
+      });
+
+      if (requeued.count === 0) {
+        return false;
+      }
+
+      await this.recordStaleRun(
+        job,
+        OcrRunOutcome.RETRY_SCHEDULED,
+        buildOcrFailure('TIMEOUT'),
+      );
+      return true;
+    }
+
+    const result = await this.prisma.$transaction(
+      async (
+        tx,
+      ): Promise<'failed_final' | 'requeued_new_image' | 'skipped'> => {
+        const failed = await tx.ocrJob.updateMany({
+          where: stillStale,
+          data: {
+            status: OcrJobStatus.FAILED,
+            lockedAt: null,
+            finishedAt: new Date(),
+            lastError: LOCK_EXPIRED_EXHAUSTED_ERROR,
+          },
+        });
+
+        if (failed.count === 0) {
+          return 'skipped';
+        }
+
+        // Mesma regra do failJob: só vira OCR_FAILED se a conta ainda espera
+        // esta imagem; se a imagem mudou, o job volta à fila com a imagem nova.
+        const billFailed = await tx.bill.updateMany({
+          where: {
+            id: job.billId,
+            status: BillStatus.PENDING_OCR,
+            imageKey: job.imageKey,
+          },
+          data: { status: BillStatus.OCR_FAILED },
+        });
+
+        if (
+          billFailed.count === 0 &&
+          (await this.requeueIfImageChanged(
+            tx,
+            job.id,
+            job.billId,
+            job.imageKey,
+          ))
+        ) {
+          return 'requeued_new_image';
+        }
+
+        return 'failed_final';
+      },
+    );
+
+    if (result === 'skipped') {
+      return false;
+    }
+
+    this.metrics.recordOcrFailed(
+      this.staleRunMs(job),
+      LOCK_EXPIRED_EXHAUSTED_ERROR,
+    );
+    await this.recordStaleRun(
+      job,
+      OcrRunOutcome.FAILED_FINAL,
+      buildOcrFailure('EXHAUSTED'),
+    );
+
+    // O resultado da execução lenta, se chegar, será descartado (o job não está
+    // mais RUNNING). Com a imagem trocada a reserva continua valendo para ela.
+    await this.settleCredit(job, () =>
+      result === 'failed_final'
+        ? { action: 'release', reason: failedReleaseReason('EXHAUSTED') }
+        : null,
+    );
+
+    return true;
+  }
+
+  private staleRunMs(job: { startedAt: Date | null }): number {
+    return job.startedAt
+      ? Math.max(0, Date.now() - job.startedAt.getTime())
+      : 0;
+  }
+
+  /** Linha de métrica da execução que perdeu o lock (melhor esforço, sem dados da conta). */
+  private async recordStaleRun(
+    job: {
+      id: string;
+      billId: string;
+      attempts: number;
+      availableAt: Date;
+      startedAt: Date | null;
+    },
+    outcome: OcrRunOutcome,
+    failure: OcrFailure,
+  ): Promise<void> {
+    const totalMs = this.staleRunMs(job);
+    const queueWaitMs = job.startedAt
+      ? Math.max(0, job.startedAt.getTime() - job.availableAt.getTime())
+      : 0;
+
+    this.logJobMetric(
+      { id: job.id, billId: job.billId, attempts: job.attempts - 1 },
+      queueWaitMs,
+      totalMs,
+      0,
+      'failed',
+      failure.category,
+    );
+
+    await recordOcrRunMetric(this.prisma, this.logger, {
+      ocrJobId: job.id,
+      billId: job.billId,
+      attempt: job.attempts,
+      startedAt: job.startedAt ?? new Date(),
+      outcome,
+      failure,
+      queueWaitMs,
+      totalMs,
+    });
   }
 
   private async claimNextJob() {
@@ -395,9 +599,20 @@ export class OcrQueueService {
       });
     };
 
-    const imageUrl = await this.getProcessableImageUrl(job.bill);
+    // Falha ao obter a URL da imagem (ex.: assinatura do S3) não pode escapar do
+    // runJob: o job ficaria RUNNING até o lock vencer. Ela segue o caminho normal
+    // de falha (retentativa ou falha final) mais abaixo.
+    let imageUrl: string | null = null;
+    let imageUrlError: unknown;
+    let imageUrlFailed = false;
+    try {
+      imageUrl = await this.getProcessableImageUrl(job.bill);
+    } catch (error) {
+      imageUrlFailed = true;
+      imageUrlError = error;
+    }
 
-    if (!imageUrl) {
+    if (!imageUrlFailed && !imageUrl) {
       const failure = buildOcrFailure('IMAGE_MISSING');
       const outcome = await this.failJob(
         job.id,
@@ -421,12 +636,18 @@ export class OcrQueueService {
     }
 
     const startedAt = Date.now();
-    this.metrics.recordOcrStarted();
+    if (!imageUrlFailed) {
+      this.metrics.recordOcrStarted();
+    }
 
     let result: Parameters<typeof finish>[0];
 
     try {
-      const ocrResult = await this.ocrService.processImage(imageUrl, {
+      if (imageUrlFailed) {
+        throw imageUrlError;
+      }
+
+      const ocrResult = await this.ocrService.processImage(imageUrl as string, {
         jobId: job.id,
         onOpenAiCall: (metrics) => {
           run.call = metrics;
@@ -564,6 +785,9 @@ export class OcrQueueService {
       case 'retry_scheduled':
         return OcrRunOutcome.RETRY_SCHEDULED;
       case 'failed_final':
+      case 'requeued_new_image':
+        // A execução falhou de forma definitiva: a linha de métrica é a mesma de
+        // antes. Só o destino do crédito diferencia os dois casos.
         return OcrRunOutcome.FAILED_FINAL;
       default:
         return OcrRunOutcome.DISCARDED;
@@ -776,39 +1000,49 @@ export class OcrQueueService {
       return 'retry_scheduled';
     }
 
-    const finalized = await this.prisma.$transaction(async (tx) => {
-      const failed = await tx.ocrJob.updateMany({
-        where: this.executionWhere(jobId, execution),
-        data: {
-          status: OcrJobStatus.FAILED,
-          lockedAt: null,
-          finishedAt: new Date(),
-          lastError: errorMessage,
-        },
-      });
+    const finalized = await this.prisma.$transaction(
+      async (tx): Promise<Exclude<FailOutcome, 'retry_scheduled'>> => {
+        const failed = await tx.ocrJob.updateMany({
+          where: this.executionWhere(jobId, execution),
+          data: {
+            status: OcrJobStatus.FAILED,
+            lockedAt: null,
+            finishedAt: new Date(),
+            lastError: errorMessage,
+          },
+        });
 
-      if (failed.count === 0) {
-        return false;
-      }
+        if (failed.count === 0) {
+          return 'ignored';
+        }
 
-      // A conta só vira OCR_FAILED aqui, na falha final, e se ainda espera esta imagem
-      const billFailed = await tx.bill.updateMany({
-        where: {
-          id: billId,
-          status: BillStatus.PENDING_OCR,
-          imageKey: execution.imageKey,
-        },
-        data: { status: BillStatus.OCR_FAILED },
-      });
+        // A conta só vira OCR_FAILED aqui, na falha final, e se ainda espera esta imagem
+        const billFailed = await tx.bill.updateMany({
+          where: {
+            id: billId,
+            status: BillStatus.PENDING_OCR,
+            imageKey: execution.imageKey,
+          },
+          data: { status: BillStatus.OCR_FAILED },
+        });
 
-      if (billFailed.count === 0) {
-        await this.requeueIfImageChanged(tx, jobId, billId, execution.imageKey);
-      }
+        if (
+          billFailed.count === 0 &&
+          (await this.requeueIfImageChanged(
+            tx,
+            jobId,
+            billId,
+            execution.imageKey,
+          ))
+        ) {
+          return 'requeued_new_image';
+        }
 
-      return true;
-    });
+        return 'failed_final';
+      },
+    );
 
-    if (!finalized) {
+    if (finalized === 'ignored') {
       this.logger.warn(
         `OCR failure for bill ${billId} ignored: job was claimed by another execution.`,
       );
@@ -817,7 +1051,7 @@ export class OcrQueueService {
 
     this.metrics.recordOcrFailed(durationMs, errorMessage);
     this.logger.error(`OCR failed for bill ${billId}: ${errorMessage}`);
-    return 'failed_final';
+    return finalized;
   }
 
   async getQueueSnapshot() {
