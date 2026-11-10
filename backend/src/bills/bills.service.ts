@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { OcrQueueService } from '../ocr/ocr-queue.service';
+import { InsufficientCreditsError } from '../credits/credits.service';
 import {
   IDEMPOTENCY_OPERATIONS,
   IdempotencyOperation,
@@ -243,13 +244,18 @@ export class BillsService {
   }
 
   // Duas requisições simultâneas com a mesma chave: a perdedora recebe violação de
-  // unicidade, e então devolve o resultado da vencedora.
+  // unicidade, e então devolve o resultado da vencedora. Com a cobrança ligada, a
+  // perdedora também pode esbarrar em saldo insuficiente (a vencedora gastou o
+  // último crédito): isso também é replay, e não 402.
   private async resolveIdempotentConflict(
     error: unknown,
     userId: string,
     idempotency: IdempotencyContext | undefined,
   ) {
-    if (idempotency && isUniqueViolation(error)) {
+    if (
+      idempotency &&
+      (isUniqueViolation(error) || error instanceof InsufficientCreditsError)
+    ) {
       const replay = await this.replayIdempotent(userId, idempotency);
       if (replay) {
         return replay;
@@ -408,6 +414,10 @@ export class BillsService {
       if (replay) {
         return replay;
       }
+
+      // Com a cobrança ligada, recusa sem saldo antes de enviar o arquivo ao S3
+      // (só leitura; a reserva do enqueue continua sendo quem decide)
+      await this.ocrQueue.assertCreditsAvailable(userId);
 
       // 3. Upload da imagem para S3
       const { key, url } = await this.storage.uploadFile(file, 'bills');
@@ -637,6 +647,10 @@ export class BillsService {
     if (replay) {
       return replay;
     }
+
+    // Com a cobrança ligada, recusa sem saldo antes de enviar o arquivo ao S3
+    // (só leitura; a reserva do enqueue continua sendo quem decide)
+    await this.ocrQueue.assertCreditsAvailable(userId);
 
     // 3. Upload da imagem para o S3
     const { url, key } = await this.storage.uploadFile(file, 'bills');

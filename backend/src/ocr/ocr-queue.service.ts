@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import {
   BillStatus,
+  CreditPolicy,
   OcrJob,
   OcrJobStatus,
   OcrRunOutcome,
@@ -10,6 +11,10 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { MetricsService } from '../observability/metrics.service';
 import { OcrResultDto } from './dto/ocr-result.dto';
+import {
+  CreditsService,
+  InsufficientCreditsError,
+} from '../credits/credits.service';
 import { OcrService } from './ocr.service';
 import { StorageService } from '../storage/storage.service';
 import {
@@ -19,12 +24,24 @@ import {
   classifyOcrError,
 } from './ocr-error-category';
 import { OpenAiCallMetrics, recordOcrRunMetric } from './ocr-run-metrics';
+import {
+  CREDIT_RELEASE_REASONS,
+  creditRunKey,
+  failedReleaseReason,
+  isCreditsEnforcementEnabled,
+  isUsableOcrResult,
+} from './ocr-credits';
 
 // Identifica uma execução do job: `token` é o valor de `attempts` logo após o claim
 // e `imageKey` é a imagem que está sendo lida.
 type OcrExecution = { token: number; imageKey: string | null };
 
 type FailOutcome = 'retry_scheduled' | 'failed_final' | 'ignored';
+
+// O que fazer com o crédito reservado quando a execução termina.
+type CreditSettlement =
+  | { action: 'consume' }
+  | { action: 'release'; reason: string };
 
 type PersistOutcome =
   | 'saved'
@@ -53,12 +70,44 @@ export class OcrQueueService {
   );
   private activeWorkers = 0;
 
+  /**
+   * Enquanto estiver desligado, o ledger não é tocado pela fila e nada muda no
+   * comportamento. A bandeira é lida uma vez, ao criar o serviço.
+   */
+  private readonly creditsEnforced = isCreditsEnforcementEnabled();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly ocrService: OcrService,
     private readonly metrics: MetricsService,
     private readonly storage: StorageService,
+    private readonly credits: CreditsService,
   ) {}
+
+  /**
+   * Pré-checagem de saldo ANTES do upload ao S3 (só com a cobrança ligada).
+   * Apenas leitura: não reserva e NÃO substitui a reserva do `enqueue`, que é
+   * quem decide. Se a consulta falhar, segue o fluxo (a reserva decide).
+   */
+  async assertCreditsAvailable(userId: string): Promise<void> {
+    if (!this.creditsEnforced) {
+      return;
+    }
+
+    try {
+      const balance = await this.credits.getBalance(userId);
+      if (balance.policy === CreditPolicy.METERED && balance.available < 1) {
+        throw new InsufficientCreditsError(balance.available);
+      }
+    } catch (error) {
+      if (error instanceof InsufficientCreditsError) {
+        throw error;
+      }
+      this.logger.warn(
+        `CREDIT_PRECHECK_FAILED ${JSON.stringify({ errorName: this.errorName(error) })}`,
+      );
+    }
+  }
 
   /**
    * Enfileira a leitura de uma conta sem reiniciar um job ativo:
@@ -68,6 +117,11 @@ export class OcrQueueService {
    * - PENDING: mantém e apenas aponta para a imagem mais recente;
    * - RUNNING: não muda; o resultado é conferido quando o job terminar.
    * `enqueued` diz se há trabalho novo (criado ou recriado) e não apenas reaproveitado.
+   *
+   * Com a cobrança ligada, o trabalho novo ou recriado reserva um crédito AQUI,
+   * na transação do chamador (`options.tx`): sem saldo, o erro desfaz a conta, o
+   * trabalho e a chave de idempotência. Só `enqueued=true` reserva, então
+   * retentativas e jobs reaproveitados nunca reservam de novo.
    */
   async enqueue(
     billId: string,
@@ -98,11 +152,7 @@ export class OcrQueueService {
     });
 
     if (created.count === 1) {
-      this.metrics.recordOcrQueued();
-      return {
-        job: await client.ocrJob.findUniqueOrThrow({ where: { billId } }),
-        enqueued: true,
-      };
+      return this.enqueuedResult(client, billId, userId, options.tx);
     }
 
     const requeueConditions: Prisma.OcrJobWhereInput[] = [
@@ -129,15 +179,14 @@ export class OcrQueueService {
         lastError: null,
         availableAt: new Date(),
         imageKey,
+        // Nova leitura = nova execução de cobrança (a anterior já foi consumida
+        // ou liberada). Só aqui: requeueIfImageChanged mantém a mesma reserva.
+        creditRun: { increment: 1 },
       },
     });
 
     if (requeued.count === 1) {
-      this.metrics.recordOcrQueued();
-      return {
-        job: await client.ocrJob.findUniqueOrThrow({ where: { billId } }),
-        enqueued: true,
-      };
+      return this.enqueuedResult(client, billId, userId, options.tx);
     }
 
     if (imageKey !== null) {
@@ -155,6 +204,22 @@ export class OcrQueueService {
       job: await client.ocrJob.findUniqueOrThrow({ where: { billId } }),
       enqueued: false,
     };
+  }
+
+  private async enqueuedResult(
+    client: Pick<Prisma.TransactionClient, 'ocrJob' | 'bill'>,
+    billId: string,
+    userId: string,
+    tx: Prisma.TransactionClient | undefined,
+  ): Promise<{ job: OcrJob; enqueued: true }> {
+    const job = await client.ocrJob.findUniqueOrThrow({ where: { billId } });
+
+    if (this.creditsEnforced) {
+      await this.credits.reserve(userId, creditRunKey(job), tx);
+    }
+
+    this.metrics.recordOcrQueued();
+    return { job, enqueued: true };
   }
 
   @Cron(CronExpression.EVERY_10_SECONDS)
@@ -280,6 +345,7 @@ export class OcrQueueService {
     attempts: number;
     availableAt: Date;
     imageKey?: string | null;
+    creditRun?: number;
     claimToken?: number;
     startedAt?: Date | null;
     bill: { id: string; imageUrl: string | null; imageKey: string | null };
@@ -292,6 +358,9 @@ export class OcrQueueService {
     };
     // Medição da chamada ao provedor, entregue pela OcrService (sucesso ou falha)
     const run: { call: OpenAiCallMetrics | null } = { call: null };
+    // Decide o destino do crédito depois que o desfecho já está gravado. Só é
+    // chamado com a cobrança ligada.
+    let settlement: () => CreditSettlement | null = () => null;
 
     // Fecha a execução: o MESMO totalMs alimenta o log OCR_METRIC e a linha
     // persistida (melhor esforço: gravar a métrica nunca falha o job).
@@ -343,6 +412,11 @@ export class OcrQueueService {
         status: 'failed',
         failure,
       });
+      await this.settleCredit(job, () =>
+        outcome === 'failed_final'
+          ? { action: 'release', reason: failedReleaseReason(failure.category) }
+          : null,
+      );
       return;
     }
 
@@ -370,6 +444,15 @@ export class OcrQueueService {
           `OCR result for bill ${job.billId} discarded (${outcome}).`,
         );
         result = { outcome: OcrRunOutcome.DISCARDED, status: 'discarded' };
+        if (outcome === 'discarded_bill_changed') {
+          // O resultado não chegou ao usuário: não há leitura para cobrar.
+          settlement = () => ({
+            action: 'release',
+            reason: CREDIT_RELEASE_REASONS.discardedBillChanged,
+          });
+        }
+        // discarded_stale_execution: quem assumiu o job liquida o crédito.
+        // requeued_new_image: a mesma reserva vale para a imagem nova.
       } else {
         const durationMs = Date.now() - startedAt;
         this.metrics.recordOcrCompleted(durationMs);
@@ -382,6 +465,15 @@ export class OcrQueueService {
           status: 'completed',
           items: ocrResult.items.length,
         };
+        // Consome só DEPOIS de o resultado estar gravado (job COMPLETED).
+        // Leitura não utilizável: grava como sempre, mas libera o crédito.
+        settlement = () =>
+          isUsableOcrResult(ocrResult)
+            ? { action: 'consume' }
+            : {
+                action: 'release',
+                reason: CREDIT_RELEASE_REASONS.unusableResult,
+              };
       }
     } catch (error) {
       const durationMs = Date.now() - startedAt;
@@ -403,9 +495,68 @@ export class OcrQueueService {
         status: 'failed',
         failure,
       };
+      // Falha final (qualquer categoria): o usuário não paga por leitura sem
+      // resultado. Retentativa agendada ou execução ignorada não mexem no crédito.
+      settlement = () =>
+        outcome === 'failed_final'
+          ? { action: 'release', reason: failedReleaseReason(failure.category) }
+          : null;
     }
 
     await finish(result);
+    await this.settleCredit(job, settlement);
+  }
+
+  /**
+   * Consome ou libera o crédito da execução. Roda DEPOIS de o job e a métrica
+   * estarem gravados e nunca lança: se falhar, a reserva continua HELD (a
+   * liquidação é idempotente) e o job não é reprocessado nem cobrado de novo.
+   * Logs só com ids e códigos, nunca com a mensagem do erro.
+   */
+  private async settleCredit(
+    job: { id: string; creditRun?: number },
+    decide: () => CreditSettlement | null,
+  ): Promise<void> {
+    if (!this.creditsEnforced) {
+      return;
+    }
+
+    let settlement: CreditSettlement | null = null;
+
+    try {
+      settlement = decide();
+      if (!settlement) {
+        return;
+      }
+
+      const key = creditRunKey(job);
+      if (settlement.action === 'consume') {
+        await this.credits.consume(key);
+      } else {
+        await this.credits.release(key, settlement.reason);
+      }
+
+      this.logger.log(
+        `CREDIT_SETTLED ${JSON.stringify({
+          jobId: job.id,
+          creditRun: job.creditRun ?? 1,
+          action: settlement.action,
+          reason: settlement.action === 'release' ? settlement.reason : null,
+        })}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `CREDIT_SETTLE_FAILED ${JSON.stringify({
+          jobId: job.id,
+          action: settlement?.action ?? 'decide',
+          errorName: this.errorName(error),
+        })}`,
+      );
+    }
+  }
+
+  private errorName(error: unknown): string {
+    return error instanceof Error ? error.name : 'UnknownError';
   }
 
   private toRunOutcome(outcome: FailOutcome): OcrRunOutcome {

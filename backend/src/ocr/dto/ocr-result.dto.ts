@@ -26,8 +26,19 @@ import { normalizeMeasurementUnit } from '../../common/measurement-unit';
 import { MAX_MONEY_VALUE } from '../../common/numeric-limits';
 import { MeasurementUnit } from '@prisma/client';
 
+/**
+ * De onde veio o resultado. Só MODEL_JSON passou na validação do DTO (itens,
+ * valores e soma contra o total); os demais são leitores de contingência.
+ */
+export type OcrResultSource =
+  | 'MODEL_JSON'
+  | 'JSON_UNVALIDATED'
+  | 'TEXT_FALLBACK';
+
 export interface OcrResult {
   rawText: string;
+  /** Ausente = origem desconhecida (tratada como não utilizável para crédito). */
+  source?: OcrResultSource;
   items: Array<{
     name: string;
     quantity: number;
