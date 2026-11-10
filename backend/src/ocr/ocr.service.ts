@@ -27,6 +27,44 @@ import {
 } from './ocr-error-category';
 import { OpenAiCallMetrics } from './ocr-run-metrics';
 
+/**
+ * Tempo máximo de UMA chamada à OpenAI quando OPENAI_TIMEOUT_MS não está definida.
+ * Valor PROVISÓRIO, sem medição real: o SDK assumia 10 minutos. O serviço faz até 3
+ * chamadas por execução (esperando no máximo 10 s entre elas), então o pior caso de
+ * uma execução é 3 × timeout + 2 × 10 s = 110 s, que cabe no lock padrão da fila
+ * (OCR_QUEUE_LOCK_TIMEOUT_MS = 120 s). Se subir este valor, suba o lock junto.
+ * Recalibrar com p95 real de `ocr_run_metrics.openaiMs`.
+ */
+export const OPENAI_TIMEOUT_MS_DEFAULT = 30000;
+
+/** Lê OPENAI_TIMEOUT_MS; valor ausente, não numérico ou não positivo volta ao padrão. */
+export function readOpenAiTimeoutMs(
+  raw: string | undefined = process.env.OPENAI_TIMEOUT_MS,
+): number {
+  const value = Number(raw);
+  return raw !== undefined && Number.isFinite(value) && value > 0
+    ? Math.floor(value)
+    : OPENAI_TIMEOUT_MS_DEFAULT;
+}
+
+/**
+ * Descreve um erro para LOG sem conteúdo: só a classe, o status HTTP e um código curto
+ * em padrão seguro. Nunca a mensagem, o corpo nem a pilha, que podem citar a URL
+ * assinada da imagem ou trechos da nota.
+ */
+function describeErrorForLog(error: unknown): {
+  errorType: string;
+  status: number | null;
+  code: string | null;
+} {
+  const candidate = error as { status?: unknown; code?: unknown } | null;
+  return {
+    errorType: error instanceof Error ? error.constructor.name : typeof error,
+    status: typeof candidate?.status === 'number' ? candidate.status : null,
+    code: toSafeCode(candidate?.code),
+  };
+}
+
 @Injectable()
 export class OcrService {
   private readonly logger = new Logger(OcrService.name);
@@ -49,9 +87,14 @@ export class OcrService {
       );
     }
 
-    // Inicializar cliente OpenAI
+    // Inicializar cliente OpenAI. Sem retentativa própria do SDK (maxRetries: 0): quem
+    // retenta é retryWithBackoff, que respeita o limite de 3 chamadas e o Retry-After.
+    // Com o padrão do SDK (2 retentativas) cada chamada virava até 3, e o pior caso
+    // por leitura chegava a 27 chamadas.
     this.openaiClient = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
+      timeout: readOpenAiTimeoutMs(),
+      maxRetries: 0,
     });
 
     this.model = process.env.OPENAI_MODEL;
@@ -109,7 +152,7 @@ export class OcrService {
           response_format: { type: 'json_object' },
           max_tokens: 2000,
         });
-      }, imageUrl);
+      });
 
       // Métrica da POC: apenas números, ids e nome do modelo (sem conteúdo).
       // O mesmo objeto alimenta o log e a persistência feita pela fila.
@@ -164,7 +207,7 @@ export class OcrService {
           this.logError(
             'JSON_INVALID',
             'Resposta não é JSON válido',
-            { imageUrl, error },
+            describeErrorForLog(error),
             'warn',
           );
           console.warn(
@@ -183,7 +226,7 @@ export class OcrService {
           error.length > 0 &&
           error[0] instanceof ValidationError
         ) {
-          this.logValidationError(error, imageUrl);
+          this.logValidationError(error);
           console.warn(
             'JSON não passou na validação, tentando extrair dados mesmo assim...',
           );
@@ -222,10 +265,11 @@ export class OcrService {
             ...parsedData,
           };
         } else {
-          this.logError('PARSE_ERROR', 'Erro ao processar resposta da OpenAI', {
-            imageUrl,
-            error,
-          });
+          this.logError(
+            'PARSE_ERROR',
+            'Erro ao processar resposta da OpenAI',
+            describeErrorForLog(error),
+          );
 
           // Fallback: tenta processar como texto
           const parsedData = this.parseReceiptText(responseContent);
@@ -238,7 +282,7 @@ export class OcrService {
       }
     } catch (error) {
       // Capturar e tratar erros específicos da API OpenAI
-      const ocrError = this.handleOpenAiError(error, imageUrl);
+      const ocrError = this.handleOpenAiError(error);
 
       // A chamada falhou antes de haver resposta: sem tokens, só duração e chamadas
       reportCall({
@@ -586,23 +630,19 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
   /**
    * Trata erros específicos da API OpenAI e retorna exceções apropriadas
    */
-  private handleOpenAiError(
-    error: any,
-    imageUrl: string,
-  ): InternalServerErrorException {
+  private handleOpenAiError(error: any): InternalServerErrorException {
     // Erro de API (status HTTP, rate limit, etc)
     if (error instanceof APIError) {
       const status = error.status;
-      const code = error.code;
       const message = error.message;
 
-      this.logError('OPENAI_API_ERROR', 'Erro na API OpenAI', {
-        imageUrl,
-        status,
-        code,
-        message,
-        error: error.error,
-      });
+      // Log só com classe, status e código curto: a mensagem e o corpo do erro podem
+      // citar a URL assinada da imagem. A exceção devolvida abaixo não muda.
+      this.logError(
+        'OPENAI_API_ERROR',
+        'Erro na API OpenAI',
+        describeErrorForLog(error),
+      );
 
       // Rate limit
       if (status === 429) {
@@ -636,11 +676,11 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
       error instanceof APIConnectionError ||
       error instanceof APIConnectionTimeoutError
     ) {
-      this.logError('OPENAI_CONNECTION_ERROR', 'Erro de conexão com OpenAI', {
-        imageUrl,
-        message: error.message,
-        cause: error.cause,
-      });
+      this.logError(
+        'OPENAI_CONNECTION_ERROR',
+        'Erro de conexão com OpenAI',
+        describeErrorForLog(error),
+      );
 
       return new ServiceUnavailableException(
         'Não foi possível conectar à API OpenAI. Verifique sua conexão com a internet.',
@@ -648,11 +688,11 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
     }
 
     // Erro genérico
-    this.logError('OCR_GENERIC_ERROR', 'Erro genérico no OCR', {
-      imageUrl,
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    });
+    this.logError(
+      'OCR_GENERIC_ERROR',
+      'Erro genérico no OCR',
+      describeErrorForLog(error),
+    );
 
     return new InternalServerErrorException(
       'Falha ao processar imagem. Verifique a qualidade da foto e tente novamente.',
@@ -660,24 +700,25 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
   }
 
   /**
-   * Loga erros de validação com detalhes
+   * Loga erros de validação SEM o conteúdo da nota: só o nome do campo e os nomes das
+   * regras violadas. `value` (nome, preço ou quantidade lidos) e as mensagens de
+   * `constraints` ficam de fora.
    */
-  private logValidationError(
-    errors: ValidationError[],
-    imageUrl: string,
-  ): void {
+  private logValidationError(errors: ValidationError[]): void {
     const validationErrors = errors.map((err) => {
-      const error: any = {
+      const error: {
+        property: string;
+        rules: string[];
+        children?: { property: string; rules: string[] }[];
+      } = {
         property: err.property,
-        value: err.value,
-        constraints: err.constraints,
+        rules: Object.keys(err.constraints ?? {}),
       };
 
       if (err.children && err.children.length > 0) {
         error.children = err.children.map((child) => ({
           property: child.property,
-          value: child.value,
-          constraints: child.constraints,
+          rules: Object.keys(child.constraints ?? {}),
         }));
       }
 
@@ -693,7 +734,6 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
       'VALIDATION_ERROR',
       'Erro de validação do JSON retornado pela OpenAI',
       {
-        imageUrl,
         errors: validationErrors,
         errorCount: validationErrors.length,
       },
@@ -706,14 +746,13 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
    */
   private async retryWithBackoff<T>(
     operation: () => Promise<T>,
-    imageUrl: string,
     attempt: number = 1,
   ): Promise<T> {
     try {
-      this.logRetryAttempt(attempt, imageUrl, 'iniciando');
+      this.logRetryAttempt(attempt, 'iniciando');
       const result = await operation();
       if (attempt > 1) {
-        this.logRetryAttempt(attempt, imageUrl, 'sucesso');
+        this.logRetryAttempt(attempt, 'sucesso');
       }
       return result;
     } catch (error) {
@@ -724,12 +763,7 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
 
       // Se atingiu o máximo de tentativas, lança o erro
       if (attempt >= this.maxRetries) {
-        this.logRetryAttempt(
-          attempt,
-          imageUrl,
-          'falhou_apos_todas_tentativas',
-          error,
-        );
+        this.logRetryAttempt(attempt, 'falhou_apos_todas_tentativas', error);
         throw error;
       }
 
@@ -737,7 +771,6 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
       const delayMs = this.getRetryDelayMs(error, attempt);
       this.logRetryAttempt(
         attempt,
-        imageUrl,
         'falhou_tentando_novamente',
         error,
         delayMs,
@@ -747,7 +780,7 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
       await this.sleep(delayMs);
 
       // Tenta novamente
-      return this.retryWithBackoff(operation, imageUrl, attempt + 1);
+      return this.retryWithBackoff(operation, attempt + 1);
     }
   }
 
@@ -841,7 +874,6 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
    */
   private logRetryAttempt(
     attempt: number,
-    imageUrl: string,
     status:
       | 'iniciando'
       | 'sucesso'
@@ -854,19 +886,12 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
       timestamp: new Date().toISOString(),
       attempt,
       maxRetries: this.maxRetries,
-      imageUrl,
       status,
     };
 
+    // Só classe, status e código curto; nunca a mensagem nem a URL assinada da imagem
     if (error) {
-      logData.error = {
-        message: error instanceof Error ? error.message : String(error),
-        type: error?.constructor?.name,
-        ...(error instanceof APIError && {
-          status: error.status,
-          code: error.code,
-        }),
-      };
+      logData.error = describeErrorForLog(error);
     }
 
     if (delayMs !== undefined) {
