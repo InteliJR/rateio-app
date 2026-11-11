@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, Purchase, PurchaseStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { GooglePlayVerifier } from './google-play-verifier';
+import { GooglePlayVerifier, GooglePurchaseInfo } from './google-play-verifier';
 import { CreditsGranter } from './credits-granter';
 import { getProductCredits } from './purchase-products';
 import { VerifyGooglePurchaseDto } from './dto/verify-google-purchase.dto';
@@ -45,10 +45,7 @@ export class PurchasesService {
       where: { purchaseToken: dto.purchaseToken },
     });
 
-    if (existing) {
-      if (existing.userId !== userId) {
-        throw new ForbiddenException('Compra pertence a outro usuário');
-      }
+    if (existing && existing.userId === userId) {
       if (existing.status === PurchaseStatus.CREDITED) {
         return this.toResult(existing, true);
       }
@@ -58,12 +55,74 @@ export class PurchasesService {
       if (existing.status === PurchaseStatus.REJECTED) {
         throw new ForbiddenException('Compra recusada');
       }
+      return this.settle(userId, existing);
     }
 
-    const purchase =
-      existing ?? (await this.createPending(userId, dto, credits));
+    // Token novo, ou registrado por outra conta: a Google decide de quem é a
+    // compra ANTES de qualquer gravação. Gravar primeiro deixaria quem enviasse
+    // o token antes virar dono dele e bloquear o dono real.
+    const info = await this.verifier.getProductPurchase(
+      dto.productId,
+      dto.purchaseToken,
+      userId,
+    );
 
-    return this.settle(userId, purchase);
+    if (info.obfuscatedAccountId && info.obfuscatedAccountId !== userId) {
+      this.logger.warn(
+        `Token de compra de outra conta enviado por ${userId}; nada foi gravado.`,
+      );
+      throw new ForbiddenException('Compra pertence a outro usuário');
+    }
+
+    if (!info.obfuscatedAccountId) {
+      if (info.state === 'CANCELED') {
+        throw new BadRequestException('Compra cancelada');
+      }
+      if (info.state === 'PENDING') {
+        // Ainda sem pagamento e sem dono comprovado: não grava. O app valida de
+        // novo quando a loja confirmar a compra.
+        return {
+          status: PurchaseStatus.PENDING,
+          productId: dto.productId,
+          credits,
+          alreadyCredited: false,
+        };
+      }
+      // O app deve enviar o id do usuário (obfuscatedAccountId) ao iniciar a
+      // compra; sem ele não há como provar de quem ela é. A Google reembolsa
+      // compras não consumidas, então o usuário não fica sem o dinheiro.
+      throw new BadRequestException('Compra sem identificação da conta');
+    }
+
+    if (existing) {
+      return this.settle(userId, await this.reclaim(existing, userId), info);
+    }
+
+    const purchase = await this.createPending(userId, dto, credits);
+    return this.settle(userId, purchase, info);
+  }
+
+  /**
+   * A Google confirmou que a compra é de `userId`, mas o token já estava
+   * registrado em outra conta (gravado antes desta correção). Devolve o
+   * registro ao dono real. Uma compra já creditada a outra conta não é mexida:
+   * fica para o suporte, que precisa estornar os créditos de lá.
+   */
+  private async reclaim(existing: Purchase, userId: string): Promise<Purchase> {
+    if (existing.status === PurchaseStatus.CREDITED) {
+      this.logger.error(
+        `Compra ${existing.id} creditada a ${existing.userId}, mas a Google indica ${userId}. Requer suporte.`,
+      );
+      throw new ForbiddenException('Compra pertence a outro usuário');
+    }
+
+    this.logger.warn(
+      `Compra ${existing.id} devolvida de ${existing.userId} para o dono indicado pela Google.`,
+    );
+    return this.prisma.purchase.update({
+      where: { id: existing.id },
+      data: { userId, status: PurchaseStatus.PENDING },
+    });
   }
 
   /**
@@ -102,12 +161,15 @@ export class PurchasesService {
   private async settle(
     userId: string,
     purchase: Purchase,
+    verified?: GooglePurchaseInfo,
   ): Promise<PurchaseResult> {
-    const info = await this.verifier.getProductPurchase(
-      purchase.productId,
-      purchase.purchaseToken,
-      userId,
-    );
+    const info =
+      verified ??
+      (await this.verifier.getProductPurchase(
+        purchase.productId,
+        purchase.purchaseToken,
+        userId,
+      ));
 
     if (info.obfuscatedAccountId && info.obfuscatedAccountId !== userId) {
       // Mantém o registro para suporte/antifraude, fora da fila de reconciliação.
