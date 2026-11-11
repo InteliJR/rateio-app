@@ -33,6 +33,8 @@ describe('OcrQueueService e créditos', () => {
     };
     credits = {
       reserve: jest.fn().mockResolvedValue({ reserved: true }),
+      renewReservation: jest.fn().mockResolvedValue(true),
+      reservationTtl: 15 * 60 * 1000,
       consume: jest.fn().mockResolvedValue(undefined),
       release: jest.fn().mockResolvedValue(undefined),
     };
@@ -68,5 +70,52 @@ describe('OcrQueueService e créditos', () => {
     await expect(service.enqueue(billId, userId)).rejects.toThrow(
       'Créditos insuficientes',
     );
+  });
+
+  describe('renovação da reserva ao reivindicar o trabalho', () => {
+    const jobPendente = {
+      id: jobId,
+      billId,
+      userId,
+      attempts: 0,
+      bill: { id: billId, imageUrl: null, imageKey: null },
+    };
+
+    const prismaComFila = () => ({
+      ocrJob: {
+        upsert: jest.fn().mockResolvedValue({ id: jobId, billId, userId }),
+        findFirst: jest.fn().mockResolvedValue(jobPendente),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+    });
+
+    it('adia o vencimento quando a cobrança está ligada', async () => {
+      prisma = prismaComFila();
+      const service: any = buildService(true);
+
+      await service.claimNextJob();
+
+      expect(credits.renewReservation).toHaveBeenCalledWith(jobId);
+    });
+
+    it('não toca na reserva quando a cobrança está desligada', async () => {
+      prisma = prismaComFila();
+      const service: any = buildService(false);
+
+      await service.claimNextJob();
+
+      expect(credits.renewReservation).not.toHaveBeenCalled();
+    });
+
+    it('não renova quando a reivindicação perde a corrida', async () => {
+      prisma = prismaComFila();
+      prisma.ocrJob.updateMany.mockResolvedValue({ count: 0 });
+      const service: any = buildService(true);
+
+      const reivindicado = await service.claimNextJob();
+
+      expect(reivindicado).toBeNull();
+      expect(credits.renewReservation).not.toHaveBeenCalled();
+    });
   });
 });
