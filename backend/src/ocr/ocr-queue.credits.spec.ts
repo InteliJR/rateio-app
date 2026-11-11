@@ -37,6 +37,7 @@ describe('OcrQueueService e créditos', () => {
       reservationTtl: 15 * 60 * 1000,
       consume: jest.fn().mockResolvedValue(undefined),
       release: jest.fn().mockResolvedValue(undefined),
+      releaseExpired: jest.fn().mockResolvedValue(0),
     };
     metrics = { recordOcrQueued: jest.fn() };
   });
@@ -116,6 +117,57 @@ describe('OcrQueueService e créditos', () => {
 
       expect(reivindicado).toBeNull();
       expect(credits.renewReservation).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('devolução de reservas expiradas no ciclo da fila', () => {
+    const prismaSemTrabalho = () => ({
+      ocrJob: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([{ id: 'job-ativo' }]),
+      },
+    });
+
+    it('devolve as vencidas a cada ciclo, pulando trabalhos na fila ou rodando', async () => {
+      prisma = prismaSemTrabalho();
+      const service = buildService(true);
+
+      await service.processPendingJobs();
+
+      expect(credits.releaseExpired).toHaveBeenCalledTimes(1);
+      const stillActive = credits.releaseExpired.mock.calls[0][0];
+      const ativos = await stillActive(['job-ativo', 'job-perdido']);
+
+      expect(ativos).toEqual(new Set(['job-ativo']));
+      expect(prisma.ocrJob.findMany).toHaveBeenCalledWith({
+        where: {
+          id: { in: ['job-ativo', 'job-perdido'] },
+          status: { in: ['PENDING', 'RUNNING'] },
+        },
+        select: { id: true },
+      });
+    });
+
+    it('não toca no ledger enquanto a cobrança está desligada', async () => {
+      prisma = prismaSemTrabalho();
+      const service = buildService(false);
+
+      await service.processPendingJobs();
+
+      expect(credits.releaseExpired).not.toHaveBeenCalled();
+    });
+
+    it('uma falha ao devolver não impede a fila de rodar', async () => {
+      prisma = prismaSemTrabalho();
+      credits.releaseExpired.mockRejectedValue(new Error('banco fora'));
+      const service = buildService(true);
+
+      await expect(service.processPendingJobs()).resolves.toEqual({
+        processed: 0,
+        activeWorkers: 0,
+      });
+      expect(prisma.ocrJob.findFirst).toHaveBeenCalled();
     });
   });
 });

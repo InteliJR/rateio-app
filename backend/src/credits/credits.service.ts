@@ -273,8 +273,16 @@ export class CreditsService {
     return renovada.count > 0;
   }
 
-  /** Devolve reservas que ficaram penduradas, por exemplo após uma queda do processo. */
-  async releaseExpired(): Promise<number> {
+  /**
+   * Devolve reservas que ficaram penduradas, por exemplo após uma queda do processo.
+   *
+   * `stillActive` recebe os trabalhos com reserva vencida e diz quais ainda
+   * estão em andamento: esses não são devolvidos, senão a leitura terminaria
+   * sem reserva em aberto e sairia de graça. A fila os renova ao reivindicar.
+   */
+  async releaseExpired(
+    stillActive?: (ocrJobIds: string[]) => Promise<Set<string>>,
+  ): Promise<number> {
     const expired = await this.prisma.creditReservation.findMany({
       where: {
         status: CreditReservationStatus.HELD,
@@ -283,17 +291,26 @@ export class CreditsService {
       select: { ocrJobId: true },
     });
 
-    for (const reservation of expired) {
+    if (expired.length === 0) {
+      return 0;
+    }
+
+    const active = stillActive
+      ? await stillActive(expired.map((r) => r.ocrJobId))
+      : new Set<string>();
+    const toRelease = expired.filter((r) => !active.has(r.ocrJobId));
+
+    for (const reservation of toRelease) {
       await this.release(reservation.ocrJobId, 'Reserva expirada');
     }
 
-    if (expired.length > 0) {
+    if (toRelease.length > 0) {
       this.logger.warn(
-        `${expired.length} reserva(s) expirada(s) devolvida(s).`,
+        `${toRelease.length} reserva(s) expirada(s) devolvida(s).`,
       );
     }
 
-    return expired.length;
+    return toRelease.length;
   }
 
   /**

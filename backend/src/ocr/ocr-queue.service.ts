@@ -107,6 +107,7 @@ export class OcrQueueService implements OnModuleInit {
 
   async processPendingJobs(maxJobs: number = this.maxJobsPerRun) {
     await this.releaseStaleLocks();
+    await this.releaseExpiredReservations();
 
     const availableSlots = Math.min(
       Math.max(this.maxConcurrency - this.activeWorkers, 0),
@@ -135,6 +136,36 @@ export class OcrQueueService implements OnModuleInit {
     }
 
     return { processed, activeWorkers: this.activeWorkers };
+  }
+
+  /**
+   * Devolve o crédito de reservas vencidas cujo trabalho não está mais na fila
+   * nem rodando (processo caiu, conta apagada, etc.). Sem isto o crédito ficava
+   * preso para sempre. Roda depois do releaseStaleLocks, então um trabalho com
+   * lock vencido já voltou a PENDING e mantém a reserva.
+   */
+  private async releaseExpiredReservations() {
+    if (!this.creditsEnforced) {
+      return;
+    }
+
+    try {
+      await this.credits.releaseExpired(async (ocrJobIds) => {
+        const ativos = await this.prisma.ocrJob.findMany({
+          where: {
+            id: { in: ocrJobIds },
+            status: { in: [OcrJobStatus.PENDING, OcrJobStatus.RUNNING] },
+          },
+          select: { id: true },
+        });
+        return new Set(ativos.map((job) => job.id));
+      });
+    } catch (error) {
+      // Não pode travar a fila: tenta de novo no próximo ciclo.
+      this.logger.error(
+        `Falha ao devolver reservas expiradas: ${(error as Error).message}`,
+      );
+    }
   }
 
   private async releaseStaleLocks() {
