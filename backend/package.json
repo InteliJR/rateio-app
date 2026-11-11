@@ -17,6 +17,7 @@
     "load:test:health": "node scripts/load-test.cjs health",
     "load:test:login": "node scripts/load-test.cjs login",
     "load:test:auth": "node scripts/load-test.cjs auth",
+    "ocr:report": "ts-node -r tsconfig-paths/register scripts/ocr-report.ts",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",
