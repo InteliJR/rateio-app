@@ -15,6 +15,40 @@ describe('FakeGooglePlayVerifier', () => {
     expect(info.obfuscatedAccountId).toBeUndefined();
   });
 
+  it('lê a quantidade do prefixo qty<N>-', async () => {
+    const info = await verifier.getProductPurchase('credits_1', 'qty5-abc');
+
+    expect(info.state).toBe('PURCHASED');
+    expect(info.quantity).toBe(5);
+  });
+
+  it('deixa a quantidade vazia em token comum', async () => {
+    const info = await verifier.getProductPurchase('credits_1', 'abc');
+
+    expect(info.quantity).toBeUndefined();
+  });
+
+  it('devolve a conta informada como dona da compra paga', async () => {
+    const info = await verifier.getProductPurchase(
+      'credits_1',
+      'abc',
+      'user-1',
+    );
+
+    expect(info.obfuscatedAccountId).toBe('user-1');
+  });
+
+  it('trata o prefixo no-account- como compra sem identificação', async () => {
+    const info = await verifier.getProductPurchase(
+      'credits_1',
+      'no-account-1',
+      'user-1',
+    );
+
+    expect(info.state).toBe('PURCHASED');
+    expect(info.obfuscatedAccountId).toBeUndefined();
+  });
+
   it('trata o prefixo pending- como pendente', async () => {
     const info = await verifier.getProductPurchase('credits_10', 'pending-1');
 
