@@ -6,7 +6,10 @@ import { MetricsService } from '../observability/metrics.service';
 import { OcrResultDto } from './dto/ocr-result.dto';
 import { OcrService } from './ocr.service';
 import { StorageService } from '../storage/storage.service';
-import { CreditsService } from '../credits/credits.service';
+import {
+  CreditsService,
+  ocrJobIdFromReservationKey,
+} from '../credits/credits.service';
 
 @Injectable()
 export class OcrQueueService implements OnModuleInit {
@@ -107,6 +110,7 @@ export class OcrQueueService implements OnModuleInit {
 
   async processPendingJobs(maxJobs: number = this.maxJobsPerRun) {
     await this.releaseStaleLocks();
+    await this.releaseExpiredReservations();
 
     const availableSlots = Math.min(
       Math.max(this.maxConcurrency - this.activeWorkers, 0),
@@ -135,6 +139,46 @@ export class OcrQueueService implements OnModuleInit {
     }
 
     return { processed, activeWorkers: this.activeWorkers };
+  }
+
+  /**
+   * Devolve o crédito de reservas vencidas cujo trabalho não está mais na fila
+   * nem rodando (processo caiu, conta apagada, etc.). Sem isto o crédito ficava
+   * preso para sempre. Roda depois do releaseStaleLocks, então um trabalho com
+   * lock vencido já voltou a PENDING e mantém a reserva.
+   */
+  private async releaseExpiredReservations() {
+    if (!this.creditsEnforced) {
+      return;
+    }
+
+    try {
+      await this.credits.releaseExpired(async (reservationKeys) => {
+        // Releitura grava a reserva como `id:n`: compara pelo id do trabalho,
+        // senão uma releitura demorada teria o crédito devolvido no meio.
+        const jobIds = [
+          ...new Set(reservationKeys.map(ocrJobIdFromReservationKey)),
+        ];
+        const ativos = await this.prisma.ocrJob.findMany({
+          where: {
+            id: { in: jobIds },
+            status: { in: [OcrJobStatus.PENDING, OcrJobStatus.RUNNING] },
+          },
+          select: { id: true },
+        });
+        const idsAtivos = new Set(ativos.map((job) => job.id));
+        return new Set(
+          reservationKeys.filter((key) =>
+            idsAtivos.has(ocrJobIdFromReservationKey(key)),
+          ),
+        );
+      });
+    } catch (error) {
+      // Não pode travar a fila: tenta de novo no próximo ciclo.
+      this.logger.error(
+        `Falha ao devolver reservas expiradas: ${(error as Error).message}`,
+      );
+    }
   }
 
   private async releaseStaleLocks() {

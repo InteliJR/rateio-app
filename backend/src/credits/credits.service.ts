@@ -66,6 +66,24 @@ export class InsufficientCreditsError extends Error {
 
 const UNIQUE_VIOLATION = 'P2002';
 
+/**
+ * Id do trabalho de OCR dono de uma reserva. A chave da reserva é o id do
+ * trabalho na primeira leitura e `id:n` nas releituras (creditRun do #245).
+ * O id do trabalho é um UUID, então nunca contém `:`.
+ */
+export function ocrJobIdFromReservationKey(key: string): string {
+  return key.split(':')[0];
+}
+
+/** Reservas do trabalho em qualquer leitura: `id` ou `id:n`. */
+function reservationKeysOf(
+  ocrJobId: string,
+): Prisma.CreditReservationWhereInput {
+  return {
+    OR: [{ ocrJobId }, { ocrJobId: { startsWith: `${ocrJobId}:` } }],
+  };
+}
+
 @Injectable()
 export class CreditsService {
   private readonly logger = new Logger(CreditsService.name);
@@ -263,18 +281,30 @@ export class CreditsService {
    * reserva em aberto. A pessoa receberia a leitura sem pagar, sem erro nenhum.
    *
    * Só mexe em reserva ainda em aberto, então não ressuscita reserva fechada.
+   * Recebe o id do trabalho e acha a reserva também nas releituras (`id:n`).
    */
   async renewReservation(ocrJobId: string): Promise<boolean> {
     const renovada = await this.prisma.creditReservation.updateMany({
-      where: { ocrJobId, status: CreditReservationStatus.HELD },
+      where: {
+        ...reservationKeysOf(ocrJobId),
+        status: CreditReservationStatus.HELD,
+      },
       data: { expiresAt: new Date(Date.now() + this.reservationTtlMs) },
     });
 
     return renovada.count > 0;
   }
 
-  /** Devolve reservas que ficaram penduradas, por exemplo após uma queda do processo. */
-  async releaseExpired(): Promise<number> {
+  /**
+   * Devolve reservas que ficaram penduradas, por exemplo após uma queda do processo.
+   *
+   * `stillActive` recebe as chaves das reservas vencidas e diz quais ainda
+   * pertencem a um trabalho em andamento: esses não são devolvidos, senão a leitura terminaria
+   * sem reserva em aberto e sairia de graça. A fila os renova ao reivindicar.
+   */
+  async releaseExpired(
+    stillActive?: (ocrJobIds: string[]) => Promise<Set<string>>,
+  ): Promise<number> {
     const expired = await this.prisma.creditReservation.findMany({
       where: {
         status: CreditReservationStatus.HELD,
@@ -283,17 +313,26 @@ export class CreditsService {
       select: { ocrJobId: true },
     });
 
-    for (const reservation of expired) {
+    if (expired.length === 0) {
+      return 0;
+    }
+
+    const active = stillActive
+      ? await stillActive(expired.map((r) => r.ocrJobId))
+      : new Set<string>();
+    const toRelease = expired.filter((r) => !active.has(r.ocrJobId));
+
+    for (const reservation of toRelease) {
       await this.release(reservation.ocrJobId, 'Reserva expirada');
     }
 
-    if (expired.length > 0) {
+    if (toRelease.length > 0) {
       this.logger.warn(
-        `${expired.length} reserva(s) expirada(s) devolvida(s).`,
+        `${toRelease.length} reserva(s) expirada(s) devolvida(s).`,
       );
     }
 
-    return expired.length;
+    return toRelease.length;
   }
 
   /**
