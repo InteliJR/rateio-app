@@ -3,6 +3,7 @@ import {
   InternalServerErrorException,
   BadRequestException,
   ServiceUnavailableException,
+  Logger,
 } from '@nestjs/common';
 import OpenAI, {
   APIError,
@@ -18,9 +19,11 @@ import {
 } from './ocr-number.util';
 import { normalizeMeasurementUnit } from '../common/measurement-unit';
 import { MAX_MONEY_VALUE } from '../common/numeric-limits';
+import { redact } from '../common/logging/redact';
 
 @Injectable()
 export class OcrService {
+  private readonly logger = new Logger(OcrService.name);
   private openaiClient: OpenAI;
   private readonly model: string;
   private readonly maxRetries = 3;
@@ -107,7 +110,7 @@ export class OcrService {
             { imageUrl, error },
             'warn',
           );
-          console.warn(
+          this.logger.warn(
             'Resposta não é JSON válido, usando parser de texto como fallback',
           );
 
@@ -123,7 +126,7 @@ export class OcrService {
           error[0] instanceof ValidationError
         ) {
           this.logValidationError(error, imageUrl);
-          console.warn(
+          this.logger.warn(
             'JSON não passou na validação, tentando extrair dados mesmo assim...',
           );
 
@@ -137,9 +140,8 @@ export class OcrService {
 
             // Se conseguiu extrair pelo menos alguns itens, usar esses dados
             if (parsedData.items && parsedData.items.length > 0) {
-              console.warn(
-                'Dados extraídos do JSON apesar da validação falhar. Itens encontrados:',
-                parsedData.items.length,
+              this.logger.warn(
+                `Dados extraídos do JSON apesar da validação falhar. Itens encontrados: ${parsedData.items.length}`,
               );
               return {
                 rawText: responseContent,
@@ -147,7 +149,7 @@ export class OcrService {
               };
             }
           } catch (fallbackError) {
-            console.warn(
+            this.logger.warn(
               'Não foi possível extrair dados do JSON, usando parser de texto como fallback',
             );
           }
@@ -589,14 +591,12 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
     const validationErrors = errors.map((err) => {
       const error: any = {
         property: err.property,
-        value: err.value,
         constraints: err.constraints,
       };
 
       if (err.children && err.children.length > 0) {
         error.children = err.children.map((child) => ({
           property: child.property,
-          value: child.value,
           constraints: child.constraints,
         }));
       }
@@ -604,17 +604,15 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
       return error;
     });
 
-    console.error(
-      'Erros de validação:',
-      JSON.stringify(validationErrors, null, 2),
-    );
+    const redactedErrors = redact(validationErrors);
+
+    this.logger.error(`Erros de validação: ${JSON.stringify(redactedErrors)}`);
 
     this.logError(
       'VALIDATION_ERROR',
       'Erro de validação do JSON retornado pela OpenAI',
       {
-        imageUrl,
-        errors: validationErrors,
+        errors: redactedErrors,
         errorCount: validationErrors.length,
       },
     );
@@ -794,19 +792,16 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
     }
 
     if (status === 'falhou_apos_todas_tentativas') {
-      console.error(
-        `[OCR_RETRY] Tentativa ${attempt}/${this.maxRetries} falhou após todas as tentativas:`,
-        JSON.stringify(logData, null, 2),
+      this.logger.error(
+        `[OCR_RETRY] Tentativa ${attempt}/${this.maxRetries} falhou após todas as tentativas: ${JSON.stringify(redact(logData))}`,
       );
     } else if (status === 'falhou_tentando_novamente') {
-      console.warn(
-        `[OCR_RETRY] Tentativa ${attempt}/${this.maxRetries} falhou, tentando novamente em ${delayMs}ms:`,
-        JSON.stringify(logData, null, 2),
+      this.logger.warn(
+        `[OCR_RETRY] Tentativa ${attempt}/${this.maxRetries} falhou, tentando novamente em ${delayMs}ms: ${JSON.stringify(redact(logData))}`,
       );
     } else if (status === 'sucesso' && attempt > 1) {
-      console.log(
-        `[OCR_RETRY] Tentativa ${attempt}/${this.maxRetries} bem-sucedida após retry:`,
-        JSON.stringify(logData, null, 2),
+      this.logger.log(
+        `[OCR_RETRY] Tentativa ${attempt}/${this.maxRetries} bem-sucedida após retry: ${JSON.stringify(redact(logData))}`,
       );
     } else if (status === 'iniciando' && attempt === 1) {
       // Não loga a primeira tentativa inicial para não poluir os logs
@@ -830,14 +825,12 @@ Retorne o JSON seguindo exatamente a estrutura acima, baseando-se nos exemplos f
     };
 
     if (level === 'error') {
-      console.error(
-        `[OCR_ERROR] ${errorType}:`,
-        JSON.stringify(logData, null, 2),
+      this.logger.error(
+        `[OCR_ERROR] ${errorType}: ${JSON.stringify(redact(logData))}`,
       );
     } else {
-      console.warn(
-        `[OCR_WARN] ${errorType}:`,
-        JSON.stringify(logData, null, 2),
+      this.logger.warn(
+        `[OCR_WARN] ${errorType}: ${JSON.stringify(redact(logData))}`,
       );
     }
   }

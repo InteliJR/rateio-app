@@ -28,6 +28,8 @@ import {
   IsEnum,
   IsBoolean,
   IsOptional,
+  IsPositive,
+  Max,
 } from 'class-validator';
 
 // DTOs
@@ -84,6 +86,11 @@ class PresignedAvatarUploadDto {
   @IsString()
   @Matches(/^image\/(jpeg|jpg|png|webp|gif)$/)
   mimeType: string;
+
+  @IsOptional()
+  @IsPositive()
+  @Max(10 * 1024 * 1024)
+  size?: number;
 }
 
 class AttachAvatarDto {
@@ -176,6 +183,7 @@ export class UsersController {
       req.user.id,
       dto.filename,
       dto.mimeType,
+      dto.size,
     );
   }
 
@@ -185,8 +193,16 @@ export class UsersController {
     @Request() req: any,
     @Body(ValidationPipe) dto: AttachAvatarDto,
   ) {
-    if (!this.storageService.isOwnedObjectKey(dto.imageKey, 'avatars', req.user.id)) {
-      throw new BadRequestException('Chave de avatar invalida para este usuario');
+    if (
+      !this.storageService.isOwnedObjectKey(
+        dto.imageKey,
+        'avatars',
+        req.user.id,
+      )
+    ) {
+      throw new BadRequestException(
+        'Chave de avatar invalida para este usuario',
+      );
     }
 
     const avatarUrl = await this.storageService.getFileUrl(dto.imageKey);
@@ -195,7 +211,11 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard)
   @Post('me/avatar')
-  @UseInterceptors(FileInterceptor('avatar'))
+  @UseInterceptors(
+    FileInterceptor('avatar', {
+      limits: { fileSize: 10 * 1024 * 1024, files: 1, fields: 20 },
+    }),
+  )
   async uploadAvatar(
     @Request() req: any,
     @UploadedFile() file: Express.Multer.File,
@@ -205,7 +225,9 @@ export class UsersController {
     }
 
     if (!this.storageService.validateFileType(file.mimetype)) {
-      throw new BadRequestException('Apenas imagens sao permitidas (JPEG, PNG, WebP, GIF)');
+      throw new BadRequestException(
+        'Apenas imagens sao permitidas (JPEG, PNG, WebP, GIF)',
+      );
     }
 
     if (!this.storageService.validateFileSize(file.size)) {
@@ -220,8 +242,8 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   @Delete('me/avatar')
   async removeAvatar(@Request() req: any) {
-    const user = await this.usersService.findById(req.user.id) as any;
-    
+    const user = (await this.usersService.findById(req.user.id)) as any;
+
     if (user?.avatarUrl) {
       const key = this.storageService.extractStorageKeyFromUrl(user.avatarUrl);
       if (key) {

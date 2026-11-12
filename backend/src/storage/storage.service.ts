@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import {
   S3Client,
@@ -15,9 +16,11 @@ import { diskStorage, memoryStorage } from 'multer';
 import { extname } from 'path';
 import * as fs from 'fs';
 import * as path from 'path';
+import { assertImageSignature } from './file-signature';
 
 @Injectable()
 export class StorageService {
+  private readonly logger = new Logger(StorageService.name);
   private s3Client: S3Client;
   private bucketName: string;
   private readonly uploadRoot = './uploads';
@@ -30,8 +33,12 @@ export class StorageService {
   constructor() {
     this.bucketName = process.env.AWS_S3_BUCKET || '';
     this.publicBaseUrl = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
-    this.s3PublicBaseUrl = (process.env.AWS_S3_PUBLIC_BASE_URL || '').replace(/\/$/, '');
-    this.isServerlessEnv = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
+    this.s3PublicBaseUrl = (process.env.AWS_S3_PUBLIC_BASE_URL || '').replace(
+      /\/$/,
+      '',
+    );
+    this.isServerlessEnv =
+      process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
     this.useS3 = !!this.bucketName; // Usa S3 se bucket estiver configurado
 
     if (this.isServerlessEnv && !this.useS3) {
@@ -60,7 +67,12 @@ export class StorageService {
     return this.useS3;
   }
 
-  createObjectKey(folder: string, userId: string, filename: string, mimetype: string): string {
+  createObjectKey(
+    folder: string,
+    userId: string,
+    filename: string,
+    mimetype: string,
+  ): string {
     const extension = this.resolveFileExtension(filename, mimetype);
     return `${folder}/${userId}/${randomUUID()}.${extension}`;
   }
@@ -78,6 +90,7 @@ export class StorageService {
     userId: string,
     filename: string,
     mimetype: string,
+    size?: number,
   ): Promise<{
     key: string;
     uploadUrl: string;
@@ -97,21 +110,37 @@ export class StorageService {
       );
     }
 
+    if (size !== undefined) {
+      if (size <= 0 || size > 10 * 1024 * 1024) {
+        throw new BadRequestException(
+          'Tamanho de arquivo inválido (máximo 10MB)',
+        );
+      }
+    } else if (process.env.REQUIRE_UPLOAD_SIZE === 'true') {
+      throw new BadRequestException('O campo size é obrigatório para upload');
+    }
+
     const key = this.createObjectKey(folder, userId, filename, mimetype);
     const command = new PutObjectCommand({
       Bucket: this.bucketName,
       Key: key,
       ContentType: mimetype,
+      ...(size ? { ContentLength: size } : {}),
     });
     const expiresIn = 600;
+
+    const headers: Record<string, string> = {
+      'Content-Type': mimetype,
+    };
+    if (size) {
+      headers['Content-Length'] = size.toString();
+    }
 
     return {
       key,
       uploadUrl: await getSignedUrl(this.s3Client, command, { expiresIn }),
       fileUrl: await this.resolveS3Url(key),
-      headers: {
-        'Content-Type': mimetype,
-      },
+      headers,
       expiresIn,
     };
   }
@@ -122,7 +151,9 @@ export class StorageService {
     }
 
     const relativeUrl = `/uploads/${key}`;
-    return this.publicBaseUrl ? `${this.publicBaseUrl}${relativeUrl}` : relativeUrl;
+    return this.publicBaseUrl
+      ? `${this.publicBaseUrl}${relativeUrl}`
+      : relativeUrl;
   }
 
   /**
@@ -165,45 +196,59 @@ export class StorageService {
     file: Express.Multer.File,
     folder: string = 'bills',
   ): Promise<{ key: string; url: string }> {
+    const detected = file.buffer ? assertImageSignature(file.buffer) : null;
+    if (file.buffer && !detected) {
+      this.logger.warn(
+        JSON.stringify({
+          event: 'upload_signature_mismatch',
+          mimetype: file.mimetype,
+        }),
+      );
+    }
+    const extension =
+      detected?.extension ||
+      this.resolveFileExtension(file.originalname, file.mimetype);
+    const mimeType = detected?.mimeType || file.mimetype;
+
     if (this.useS3) {
-      return this.uploadToS3(file, folder);
+      return this.uploadToS3(file, folder, extension, mimeType);
     } else {
       const folderPath = path.join(this.uploadRoot, folder);
       if (!fs.existsSync(folderPath)) {
         fs.mkdirSync(folderPath, { recursive: true });
       }
 
-      const filename = file.filename || `${randomUUID()}.${file.originalname.split('.').pop()}`;
+      const filename = `${randomUUID()}.${extension}`;
       const filePath = path.join(folderPath, filename);
 
-      if (file.buffer && !file.filename) {
+      if (file.buffer) {
         fs.writeFileSync(filePath, file.buffer);
       }
 
       const relativeUrl = `/uploads/${folder}/${filename}`;
       return {
         key: `${folder}/${filename}`,
-        url: this.publicBaseUrl ? `${this.publicBaseUrl}${relativeUrl}` : relativeUrl,
+        url: this.publicBaseUrl
+          ? `${this.publicBaseUrl}${relativeUrl}`
+          : relativeUrl,
       };
     }
   }
 
-  /**
-   * Upload para S3
-   */
   private async uploadToS3(
     file: Express.Multer.File,
     folder: string,
+    extension: string = 'jpg',
+    mimeType: string = 'image/jpeg',
   ): Promise<{ key: string; url: string }> {
     try {
-      const fileExtension = file.originalname.split('.').pop();
-      const key = `${folder}/${randomUUID()}.${fileExtension}`;
+      const key = `${folder}/${randomUUID()}.${extension}`;
 
       const command = new PutObjectCommand({
         Bucket: this.bucketName,
         Key: key,
         Body: file.buffer,
-        ContentType: file.mimetype,
+        ContentType: mimeType,
       });
 
       await this.s3Client.send(command);
@@ -212,7 +257,13 @@ export class StorageService {
 
       return { key, url };
     } catch (error) {
-      console.error('❌ Erro no upload S3:', error);
+      this.logger.error(
+        JSON.stringify({
+          event: 's3_upload_failed',
+          folder,
+          error: (error as any)?.message,
+        }),
+      );
       throw new InternalServerErrorException('Falha ao fazer upload da imagem');
     }
   }
@@ -223,7 +274,9 @@ export class StorageService {
   async getSignedUrl(key: string, expiresIn: number = 3600): Promise<string> {
     if (!this.useS3) {
       const relativeUrl = `/uploads/${key}`;
-      return this.publicBaseUrl ? `${this.publicBaseUrl}${relativeUrl}` : relativeUrl;
+      return this.publicBaseUrl
+        ? `${this.publicBaseUrl}${relativeUrl}`
+        : relativeUrl;
     }
 
     try {
@@ -300,7 +353,10 @@ export class StorageService {
       return url.slice(localPrefix.length);
     }
 
-    if (this.publicBaseUrl && url.startsWith(`${this.publicBaseUrl}${localPrefix}`)) {
+    if (
+      this.publicBaseUrl &&
+      url.startsWith(`${this.publicBaseUrl}${localPrefix}`)
+    ) {
       return url.slice(`${this.publicBaseUrl}${localPrefix}`.length);
     }
 
@@ -343,16 +399,16 @@ export class StorageService {
   }
 
   private resolveFileExtension(filename: string, mimetype: string): string {
-    const extensionFromName = filename.split('.').pop()?.toLowerCase();
+    const mimeMap: Record<string, string> = {
+      'image/jpeg': 'jpg',
+      'image/jpg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp',
+      'image/gif': 'gif',
+    };
 
-    if (extensionFromName && /^[a-z0-9]+$/.test(extensionFromName)) {
-      return extensionFromName === 'jpeg' ? 'jpg' : extensionFromName;
-    }
-
-    const extensionFromMime = mimetype.split('/').pop()?.toLowerCase();
-
-    if (extensionFromMime && /^[a-z0-9]+$/.test(extensionFromMime)) {
-      return extensionFromMime === 'jpeg' ? 'jpg' : extensionFromMime;
+    if (mimetype && mimeMap[mimetype.toLowerCase()]) {
+      return mimeMap[mimetype.toLowerCase()];
     }
 
     return 'jpg';
