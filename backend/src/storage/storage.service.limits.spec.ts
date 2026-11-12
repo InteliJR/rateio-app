@@ -9,11 +9,12 @@ import { PresignedUploadDto } from '../bills/dto/presigned-upload.dto';
 import { StorageService } from './storage.service';
 
 /**
- * Limites e validações de imagem no servidor (ver docs/dev/limites-imagem.md).
+ * Limites e validações de imagem no servidor.
  *
  * Testes marcados com [CARACTERIZAÇÃO] registram o comportamento ATUAL, inclusive
  * lacunas conhecidas. Eles NÃO endossam esse comportamento: se um deles quebrar
- * porque a lacuna foi corrigida, atualize o teste e o documento.
+ * porque a lacuna foi corrigida, atualize o teste de propósito. Cada lacuna
+ * conhecida tem de ter um item de backlog (issue); ao corrigir uma, feche o item.
  *
  * O QUE ESTES TESTES PROVAM: o que os validadores e a assinatura da URL fazem com
  * entradas de fronteira, sem rede, sem S3 e sem banco (a assinatura é local, com
@@ -21,7 +22,8 @@ import { StorageService } from './storage.service';
  *
  * O QUE NÃO PROVAM: o que o S3 real faz com a URL assinada (inclusive o parâmetro
  * de checksum que o SDK coloca na URL), os 4,5 MB da Vercel, o Multer em uma
- * requisição real, nem nada sobre fotos reais. Isso fica "pendente" no documento.
+ * requisição real, nem nada sobre fotos reais. Isso exige ambiente real e fica
+ * pendente.
  */
 describe('StorageService: limites e validações de imagem', () => {
   const MB = 1024 * 1024;
@@ -116,10 +118,9 @@ describe('StorageService: limites e validações de imagem', () => {
       expect(storage.validateFileType('image/gif')).toBe(true);
     });
 
-    it('[CARACTERIZAÇÃO] só olha o MIME declarado: não há leitura dos bytes do arquivo', () => {
-      // A assinatura recebe apenas a string do tipo, sem acesso ao conteúdo
-      expect(storage.validateFileType.length).toBe(1);
-    });
+    // O validador só recebe a string do MIME declarado: o conteúdo do arquivo nunca é
+    // lido. A prova por comportamento (um arquivo que não é imagem passa se declarar
+    // image/png) está no describe de BillsService, mais abaixo.
   });
 
   describe('isOwnedObjectKey', () => {
@@ -482,6 +483,23 @@ describe('BillsService: onde os limites são aplicados (sem banco, sem S3)', () 
       .mockResolvedValue({ key: 'bills/x.jpg', url: 'https://img.test/x.jpg' });
 
     await service.create(file(8 * MB), USER, {} as any);
+
+    expect(prisma.bill.create).toHaveBeenCalledTimes(1);
+    expect(queue.enqueue).toHaveBeenCalledTimes(1);
+  });
+
+  it('[CARACTERIZAÇÃO] só o tipo declarado vale: um arquivo cujo conteúdo não é imagem passa se declarar image/png', async () => {
+    jest
+      .spyOn(storage, 'uploadFile')
+      .mockResolvedValue({ key: 'bills/x.png', url: 'https://img.test/x.png' });
+    const buffer = Buffer.from('isto não é uma imagem');
+    const notAnImage = {
+      size: buffer.length,
+      mimetype: 'image/png',
+      buffer,
+    } as Express.Multer.File;
+
+    await service.create(notAnImage, USER, {} as any);
 
     expect(prisma.bill.create).toHaveBeenCalledTimes(1);
     expect(queue.enqueue).toHaveBeenCalledTimes(1);
