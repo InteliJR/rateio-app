@@ -1,0 +1,287 @@
+{
+  "description": "Comportamento observado na produção (origin/main). Gerado por PRESERVATION_MODE=record; não editar à mão.",
+  "observations": {
+    "register.valid": {
+      "status": 201,
+      "body": {
+        "accessToken": "<jwt>",
+        "message": "Usuário criado com sucesso. Você já pode fazer login.",
+        "refreshToken": "<jwt>",
+        "user": {
+          "createdAt": "<date>",
+          "email": "<email>",
+          "id": "<uuid>",
+          "name": "Novo Usuário",
+          "role": "USER"
+        }
+      }
+    },
+    "register.valid.stored": {
+      "role": "USER",
+      "isActive": true
+    },
+    "register.admin": {
+      "status": 403,
+      "body": {
+        "error": "Forbidden",
+        "message": "Não é permitido criar usuários ADMIN via registro",
+        "statusCode": 403
+      }
+    },
+    "register.duplicate": {
+      "status": 409,
+      "body": {
+        "error": "Conflict",
+        "message": "Email já cadastrado",
+        "statusCode": 409
+      }
+    },
+    "register.missingFields": {
+      "status": 400,
+      "body": {
+        "error": "Bad Request",
+        "message": [
+          "Nome é obrigatório",
+          "name must be a string",
+          "Senha deve ter no mínimo 8 caracteres",
+          "password must be a string"
+        ],
+        "statusCode": 400
+      }
+    },
+    "register.extraField": {
+      "status": 400,
+      "body": {
+        "error": "Bad Request",
+        "message": [
+          "property hacker should not exist"
+        ],
+        "statusCode": 400
+      }
+    },
+    "login.valid": {
+      "status": 200,
+      "body": {
+        "accessToken": "<jwt>",
+        "refreshToken": "<jwt>",
+        "user": {
+          "createdAt": "<date>",
+          "email": "<email>",
+          "id": "<uuid>",
+          "name": "Usuário Teste",
+          "role": "USER"
+        }
+      }
+    },
+    "login.valid.accessLifetime": 900,
+    "login.valid.refreshLifetime": 2592000,
+    "login.valid.accessSubIsUser": true,
+    "login.invalid.distinctResponses": [
+      "{\"status\":401,\"body\":{\"error\":\"Unauthorized\",\"message\":\"Credenciais inválidas\",\"statusCode\":401}}"
+    ],
+    "login.inactive.correctPassword": {
+      "status": 401,
+      "body": {
+        "error": "Unauthorized",
+        "message": "Usuário inativo. Entre em contato com o administrador.",
+        "statusCode": 401
+      }
+    },
+    "google.firstAccess": {
+      "status": 200,
+      "body": {
+        "accessToken": "<jwt>",
+        "refreshToken": "<jwt>",
+        "user": {
+          "createdAt": "<date>",
+          "email": "<email>",
+          "id": "<uuid>",
+          "name": "Google User",
+          "role": "USER"
+        }
+      }
+    },
+    "google.secondAccess": {
+      "status": 200,
+      "body": {
+        "accessToken": "<jwt>",
+        "refreshToken": "<jwt>",
+        "user": {
+          "createdAt": "<date>",
+          "email": "<email>",
+          "id": "<uuid>",
+          "name": "Google User",
+          "role": "USER"
+        }
+      }
+    },
+    "google.emailWithPassword": {
+      "status": 409,
+      "body": {
+        "error": "Conflict",
+        "message": "este email já possui conta com senha",
+        "statusCode": 409
+      }
+    },
+    "google.invalidToken": {
+      "status": 401,
+      "body": {
+        "error": "Unauthorized",
+        "message": "Token Google invalido",
+        "statusCode": 401
+      }
+    },
+    "google.inactive": {
+      "status": 401,
+      "body": {
+        "error": "Unauthorized",
+        "message": "Usuario inativo. Entre em contato com o administrador.",
+        "statusCode": 401
+      }
+    },
+    "refresh.chain": [
+      {
+        "step": 0,
+        "status": 200,
+        "body": {
+          "accessToken": "string",
+          "refreshToken": "string"
+        }
+      },
+      {
+        "step": 0,
+        "status": 200,
+        "body": {
+          "accessToken": "string",
+          "refreshToken": "string"
+        }
+      },
+      {
+        "step": 0,
+        "status": 200,
+        "body": {
+          "accessToken": "string",
+          "refreshToken": "string"
+        }
+      },
+      {
+        "step": 1,
+        "status": 200,
+        "body": {
+          "accessToken": "string",
+          "refreshToken": "string"
+        }
+      },
+      {
+        "step": 2,
+        "status": 200,
+        "body": {
+          "accessToken": "string",
+          "refreshToken": "string"
+        }
+      },
+      {
+        "step": 3,
+        "status": 200,
+        "body": {
+          "accessToken": "string",
+          "refreshToken": "string"
+        }
+      }
+    ],
+    "refresh.reuseWithoutRotation": {
+      "status": 200,
+      "body": {
+        "accessToken": "string",
+        "refreshToken": "string"
+      }
+    },
+    "refresh.invalid": {
+      "status": 401,
+      "body": {
+        "error": "Unauthorized",
+        "message": "Refresh token inválido",
+        "statusCode": 401
+      }
+    },
+    "logout.valid": {
+      "status": 200,
+      "body": {
+        "message": "Logout realizado com sucesso"
+      }
+    },
+    "logout.thenRefresh": {
+      "status": 401,
+      "body": {
+        "error": "Unauthorized",
+        "message": "Refresh token inválido",
+        "statusCode": 401
+      }
+    },
+    "me.noToken": {
+      "status": 401,
+      "body": {
+        "message": "Unauthorized",
+        "statusCode": 401
+      }
+    },
+    "me.withToken": {
+      "status": 200,
+      "body": {
+        "avatarUrl": null,
+        "createdAt": "<date>",
+        "email": "<email>",
+        "id": "<uuid>",
+        "isActive": true,
+        "name": "Usuário Teste",
+        "role": "USER",
+        "updatedAt": "<date>"
+      }
+    },
+    "forgot.existing": {
+      "status": 200,
+      "body": {
+        "message": "Se este email estiver cadastrado, você receberá um código de recuperação em breve."
+      }
+    },
+    "forgot.mailCodeFormat": true,
+    "reset.valid": {
+      "status": 200,
+      "body": {
+        "message": "Senha redefinida com sucesso. Faça login com sua nova senha."
+      }
+    },
+    "reset.loginNew": 200,
+    "reset.loginOld": 401,
+    "forgot.unknown": {
+      "status": 200,
+      "body": {
+        "message": "Se este email estiver cadastrado, você receberá um código de recuperação em breve."
+      }
+    },
+    "reset.wrongCode": {
+      "status": 401,
+      "body": {
+        "error": "Unauthorized",
+        "message": "Código inválido ou expirado. Solicite um novo código.",
+        "statusCode": 401
+      }
+    },
+    "argon2.params": "$argon2id$v=19$m=65536,t=3,p=4",
+    "argon2.existingHashLogin": 200,
+    "profile.passwordWithoutCurrent": {
+      "status": 200,
+      "body": {
+        "avatarUrl": null,
+        "createdAt": "<date>",
+        "email": "<email>",
+        "id": "<uuid>",
+        "isActive": true,
+        "name": "Usuário Teste",
+        "role": "USER",
+        "updatedAt": "<date>"
+      }
+    },
+    "profile.passwordWithoutCurrent.login": 200
+  }
+}
