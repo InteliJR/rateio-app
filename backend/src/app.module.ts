@@ -17,6 +17,8 @@ import { BillsModule } from './bills/bills.module';
 import { ParticipantsModule } from './participants/participants.module';
 import { DivisionsModule } from './divisions/divisions.module';
 import { FeesModule } from './fees/fees.module';
+import { CreditsModule } from './credits/credits.module';
+import { PurchasesModule } from './purchases/purchases.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { MetricsInterceptor } from './observability/metrics.interceptor';
 import { parseEnv } from './config/env.schema';
@@ -55,6 +57,8 @@ function getRateLimitConfig() {
     ParticipantsModule,
     DivisionsModule,
     FeesModule,
+    CreditsModule,
+    PurchasesModule,
   ],
   controllers: [AppController],
   providers: [
