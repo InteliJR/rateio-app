@@ -149,6 +149,28 @@ describe('OcrQueueService e créditos', () => {
       });
     });
 
+    it('não devolve a reserva de uma releitura em andamento (chave id:n)', async () => {
+      prisma = prismaSemTrabalho();
+      const service = buildService(true);
+
+      await service.processPendingJobs();
+      const stillActive = credits.releaseExpired.mock.calls[0][0];
+      const ativos = await stillActive([
+        'job-ativo:2',
+        'job-perdido:3',
+        'job-ativo:2',
+      ]);
+
+      expect(ativos).toEqual(new Set(['job-ativo:2']));
+      expect(prisma.ocrJob.findMany).toHaveBeenCalledWith({
+        where: {
+          id: { in: ['job-ativo', 'job-perdido'] },
+          status: { in: ['PENDING', 'RUNNING'] },
+        },
+        select: { id: true },
+      });
+    });
+
     it('não toca no ledger enquanto a cobrança está desligada', async () => {
       prisma = prismaSemTrabalho();
       const service = buildService(false);

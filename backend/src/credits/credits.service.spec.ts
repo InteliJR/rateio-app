@@ -391,9 +391,29 @@ describe('CreditsService', () => {
 
       expect(renovou).toBe(true);
       expect(prisma.creditReservation.updateMany).toHaveBeenCalledWith({
-        where: { ocrJobId, status: CreditReservationStatus.HELD },
+        where: {
+          OR: [{ ocrJobId }, { ocrJobId: { startsWith: `${ocrJobId}:` } }],
+          status: CreditReservationStatus.HELD,
+        },
         data: { expiresAt: expect.any(Date) },
       });
+    });
+
+    it('acha a reserva da releitura (chave id:n)', async () => {
+      await service.renewReservation('abc');
+
+      const { where } = prisma.creditReservation.updateMany.mock.calls[0][0];
+      const casa = (key: string) =>
+        where.OR.some((c: any) =>
+          typeof c.ocrJobId === 'string'
+            ? c.ocrJobId === key
+            : key.startsWith(c.ocrJobId.startsWith),
+        );
+
+      expect(casa('abc')).toBe(true);
+      expect(casa('abc:2')).toBe(true);
+      expect(casa('abcd')).toBe(false);
+      expect(casa('abcd:2')).toBe(false);
     });
 
     it('não ressuscita reserva já fechada', async () => {

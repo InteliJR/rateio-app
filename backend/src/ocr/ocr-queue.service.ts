@@ -6,7 +6,10 @@ import { MetricsService } from '../observability/metrics.service';
 import { OcrResultDto } from './dto/ocr-result.dto';
 import { OcrService } from './ocr.service';
 import { StorageService } from '../storage/storage.service';
-import { CreditsService } from '../credits/credits.service';
+import {
+  CreditsService,
+  ocrJobIdFromReservationKey,
+} from '../credits/credits.service';
 
 @Injectable()
 export class OcrQueueService implements OnModuleInit {
@@ -150,15 +153,25 @@ export class OcrQueueService implements OnModuleInit {
     }
 
     try {
-      await this.credits.releaseExpired(async (ocrJobIds) => {
+      await this.credits.releaseExpired(async (reservationKeys) => {
+        // Releitura grava a reserva como `id:n`: compara pelo id do trabalho,
+        // senão uma releitura demorada teria o crédito devolvido no meio.
+        const jobIds = [
+          ...new Set(reservationKeys.map(ocrJobIdFromReservationKey)),
+        ];
         const ativos = await this.prisma.ocrJob.findMany({
           where: {
-            id: { in: ocrJobIds },
+            id: { in: jobIds },
             status: { in: [OcrJobStatus.PENDING, OcrJobStatus.RUNNING] },
           },
           select: { id: true },
         });
-        return new Set(ativos.map((job) => job.id));
+        const idsAtivos = new Set(ativos.map((job) => job.id));
+        return new Set(
+          reservationKeys.filter((key) =>
+            idsAtivos.has(ocrJobIdFromReservationKey(key)),
+          ),
+        );
       });
     } catch (error) {
       // Não pode travar a fila: tenta de novo no próximo ciclo.

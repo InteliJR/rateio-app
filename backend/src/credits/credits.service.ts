@@ -66,6 +66,24 @@ export class InsufficientCreditsError extends Error {
 
 const UNIQUE_VIOLATION = 'P2002';
 
+/**
+ * Id do trabalho de OCR dono de uma reserva. A chave da reserva é o id do
+ * trabalho na primeira leitura e `id:n` nas releituras (creditRun do #245).
+ * O id do trabalho é um UUID, então nunca contém `:`.
+ */
+export function ocrJobIdFromReservationKey(key: string): string {
+  return key.split(':')[0];
+}
+
+/** Reservas do trabalho em qualquer leitura: `id` ou `id:n`. */
+function reservationKeysOf(
+  ocrJobId: string,
+): Prisma.CreditReservationWhereInput {
+  return {
+    OR: [{ ocrJobId }, { ocrJobId: { startsWith: `${ocrJobId}:` } }],
+  };
+}
+
 @Injectable()
 export class CreditsService {
   private readonly logger = new Logger(CreditsService.name);
@@ -263,10 +281,14 @@ export class CreditsService {
    * reserva em aberto. A pessoa receberia a leitura sem pagar, sem erro nenhum.
    *
    * Só mexe em reserva ainda em aberto, então não ressuscita reserva fechada.
+   * Recebe o id do trabalho e acha a reserva também nas releituras (`id:n`).
    */
   async renewReservation(ocrJobId: string): Promise<boolean> {
     const renovada = await this.prisma.creditReservation.updateMany({
-      where: { ocrJobId, status: CreditReservationStatus.HELD },
+      where: {
+        ...reservationKeysOf(ocrJobId),
+        status: CreditReservationStatus.HELD,
+      },
       data: { expiresAt: new Date(Date.now() + this.reservationTtlMs) },
     });
 
@@ -276,8 +298,8 @@ export class CreditsService {
   /**
    * Devolve reservas que ficaram penduradas, por exemplo após uma queda do processo.
    *
-   * `stillActive` recebe os trabalhos com reserva vencida e diz quais ainda
-   * estão em andamento: esses não são devolvidos, senão a leitura terminaria
+   * `stillActive` recebe as chaves das reservas vencidas e diz quais ainda
+   * pertencem a um trabalho em andamento: esses não são devolvidos, senão a leitura terminaria
    * sem reserva em aberto e sairia de graça. A fila os renova ao reivindicar.
    */
   async releaseExpired(
