@@ -20,6 +20,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import billService from "../../../services/bill.service";
 import { validateReceiptImage } from "../../../services/imageValidation";
+import { refreshRemoteConfig } from "../../../services/remoteConfig";
+import { API_URL } from "../../../services/api.service";
 import { CropModal } from "../../../components/modals/CropModal";
 import { useTheme } from "../../../contexts/ThemeContext";
 
@@ -58,6 +60,12 @@ export default function CameraScreen() {
         await requestPermission();
       }
     })();
+  }, []);
+
+  // Busca a configuração do servidor em segundo plano (mínimo de texto da pré-validação).
+  // Nunca bloqueia nem falha o fluxo: sem resposta, vale o valor de reserva.
+  useEffect(() => {
+    void refreshRemoteConfig(API_URL);
   }, []);
 
   // Verificar resolução da imagem e classificar qualidade

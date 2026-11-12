@@ -1,8 +1,10 @@
 import { Platform } from "react-native";
 import { logger } from "../lib/logger";
+import { getMinTextLength } from "./remoteConfig";
 
-// Mínimo de caracteres reconhecidos para considerar a foto legível (ajustável)
-export const MIN_TEXT_LENGTH = 20;
+// O mínimo de caracteres reconhecidos para considerar a foto legível vem do servidor
+// (GET /config, ver remoteConfig.ts), com 20 como valor de reserva. Zero desliga a
+// pré-validação.
 
 export interface ImageValidationResult {
   isValid: boolean;
@@ -43,6 +45,14 @@ export const validateReceiptImage = async (
   const startedAt = Date.now();
 
   try {
+    // Lido uma vez por validação, para o mesmo valor valer do começo ao fim
+    const minTextLength = getMinTextLength();
+
+    // Desligada pelo servidor (0): não gasta tempo nem bateria reconhecendo o texto
+    if (minTextLength <= 0) {
+      return { isValid: true, textLength: 0 };
+    }
+
     const module = loadMlkitOcr();
     if (!module || !module.isSupported()) {
       return { isValid: true, textLength: 0 };
@@ -50,7 +60,7 @@ export const validateReceiptImage = async (
 
     const { text } = await module.recognizeText(uri);
     const textLength = text.replace(/\s/g, "").length;
-    const isValid = textLength >= MIN_TEXT_LENGTH;
+    const isValid = textLength >= minTextLength;
 
     logger.debug("Validação de imagem:", {
       textLength,
