@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { BillStatus, OcrJobStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -9,7 +9,7 @@ import { StorageService } from '../storage/storage.service';
 import { CreditsService } from '../credits/credits.service';
 
 @Injectable()
-export class OcrQueueService {
+export class OcrQueueService implements OnModuleInit {
   private readonly logger = new Logger(OcrQueueService.name);
   private readonly maxConcurrency = Number(
     process.env.OCR_QUEUE_CONCURRENCY ?? 2,
@@ -43,6 +43,29 @@ export class OcrQueueService {
     private readonly storage: StorageService,
     private readonly credits: CreditsService,
   ) {}
+
+  onModuleInit() {
+    this.avisarSePrazoDaReservaForCurto();
+  }
+
+  /**
+   * O prazo da reserva de crédito precisa cobrir o pior caso da fila, senão o
+   * crédito é devolvido com a leitura ainda rodando e a leitura sai de graça.
+   * A renovação a cada reivindicação já protege; este aviso existe para quem
+   * mexer nas configurações saber que elas estão ligadas.
+   */
+  private avisarSePrazoDaReservaForCurto() {
+    const piorCaso =
+      this.maxAttempts * this.lockTimeoutMs +
+      (this.maxAttempts - 1) * this.retryDelayMs;
+
+    if (this.credits.reservationTtl < piorCaso) {
+      this.logger.warn(
+        `CREDITS_RESERVATION_TTL_MS (${this.credits.reservationTtl}ms) é menor que o pior caso da fila (${piorCaso}ms). ` +
+          'A reserva é renovada a cada reivindicação, mas vale alinhar os dois valores.',
+      );
+    }
+  }
 
   async enqueue(billId: string, userId: string) {
     const job = await this.prisma.ocrJob.upsert({
@@ -173,6 +196,12 @@ export class OcrQueueService {
 
     if (updated.count === 0) {
       return null;
+    }
+
+    if (this.creditsEnforced) {
+      // Cada reivindicação adia o vencimento da reserva. Enquanto o trabalho
+      // estiver andando, o crédito não é devolvido por tempo.
+      await this.credits.renewReservation(job.id);
     }
 
     return job;

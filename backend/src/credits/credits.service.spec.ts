@@ -76,6 +76,7 @@ describe('CreditsService', () => {
         count: jest.fn().mockResolvedValue(0),
         findMany: jest.fn().mockResolvedValue([]),
         findUnique: jest.fn().mockResolvedValue(null),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
     };
 
@@ -477,6 +478,33 @@ describe('CreditsService', () => {
           actorId: 'admin-1',
         }),
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('renewReservation', () => {
+    it('adia o vencimento de uma reserva ainda em aberto', async () => {
+      const renovou = await service.renewReservation(ocrJobId);
+
+      expect(renovou).toBe(true);
+      expect(prisma.creditReservation.updateMany).toHaveBeenCalledWith({
+        where: { ocrJobId, status: CreditReservationStatus.HELD },
+        data: { expiresAt: expect.any(Date) },
+      });
+    });
+
+    it('não ressuscita reserva já fechada', async () => {
+      prisma.creditReservation.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(service.renewReservation(ocrJobId)).resolves.toBe(false);
+    });
+
+    it('o novo vencimento fica no futuro', async () => {
+      const antes = Date.now();
+
+      await service.renewReservation(ocrJobId);
+
+      const { data } = prisma.creditReservation.updateMany.mock.calls[0][0];
+      expect((data.expiresAt as Date).getTime()).toBeGreaterThan(antes);
     });
   });
 });

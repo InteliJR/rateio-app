@@ -93,6 +93,11 @@ export class CreditsService {
 
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Prazo de uma reserva, em milissegundos. Lido por quem precisa comparar com o próprio ciclo. */
+  get reservationTtl(): number {
+    return this.reservationTtlMs;
+  }
+
   /**
    * Saldo do usuário. Concede a cota gratuita na primeira consulta, de forma
    * idempotente, para que uma conta criada antes do ledger também receba.
@@ -262,6 +267,26 @@ export class CreditsService {
       1,
       reason ?? 'Falha na leitura: crédito devolvido',
     );
+  }
+
+  /**
+   * Adia o vencimento da reserva por mais um prazo cheio.
+   *
+   * Chamado toda vez que a fila reivindica o trabalho. Sem isso, o prazo da
+   * reserva e o tempo que a fila pode levar seriam dois números independentes:
+   * se a leitura demorasse mais que o prazo, o `releaseExpired` devolveria o
+   * crédito com a leitura ainda rodando, e o `consume` do fim não encontraria
+   * reserva em aberto. A pessoa receberia a leitura sem pagar, sem erro nenhum.
+   *
+   * Só mexe em reserva ainda em aberto, então não ressuscita reserva fechada.
+   */
+  async renewReservation(ocrJobId: string): Promise<boolean> {
+    const renovada = await this.prisma.creditReservation.updateMany({
+      where: { ocrJobId, status: CreditReservationStatus.HELD },
+      data: { expiresAt: new Date(Date.now() + this.reservationTtlMs) },
+    });
+
+    return renovada.count > 0;
   }
 
   /** Devolve reservas que ficaram penduradas, por exemplo após uma queda do processo. */
