@@ -172,6 +172,14 @@ export class PurchasesService {
    * Créditos da compra: valor por unidade do catálogo vezes a quantidade que a
    * Google registrou. Enquanto não creditada, `purchase.credits` guarda só o
    * valor por unidade; ao creditar, passa a guardar o total.
+   *
+   * O `?? purchase.credits` só vale para produto que saiu do catálogo
+   * (GOOGLE_PLAY_PRODUCTS) com a compra ainda pendente, quando `credits` é o
+   * valor por unidade. Compra já creditada não passa por aqui: a validação
+   * devolve o resultado antes e `reconcile` só consome o produto. Por isso
+   * `credits` nunca é o total neste ponto e a multiplicação não se repete.
+   * Se algum dia uma compra creditada voltar a ser revalidada, guarde o valor
+   * por unidade em coluna própria em vez de reaproveitar `credits`.
    */
   private totalCredits(purchase: Purchase, quantity = 1): number {
     if (!Number.isInteger(quantity) || quantity < 1) {
