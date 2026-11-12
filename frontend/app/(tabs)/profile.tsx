@@ -17,6 +17,7 @@ import { useAuthStore } from "../../store/authStore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../../contexts/ThemeContext";
 import { buildAvatarUrl } from "../../lib/avatar";
+import { CreditBalanceCard } from "../../components/credits/CreditBalanceCard";
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -172,6 +173,10 @@ export default function ProfileScreen() {
             {userEmail}
           </Text>
         )}
+      </View>
+
+      <View style={styles.creditsSection}>
+        <CreditBalanceCard />
       </View>
 
       {/* Menu Options */}
@@ -355,6 +360,9 @@ const styles = StyleSheet.create({
   userEmail: {
     fontSize: 14,
     color: "#999",
+  },
+  creditsSection: {
+    paddingHorizontal: 20,
   },
   menuContainer: {
     paddingHorizontal: 20,
