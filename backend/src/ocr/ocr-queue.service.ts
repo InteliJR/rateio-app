@@ -182,8 +182,11 @@ export class OcrQueueService {
     id: string;
     billId: string;
     attempts: number;
+    availableAt: Date;
     bill: { id: string; imageUrl: string | null; imageKey: string | null };
   }) {
+    const jobStartedAt = Date.now();
+    const queueWaitMs = jobStartedAt - job.availableAt.getTime();
     const imageUrl = await this.getProcessableImageUrl(job.bill);
 
     if (!imageUrl) {
@@ -194,6 +197,7 @@ export class OcrQueueService {
         false,
         0,
       );
+      this.logJobMetric(job, queueWaitMs, jobStartedAt, 0, 'failed');
       return;
     }
 
@@ -201,7 +205,9 @@ export class OcrQueueService {
     this.metrics.recordOcrStarted();
 
     try {
-      const ocrResult = await this.ocrService.processImage(imageUrl);
+      const ocrResult = await this.ocrService.processImage(imageUrl, {
+        jobId: job.id,
+      });
       await this.persistOcrResult(job.billId, ocrResult);
 
       if (this.creditsEnforced) {
@@ -225,6 +231,13 @@ export class OcrQueueService {
       this.logger.log(
         `OCR completed for bill ${job.billId} in ${durationMs}ms.`,
       );
+      this.logJobMetric(
+        job,
+        queueWaitMs,
+        jobStartedAt,
+        ocrResult.items.length,
+        'completed',
+      );
     } catch (error) {
       const durationMs = Date.now() - startedAt;
       const errorMessage =
@@ -238,7 +251,30 @@ export class OcrQueueService {
         shouldRetry,
         durationMs,
       );
+      this.logJobMetric(job, queueWaitMs, jobStartedAt, 0, 'failed');
     }
+  }
+
+  // Métrica da POC: apenas números, ids e status (sem dados da conta)
+  private logJobMetric(
+    job: { id: string; billId: string; attempts: number },
+    queueWaitMs: number,
+    jobStartedAt: number,
+    items: number,
+    status: 'completed' | 'failed',
+  ) {
+    this.logger.log(
+      `OCR_METRIC ${JSON.stringify({
+        stage: 'job',
+        jobId: job.id,
+        billId: job.billId,
+        attempt: job.attempts + 1,
+        queueWaitMs,
+        totalMs: Date.now() - jobStartedAt,
+        items,
+        status,
+      })}`,
+    );
   }
 
   private async getProcessableImageUrl(bill: {

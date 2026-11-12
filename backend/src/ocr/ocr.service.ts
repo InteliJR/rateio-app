@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   InternalServerErrorException,
   BadRequestException,
   ServiceUnavailableException,
@@ -54,10 +55,16 @@ export class OcrService {
   /**
    * Processar imagem e extrair texto via OCR
    */
-  async processImage(imageUrl: string): Promise<OcrResult> {
+  async processImage(
+    imageUrl: string,
+    context?: { jobId?: string },
+  ): Promise<OcrResult> {
     try {
       // 1. Fazer OCR da imagem com retry
+      let openaiCalls = 0;
+      const openaiStartedAt = Date.now();
       const response = await this.retryWithBackoff(async () => {
+        openaiCalls += 1;
         return await this.openaiClient.chat.completions.create({
           model: this.model,
           messages: [
@@ -81,6 +88,19 @@ export class OcrService {
           max_tokens: 2000,
         });
       }, imageUrl);
+
+      // Métrica da POC: apenas números, ids e nome do modelo (sem conteúdo)
+      this.logger.log(
+        `OCR_METRIC ${JSON.stringify({
+          stage: 'openai',
+          jobId: context?.jobId ?? null,
+          model: this.model,
+          openaiMs: Date.now() - openaiStartedAt,
+          attempts: openaiCalls,
+          promptTokens: response.usage?.prompt_tokens ?? null,
+          completionTokens: response.usage?.completion_tokens ?? null,
+        })}`,
+      );
 
       const responseContent = response.choices[0]?.message?.content || '';
 
