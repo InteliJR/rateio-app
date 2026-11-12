@@ -28,6 +28,28 @@ function sanitizeValue(val: unknown, seen = new WeakSet()): unknown {
       .replace(BEARER_REGEX, 'Bearer [REDACTED]');
   }
   if (typeof val !== 'object') return val;
+
+  // Error não tem campos enumeráveis (message/stack são próprios, mas não enumeráveis):
+  // sem este tratamento, logger.error('...', error) mostraria só {}.
+  // Mantém só dados técnicos (2.31); config/request/response do Axios ficam de fora,
+  // pois podem carregar o header Authorization e o corpo da requisição.
+  if (val instanceof Error) {
+    const err = val as Error & { code?: unknown; status?: unknown };
+    const result: Record<string, unknown> = {
+      name: err.name,
+      message: sanitizeValue(err.message, seen),
+      // O stack repete a mensagem: passa pela mesma sanitização de string
+      stack: sanitizeValue(err.stack, seen),
+    };
+    if (typeof err.code === 'string' || typeof err.code === 'number') {
+      result.code = err.code;
+    }
+    if (typeof err.status === 'number') {
+      result.status = err.status;
+    }
+    return result;
+  }
+
   if (seen.has(val as object)) return '[CIRCULAR]';
   seen.add(val as object);
 
