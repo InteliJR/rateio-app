@@ -1,4 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { readEnv } from '../config/read-env';
 import * as nodemailer from 'nodemailer';
 
 @Injectable()
@@ -6,20 +8,24 @@ export class MailService {
   private readonly logger = new Logger(MailService.name);
   private transporter: nodemailer.Transporter;
 
-  constructor() {
+  constructor(@Optional() private readonly configService?: ConfigService) {
+    // SMTP ausente gera aviso no boot (parseEnv); a falha ocorre só no envio
+    const port = readEnv(this.configService, 'SMTP_PORT');
     this.transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: parseInt(process.env.SMTP_PORT || '587', 10),
-      secure: process.env.SMTP_PORT === '465',
+      host: readEnv(this.configService, 'SMTP_HOST') || 'smtp.gmail.com',
+      port: parseInt(port || '587', 10),
+      secure: port === '465',
       auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
+        user: readEnv(this.configService, 'SMTP_USER'),
+        pass: readEnv(this.configService, 'SMTP_PASS'),
       },
     });
   }
 
   async sendPasswordResetEmail(email: string, token: string): Promise<void> {
-    const from = process.env.SMTP_FROM || 'Rateio App <noreply@rateio.app>';
+    const from =
+      readEnv(this.configService, 'SMTP_FROM') ||
+      'Rateio App <noreply@rateio.app>';
 
     const html = `
       <!DOCTYPE html>

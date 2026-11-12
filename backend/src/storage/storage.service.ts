@@ -3,6 +3,7 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import {
   S3Client,
@@ -17,6 +18,8 @@ import { extname } from 'path';
 import * as fs from 'fs';
 import * as path from 'path';
 import { assertImageSignature } from './file-signature';
+import { ConfigService } from '@nestjs/config';
+import { readEnv } from '../config/read-env';
 
 @Injectable()
 export class StorageService {
@@ -30,10 +33,12 @@ export class StorageService {
   private readonly publicBaseUrl: string;
   private readonly s3PublicBaseUrl: string;
 
-  constructor() {
-    this.bucketName = process.env.AWS_S3_BUCKET || '';
-    this.publicBaseUrl = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
-    this.s3PublicBaseUrl = (process.env.AWS_S3_PUBLIC_BASE_URL || '').replace(
+  constructor(@Optional() private readonly configService?: ConfigService) {
+    // Credenciais ausentes geram aviso no boot (parseEnv); a falha ocorre só no uso
+    const env = (name: string) => readEnv(this.configService, name);
+    this.bucketName = env('AWS_S3_BUCKET') || '';
+    this.publicBaseUrl = (env('PUBLIC_BASE_URL') || '').replace(/\/$/, '');
+    this.s3PublicBaseUrl = (env('AWS_S3_PUBLIC_BASE_URL') || '').replace(
       /\/$/,
       '',
     );
@@ -49,10 +54,10 @@ export class StorageService {
 
     if (this.useS3) {
       this.s3Client = new S3Client({
-        region: process.env.AWS_S3_REGION || 'us-east-1',
+        region: env('AWS_S3_REGION') || 'us-east-1',
         credentials: {
-          accessKeyId: process.env.AWS_S3_ACCESS_KEY || '',
-          secretAccessKey: process.env.AWS_S3_SECRET_KEY || '',
+          accessKeyId: env('AWS_S3_ACCESS_KEY') || '',
+          secretAccessKey: env('AWS_S3_SECRET_KEY') || '',
         },
       });
     } else {

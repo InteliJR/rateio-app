@@ -119,4 +119,28 @@ describe('AllExceptionsFilter', () => {
       process.env.NODE_ENV = originalEnv;
     }
   });
+  it('não deve registrar a mensagem interna do erro nem a query string no log fora de development', () => {
+    const originalEnv = process.env.NODE_ENV;
+    const errorSpy = jest
+      .spyOn((filter as any).logger, 'error')
+      .mockImplementation(() => undefined);
+    try {
+      process.env.NODE_ENV = 'production';
+      mockRequest.url = '/auth/reset?email=a@x.com&token=abc';
+      filter.catch(
+        new Error('column "password_hash" violates constraint; password=123'),
+        mockHost,
+      );
+
+      const logged = errorSpy.mock.calls.map((c) => String(c[0])).join('\n');
+      expect(logged).toContain('/auth/reset');
+      expect(logged).not.toContain('password_hash');
+      expect(logged).not.toContain('password=123');
+      expect(logged).not.toContain('a@x.com');
+      expect(logged).not.toContain('token=abc');
+    } finally {
+      process.env.NODE_ENV = originalEnv;
+      errorSpy.mockRestore();
+    }
+  });
 });

@@ -3,8 +3,9 @@
 
 const defaults: Record<string, string> = {
   DATABASE_URL: 'postgresql://ci:ci@localhost:55432/rateio_test',
-  JWT_SECRET: 'e2e-access-secret',
-  JWT_REFRESH_SECRET: 'e2e-refresh-secret',
+  // 32+ caracteres e diferentes entre si: exigência do parseEnv (Fase 1, requisito 2.1)
+  JWT_SECRET: 'e2e-access-secret-0123456789abcdef',
+  JWT_REFRESH_SECRET: 'e2e-refresh-secret-fedcba9876543210',
   OPENAI_API_KEY: 'sk-e2e-fake',
   OPENAI_MODEL: 'e2e-fake-model',
   INTERNAL_CRON_SECRET: 'e2e-cron-secret',

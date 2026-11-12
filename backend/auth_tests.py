@@ -4,11 +4,20 @@ import logging
 import time
 import subprocess
 import sys
+import os
 
 # --- Configuração ---
-BASE_URL = "http://localhost:3000"
-ADMIN_EMAIL = "admin@rateio.com"
-ADMIN_PASSWORD = "Admin@123456" # Assumindo a senha do seed.ts
+# Credenciais vêm do ambiente; nenhuma senha fica versionada (requisito 2.3).
+# Ex.: AUTH_TESTS_ADMIN_EMAIL=... AUTH_TESTS_ADMIN_PASSWORD=... python auth_tests.py
+BASE_URL = os.environ.get("AUTH_TESTS_BASE_URL", "http://localhost:3000")
+ADMIN_EMAIL = os.environ.get("AUTH_TESTS_ADMIN_EMAIL") or os.environ.get("SEED_USER_EMAIL")
+ADMIN_PASSWORD = os.environ.get("AUTH_TESTS_ADMIN_PASSWORD") or os.environ.get("SEED_USER_PASSWORD")
+
+if not ADMIN_EMAIL or not ADMIN_PASSWORD:
+    sys.exit(
+        "Defina AUTH_TESTS_ADMIN_EMAIL e AUTH_TESTS_ADMIN_PASSWORD "
+        "(ou SEED_USER_EMAIL e SEED_USER_PASSWORD) antes de rodar os testes."
+    )
 
 # Email de teste para usuário comum
 TEST_EMAIL = f"teste-py-{int(time.time())}@teste.com"
