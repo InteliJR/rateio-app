@@ -151,7 +151,12 @@ describe('PurchasesService', () => {
   });
 
   it('usa a quantidade confirmada quando a compra pendente é paga', async () => {
-    verifier.info = { state: 'PENDING', consumed: false, quantity: 2 };
+    verifier.info = {
+      state: 'PENDING',
+      consumed: false,
+      obfuscatedAccountId: 'user-1',
+      quantity: 2,
+    };
     await service.verifyGooglePurchase('user-1', dto);
 
     verifier.info = {
@@ -210,7 +215,7 @@ describe('PurchasesService', () => {
 
     expect(granter.grant).not.toHaveBeenCalled();
     expect(verifier.consumeCalls).toBe(0);
-    expect(prisma.rows.get('token-1').status).toBe(PurchaseStatus.REJECTED);
+    expect(prisma.rows.has('token-1')).toBe(false);
   });
 
   it('não reconcilia compra recusada por falta de identificação', async () => {
@@ -226,13 +231,14 @@ describe('PurchasesService', () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
-  it('mantém pendente a compra pendente sem identificação', async () => {
+  it('mantém pendente a compra pendente sem identificação, sem gravar', async () => {
     verifier.info = { state: 'PENDING', consumed: false };
 
     const result = await service.verifyGooglePurchase('user-1', dto);
 
     expect(result.status).toBe(PurchaseStatus.PENDING);
     expect(granter.grant).not.toHaveBeenCalled();
+    expect(prisma.rows.has('token-1')).toBe(false);
   });
 
   it('não credita de novo quando o token se repete', async () => {
@@ -270,7 +276,11 @@ describe('PurchasesService', () => {
   });
 
   it('rejeita compra cancelada e não credita', async () => {
-    verifier.info = { state: 'CANCELED', consumed: false };
+    verifier.info = {
+      state: 'CANCELED',
+      consumed: false,
+      obfuscatedAccountId: 'user-1',
+    };
 
     await expect(
       service.verifyGooglePurchase('user-1', dto),
@@ -280,8 +290,21 @@ describe('PurchasesService', () => {
     expect(granter.grant).not.toHaveBeenCalled();
   });
 
-  it('rejeita nova tentativa de uma compra já cancelada', async () => {
+  it('rejeita compra cancelada sem identificação, sem gravar', async () => {
     verifier.info = { state: 'CANCELED', consumed: false };
+
+    await expect(
+      service.verifyGooglePurchase('user-2', dto),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.rows.has('token-1')).toBe(false);
+  });
+
+  it('rejeita nova tentativa de uma compra já cancelada', async () => {
+    verifier.info = {
+      state: 'CANCELED',
+      consumed: false,
+      obfuscatedAccountId: 'user-1',
+    };
     await expect(
       service.verifyGooglePurchase('user-1', dto),
     ).rejects.toBeInstanceOf(BadRequestException);
@@ -329,10 +352,10 @@ describe('PurchasesService', () => {
       service.verifyGooglePurchase('user-1', dto),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(granter.grant).not.toHaveBeenCalled();
-    expect(prisma.rows.get('token-1').status).toBe(PurchaseStatus.REJECTED);
+    expect(prisma.rows.has('token-1')).toBe(false);
   });
 
-  it('não consulta a Google de novo para compra já recusada', async () => {
+  it('continua recusando quando a compra de outra conta é reenviada', async () => {
     verifier.info = {
       state: 'PURCHASED',
       consumed: false,
@@ -341,14 +364,84 @@ describe('PurchasesService', () => {
     await expect(
       service.verifyGooglePurchase('user-1', dto),
     ).rejects.toBeInstanceOf(ForbiddenException);
-
-    const spy = jest.spyOn(verifier, 'getProductPurchase');
     await expect(
       service.verifyGooglePurchase('user-1', dto),
     ).rejects.toBeInstanceOf(ForbiddenException);
 
-    expect(spy).not.toHaveBeenCalled();
     expect(granter.grant).not.toHaveBeenCalled();
+    expect(prisma.purchase.create).not.toHaveBeenCalled();
+  });
+
+  it('não deixa quem envia o token primeiro bloquear o dono real', async () => {
+    // A compra é do user-1 na Google; o user-2 tenta registrar antes.
+    await expect(
+      service.verifyGooglePurchase('user-2', dto),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.rows.has('token-1')).toBe(false);
+
+    const result = await service.verifyGooglePurchase('user-1', dto);
+
+    expect(result.status).toBe(PurchaseStatus.CREDITED);
+    expect(granter.grant).toHaveBeenCalledWith({
+      userId: 'user-1',
+      credits: 10,
+      reference: 'p1',
+    });
+    expect(prisma.rows.get('token-1').userId).toBe('user-1');
+  });
+
+  it.each([PurchaseStatus.PENDING, PurchaseStatus.REJECTED])(
+    'devolve ao dono real um token gravado antes em outra conta (%s)',
+    async (status) => {
+      prisma.rows.set('token-1', {
+        id: 'legado',
+        userId: 'user-2',
+        productId: 'credits_10',
+        purchaseToken: 'token-1',
+        orderId: null,
+        status,
+        credits: 10,
+        consumedAt: null,
+      });
+
+      const result = await service.verifyGooglePurchase('user-1', dto);
+
+      expect(result.status).toBe(PurchaseStatus.CREDITED);
+      expect(granter.grant).toHaveBeenCalledWith({
+        userId: 'user-1',
+        credits: 10,
+        reference: 'legado',
+      });
+      expect(prisma.rows.get('token-1').userId).toBe('user-1');
+    },
+  );
+
+  it('não mexe em compra já creditada a outra conta', async () => {
+    prisma.rows.set('token-1', {
+      id: 'legado',
+      userId: 'user-2',
+      productId: 'credits_10',
+      purchaseToken: 'token-1',
+      orderId: null,
+      status: PurchaseStatus.CREDITED,
+      credits: 10,
+      consumedAt: new Date(),
+    });
+
+    await expect(
+      service.verifyGooglePurchase('user-1', dto),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(granter.grant).not.toHaveBeenCalled();
+    expect(prisma.rows.get('token-1').userId).toBe('user-2');
+  });
+
+  it('consulta a Google uma única vez para uma compra nova', async () => {
+    const spy = jest.spyOn(verifier, 'getProductPurchase');
+
+    await service.verifyGooglePurchase('user-1', dto);
+
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 
   it('não reconcilia compra recusada', async () => {
@@ -384,7 +477,11 @@ describe('PurchasesService', () => {
   });
 
   it('reconcilia compra pendente que foi confirmada', async () => {
-    verifier.info = { state: 'PENDING', consumed: false };
+    verifier.info = {
+      state: 'PENDING',
+      consumed: false,
+      obfuscatedAccountId: 'user-1',
+    };
     await service.verifyGooglePurchase('user-1', dto);
 
     verifier.info = {
