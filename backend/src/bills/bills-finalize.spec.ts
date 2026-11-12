@@ -26,14 +26,7 @@ describe('BillsService - validateFinalize', () => {
       },
     };
 
-    service = new BillsService(
-      prismaMock,
-      {} as any,
-      {} as any,
-      {} as any,
-      {} as any,
-      {} as any,
-    );
+    service = new BillsService(prismaMock, {} as any, {} as any, {} as any);
   });
 
   it('deve rejeitar finalização com billItemId pertencente a outra conta (BUG-012 / Task 7.3)', async () => {
