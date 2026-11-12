@@ -13,12 +13,12 @@ import { CommonModule } from './common/common.module';
 import { StorageModule } from './storage/storage.module';
 import { OcrModule } from './ocr/ocr.module';
 import { BillsModule } from './bills/bills.module';
-import { BillItemsModule } from './bill-items/bill-items.module';
+
 import { ParticipantsModule } from './participants/participants.module';
 import { DivisionsModule } from './divisions/divisions.module';
 import { FeesModule } from './fees/fees.module';
-import { PurchasesModule } from './purchases/purchases.module';
 import { CreditsModule } from './credits/credits.module';
+import { PurchasesModule } from './purchases/purchases.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { MetricsInterceptor } from './observability/metrics.interceptor';
 
@@ -39,9 +39,7 @@ function getRateLimitConfig() {
     }),
     ScheduleModule.forRoot(),
     // Global rate limiting should be lenient enough for normal app usage.
-    ThrottlerModule.forRoot([
-      getRateLimitConfig(),
-    ]),
+    ThrottlerModule.forRoot([getRateLimitConfig()]),
     ObservabilityModule,
     PrismaModule,
     AuthModule,
@@ -51,12 +49,12 @@ function getRateLimitConfig() {
     StorageModule,
     OcrModule,
     BillsModule,
-    BillItemsModule,
+
     ParticipantsModule,
     DivisionsModule,
     FeesModule,
-    PurchasesModule,
     CreditsModule,
+    PurchasesModule,
   ],
   controllers: [AppController],
   providers: [

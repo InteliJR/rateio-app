@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   CreditPolicy,
   CreditReservationStatus,
@@ -61,6 +61,22 @@ export class InsufficientCreditsError extends Error {
   constructor(public readonly available: number) {
     super('Créditos insuficientes para iniciar a leitura');
     this.name = 'InsufficientCreditsError';
+  }
+}
+
+/** Erro de domínio: o ajuste deixaria o saldo disponível negativo. */
+export class NegativeBalanceError extends Error {
+  constructor(public readonly available: number) {
+    super('O ajuste deixaria o saldo negativo');
+    this.name = 'NegativeBalanceError';
+  }
+}
+
+/** Erro de domínio: a referência já foi usada em outro ajuste. */
+export class AdjustReferenceConflictError extends Error {
+  constructor() {
+    super('Referência já usada em outro ajuste');
+    this.name = 'AdjustReferenceConflictError';
   }
 }
 
@@ -323,7 +339,10 @@ export class CreditsService {
    * pede o critério de aceite do EPIC-02.
    *
    * `reference` permite que o suporte repita a chamada sem medo: a mesma
-   * referência não ajusta o saldo duas vezes.
+   * referência não ajusta o saldo duas vezes. Reusar a referência em outro
+   * ajuste é erro, para o suporte não achar que ajustou quando nada mudou.
+   *
+   * Não deixa o saldo disponível negativo.
    */
   async adminAdjust(input: {
     userId: string;
@@ -335,31 +354,81 @@ export class CreditsService {
     const idempotencyKey =
       input.reference ?? `admin:${input.userId}:${randomUUID()}`;
 
-    let applied = true;
+    let applied: boolean;
 
     try {
-      await this.prisma.creditTransaction.create({
-        data: {
-          userId: input.userId,
-          type: CreditTransactionType.ADMIN_ADJUST,
-          amount: input.amount,
-          idempotencyKey,
-          reason: input.reason,
-          actorId: input.actorId,
-        },
+      applied = await this.prisma.$transaction(async (tx) => {
+        // Mesma trava da reserva: ajuste e leitura simultâneos não furam o saldo.
+        const [user] = await tx.$queryRaw<{ id: string }[]>`
+          SELECT "id" FROM "users" WHERE "id" = ${input.userId} FOR UPDATE
+        `;
+        if (!user) {
+          throw new NotFoundException('Usuário não encontrado');
+        }
+
+        const existing = await tx.creditTransaction.findUnique({
+          where: { idempotencyKey },
+        });
+        if (existing) {
+          this.assertSameAdjust(existing, input);
+          return false;
+        }
+
+        const sum = await tx.creditTransaction.aggregate({
+          where: { userId: input.userId },
+          _sum: { amount: true },
+        });
+        const available = sum._sum.amount ?? 0;
+
+        if (available + input.amount < 0) {
+          throw new NegativeBalanceError(available);
+        }
+
+        await tx.creditTransaction.create({
+          data: {
+            userId: input.userId,
+            type: CreditTransactionType.ADMIN_ADJUST,
+            amount: input.amount,
+            idempotencyKey,
+            reason: input.reason,
+            actorId: input.actorId,
+          },
+        });
+        return true;
       });
     } catch (error) {
       if (!this.isUniqueViolation(error)) {
         throw error;
       }
+      // Mesma referência ao mesmo tempo para outro usuário: o outro já gravou.
+      const existing = await this.prisma.creditTransaction.findUniqueOrThrow({
+        where: { idempotencyKey },
+      });
+      this.assertSameAdjust(existing, input);
       applied = false;
     }
 
-    this.logger.log(
-      `Ajuste administrativo de ${input.amount} em ${input.userId} por ${input.actorId}: ${input.reason}`,
-    );
+    if (applied) {
+      // O motivo fica só no ledger: é texto livre e pode ter dado pessoal.
+      this.logger.log(
+        `Ajuste administrativo de ${input.amount} em ${input.userId} por ${input.actorId}`,
+      );
+    }
 
     return { applied, balance: await this.getBalance(input.userId) };
+  }
+
+  private assertSameAdjust(
+    existing: { userId: string; type: CreditTransactionType; amount: number },
+    input: { userId: string; amount: number },
+  ): void {
+    if (
+      existing.type !== CreditTransactionType.ADMIN_ADJUST ||
+      existing.userId !== input.userId ||
+      existing.amount !== input.amount
+    ) {
+      throw new AdjustReferenceConflictError();
+    }
   }
 
   private async settle(
