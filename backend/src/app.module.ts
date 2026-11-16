@@ -21,6 +21,7 @@ import { CreditsModule } from './credits/credits.module';
 import { PurchasesModule } from './purchases/purchases.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { MetricsInterceptor } from './observability/metrics.interceptor';
+import { parseEnv } from './config/env.schema';
 
 function getRateLimitConfig() {
   const ttl = Number(process.env.THROTTLE_TTL_MS ?? 60000);
@@ -36,6 +37,9 @@ function getRateLimitConfig() {
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      // Segunda barreira (testes, scripts ou entrypoints que não passem por main.ts):
+      // lança se os segredos JWT forem inválidos; avisos já são registrados no boot
+      validate: (raw) => parseEnv(raw).config,
     }),
     ScheduleModule.forRoot(),
     // Global rate limiting should be lenient enough for normal app usage.

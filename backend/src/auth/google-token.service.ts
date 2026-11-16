@@ -1,4 +1,6 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Optional, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { readEnv } from '../config/read-env';
 import { OAuth2Client } from 'google-auth-library';
 
 export interface VerifiedGoogleUser {
@@ -11,6 +13,8 @@ export interface VerifiedGoogleUser {
 @Injectable()
 export class GoogleTokenService {
   private readonly client = new OAuth2Client();
+
+  constructor(@Optional() private readonly configService?: ConfigService) {}
 
   async verifyIdToken(idToken: string): Promise<VerifiedGoogleUser> {
     const audiences = this.getAllowedAudiences();
@@ -62,7 +66,9 @@ export class GoogleTokenService {
 
   private getAllowedAudiences(): string[] {
     const raw =
-      process.env.GOOGLE_OAUTH_CLIENT_IDS || process.env.GOOGLE_OAUTH_CLIENT_ID || '';
+      readEnv(this.configService, 'GOOGLE_OAUTH_CLIENT_IDS') ||
+      readEnv(this.configService, 'GOOGLE_OAUTH_CLIENT_ID') ||
+      '';
 
     return raw
       .split(',')
