@@ -2,15 +2,15 @@
 //
 // Cria o primeiro ADMIN, somente com credenciais explícitas (requisitos 1.3 / 2.3):
 // - Se já existe ADMIN, não altera nada e sai com sucesso (seguro para rodar de novo).
-// - Sem SEED_USER_EMAIL / SEED_USER_PASSWORD, ou com senha < 12 caracteres, aborta sem criar.
+// - Sem SEED_USER_EMAIL / SEED_USER_PASSWORD válidos (ausentes, placeholders <...>, e-mail
+//   inválido ou senha < 12 caracteres), aborta sem criar.
 // - Nunca imprime a senha.
 // - Usa o mesmo pepper efetivo da API (process.env.PASSWORD_PEPPER || ''), para que o login funcione.
 import { PrismaClient, UserRole } from '@prisma/client';
 import * as argon2 from 'argon2';
+import { validateSeedCredentials } from '../src/config/seed-credentials';
 
 const prisma = new PrismaClient();
-
-const MIN_SEED_PASSWORD_LENGTH = 12;
 
 function fail(message: string): never {
   console.error(`❌ Seed abortado: ${message}`);
@@ -33,18 +33,10 @@ async function main() {
   const name = process.env.SEED_USER_NAME?.trim() || 'Admin Rateio';
   const password = process.env.SEED_USER_PASSWORD;
 
-  const missing = [
-    !email ? 'SEED_USER_EMAIL' : null,
-    !password ? 'SEED_USER_PASSWORD' : null,
-  ].filter(Boolean);
-  if (missing.length > 0) {
-    fail(`defina ${missing.join(' e ')} para criar o ADMIN.`);
-  }
-
-  if ((password as string).length < MIN_SEED_PASSWORD_LENGTH) {
-    fail(
-      `SEED_USER_PASSWORD deve ter ao menos ${MIN_SEED_PASSWORD_LENGTH} caracteres.`,
-    );
+  // Recusa ausentes, placeholders <...>, e-mail inválido e senha curta (sem citar valores)
+  const errors = validateSeedCredentials({ email, password });
+  if (errors.length > 0) {
+    fail(`${errors.join('; ')}. Nenhum ADMIN foi criado.`);
   }
 
   // Mesmo subset de validação de parseEnv: pepper ausente é aviso, não erro

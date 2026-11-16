@@ -1,15 +1,12 @@
 import * as fc from 'fast-check';
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 import {
   BOOLEAN_FLAGS,
   EnvValidationError,
   JWT_SECRET_MIN_LENGTH,
-  NUMERIC_SETTINGS,
   RawEnv,
-  deriveSecret,
   parseEnv,
-  resolveDerivedSecret,
 } from './env.schema';
 import { readEnv } from './read-env';
 
@@ -55,7 +52,6 @@ function toValue(state: SecretState): string | undefined {
 const OPTIONAL_VARS = [
   'DATABASE_URL',
   'PASSWORD_PEPPER',
-  'RESET_CODE_SECRET',
   'METRICS_TOKEN',
   'SMTP_USER',
   'SMTP_PASS',
@@ -134,11 +130,7 @@ describe('parseEnv (Property 3: validação de ambiente fail-fast)', () => {
           if (expected.length === 0) {
             expect(thrown).toBeUndefined();
             // Toda variável opcional vazia/ausente gera aviso nomeado
-            for (const name of [
-              'PASSWORD_PEPPER',
-              'RESET_CODE_SECRET',
-              'METRICS_TOKEN',
-            ]) {
+            for (const name of ['PASSWORD_PEPPER', 'METRICS_TOKEN']) {
               if (!env[name]) {
                 expect(warnings.some((w) => w.includes(name))).toBe(true);
               }
@@ -184,11 +176,8 @@ describe('parseEnv (Property 3: validação de ambiente fail-fast)', () => {
     );
   });
 
-  it('flags e numéricos inválidos viram aviso e voltam ao default, sem expor o valor', () => {
-    const flagNames = [
-      ...Object.keys(BOOLEAN_FLAGS),
-      ...Object.keys(NUMERIC_SETTINGS),
-    ];
+  it('flags inválidas viram aviso e voltam ao default, sem expor o valor', () => {
+    const flagNames = Object.keys(BOOLEAN_FLAGS);
     fc.assert(
       fc.property(
         fc.constantFrom(...flagNames),
@@ -199,11 +188,7 @@ describe('parseEnv (Property 3: validação de ambiente fail-fast)', () => {
             JWT_REFRESH_SECRET: 'b'.repeat(40),
             [name]: invalidValue,
           });
-          const expectedDefault =
-            name in BOOLEAN_FLAGS
-              ? BOOLEAN_FLAGS[name]
-              : String(NUMERIC_SETTINGS[name].default);
-          expect(config[name]).toBe(expectedDefault);
+          expect(config[name]).toBe(BOOLEAN_FLAGS[name]);
           const line = warnings.find((w) => w.includes(name));
           expect(line).toBeDefined();
           expect(line).not.toContain(invalidValue);
@@ -217,14 +202,87 @@ describe('parseEnv (Property 3: validação de ambiente fail-fast)', () => {
       JWT_SECRET: 'a'.repeat(40),
       JWT_REFRESH_SECRET: 'b'.repeat(40),
       HEALTH_STRICT_STATUS: 'true',
-      REFRESH_ROTATION_GRACE_SECONDS: '45',
-      RATE_LIMIT_STORE: 'memory',
+      REQUIRE_UPLOAD_SIZE: 'false',
+      UPLOAD_SIGNATURE_ENFORCE: 'true',
     });
     expect(config.HEALTH_STRICT_STATUS).toBe('true');
-    expect(config.REFRESH_ROTATION_GRACE_SECONDS).toBe('45');
+    expect(config.UPLOAD_SIGNATURE_ENFORCE).toBe('true');
     expect(
-      warnings.some((w) => /HEALTH_STRICT_STATUS|GRACE|RATE_LIMIT/.test(w)),
+      warnings.some((w) =>
+        /HEALTH_STRICT_STATUS|REQUIRE_UPLOAD_SIZE|UPLOAD_SIGNATURE_ENFORCE/.test(
+          w,
+        ),
+      ),
     ).toBe(false);
+  });
+});
+
+/**
+ * Guarda contra configuração "fantasma": variável citada no aviso de boot, na lista de
+ * flags ou no .env.example sem nenhum código que a leia. Alguém poderia ligar uma flag
+ * achando que ativou um comportamento que não existe.
+ */
+describe('só variáveis lidas pelo código aparecem na validação e no .env.example', () => {
+  const srcRoot = join(__dirname, '..');
+  const backendRoot = join(srcRoot, '..');
+
+  const listSources = (dir: string): string[] =>
+    readdirSync(dir).flatMap((entry) => {
+      const full = join(dir, entry);
+      if (statSync(full).isDirectory()) return listSources(full);
+      return /\.ts$/.test(entry) && !/\.spec\.ts$/.test(entry) ? [full] : [];
+    });
+
+  // Código da aplicação, fora de src/config (que só valida, não consome)
+  const appCode = [
+    ...listSources(srcRoot),
+    join(backendRoot, 'prisma', 'seed.ts'),
+  ]
+    .filter((file) => !file.includes(join('src', 'config')))
+    .map((file) => readFileSync(file, 'utf8'))
+    .join('\n');
+  const isRead = (name: string) => new RegExp(`\\b${name}\\b`).test(appCode);
+
+  // Lidas por bibliotecas/infra, não pelo código TypeScript da API
+  const readOutsideAppCode = new Set(['DIRECT_URL']);
+  // Já estavam no .env.example antes deste trabalho e não são lidas pelo código
+  // (provedores de OCR alternativos não implementados). Decisão da equipe: remover ou
+  // implementar. Não adicione nomes novos aqui.
+  const legacyUnread = new Set([
+    'GOOGLE_VISION_API_KEY',
+    'AWS_TEXTRACT_REGION',
+    'AWS_TEXTRACT_ACCESS_KEY',
+    'AWS_TEXTRACT_SECRET_KEY',
+  ]);
+
+  it('toda flag validada é lida pelo código', () => {
+    for (const name of Object.keys(BOOLEAN_FLAGS)) {
+      expect({ name, read: isRead(name) }).toEqual({ name, read: true });
+    }
+  });
+
+  it('todo aviso de boot cita uma variável lida pelo código', () => {
+    const { warnings } = parseEnv({
+      JWT_SECRET: 'a'.repeat(40),
+      JWT_REFRESH_SECRET: 'b'.repeat(40),
+      AWS_S3_PUBLIC_BASE_URL: 'https://cdn.exemplo.com',
+    });
+    for (const line of warnings) {
+      const name = line.split(' ')[1];
+      expect({ name, read: isRead(name) }).toEqual({ name, read: true });
+    }
+  });
+
+  it('toda variável do .env.example (inclusive comentada) é lida pelo código', () => {
+    const example = readFileSync(join(backendRoot, '.env.example'), 'utf8');
+    const names = [...example.matchAll(/^#?\s*([A-Z][A-Z0-9_]+)=/gm)].map(
+      (m) => m[1],
+    );
+    expect(names.length).toBeGreaterThan(0);
+    for (const name of names) {
+      if (readOutsideAppCode.has(name) || legacyUnread.has(name)) continue;
+      expect({ name, read: isRead(name) }).toEqual({ name, read: true });
+    }
   });
 });
 
@@ -244,33 +302,6 @@ describe('PASSWORD_PEPPER efetivo inalterado (3.11)', () => {
           original,
         );
       }),
-    );
-  });
-});
-
-describe('segredos derivados (HKDF)', () => {
-  it('é determinístico, tem 32 bytes e muda com o rótulo', () => {
-    fc.assert(
-      fc.property(hex(32, 64), (master) => {
-        const a = deriveSecret(master, 'RESET_CODE_SECRET');
-        expect(a).toMatch(/^[0-9a-f]{64}$/);
-        expect(deriveSecret(master, 'RESET_CODE_SECRET')).toBe(a);
-        expect(deriveSecret(master, 'LOCAL_FILES_SECRET')).not.toBe(a);
-        expect(a).not.toContain(master);
-      }),
-    );
-  });
-
-  it('usa o valor configurado quando presente e deriva quando ausente', () => {
-    const jwt = 'a'.repeat(40);
-    expect(
-      resolveDerivedSecret(
-        { JWT_SECRET: jwt, RESET_CODE_SECRET: 'x'.repeat(40) },
-        'RESET_CODE_SECRET',
-      ),
-    ).toBe('x'.repeat(40));
-    expect(resolveDerivedSecret({ JWT_SECRET: jwt }, 'RESET_CODE_SECRET')).toBe(
-      deriveSecret(jwt, 'RESET_CODE_SECRET'),
     );
   });
 });
