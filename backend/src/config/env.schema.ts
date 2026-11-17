@@ -1,4 +1,3 @@
-import { hkdfSync } from 'crypto';
 import { z } from 'zod';
 
 /**
@@ -8,7 +7,9 @@ import { z } from 'zod';
  * - Bloqueiam o boot APENAS `JWT_SECRET` e `JWT_REFRESH_SECRET` ausentes, com menos de
  *   32 caracteres ou iguais entre si (2.1).
  * - Todas as demais variáveis ausentes, vazias ou inválidas geram somente avisos (2.2, 3.22).
- *   Flags e numéricos inválidos voltam para o default documentado em `design.md`.
+ *   Flags com valor inválido voltam para o default (= comportamento atual).
+ * - Só entram aqui variáveis que o código de fato lê. Ao implementar uma flag nova
+ *   (Fases 2–5), adicione-a aqui junto com o código que a usa — nunca antes.
  * - Mensagens de erro e avisos contêm só NOMES de variáveis, nunca valores.
  * - Nenhum valor efetivo muda: `PASSWORD_PEPPER` continua sendo lido como hoje
  *   (`process.env.PASSWORD_PEPPER || ''`), sem transição ou rehash.
@@ -64,38 +65,13 @@ const blockingSchema = z
   });
 
 // ---------------------------------------------------------------------------
-// Avisos: flags de compatibilidade e numéricos (defaults = comportamento atual)
+// Avisos: flags de compatibilidade lidas pelo código (defaults = comportamento atual)
 // ---------------------------------------------------------------------------
 
 export const BOOLEAN_FLAGS: Record<string, 'true' | 'false'> = {
-  REQUIRE_CURRENT_PASSWORD: 'false',
-  REFRESH_ROTATION_ENABLED: 'false',
-  HEALTH_STRICT_STATUS: 'false',
-  REQUIRE_UPLOAD_SIZE: 'false',
-  UPLOAD_SIGNATURE_ENFORCE: 'false',
-  REQUIRE_EMAIL_VERIFICATION: 'false',
-};
-
-export const ENUM_FLAGS: Record<string, { values: string[]; default: string }> =
-  {
-    RATE_LIMIT_STORE: {
-      values: ['memory', 'postgres', 'redis'],
-      default: 'memory',
-    },
-  };
-
-export const NUMERIC_SETTINGS: Record<
-  string,
-  { default: number; min: number; max?: number }
-> = {
-  REFRESH_ROTATION_GRACE_SECONDS: { default: 60, min: 30, max: 60 },
-  REFRESH_TTL_DAYS: { default: 30, min: 1 },
-  RESET_CODE_TTL_MINUTES: { default: 15, min: 1 },
-  RESET_MAX_ATTEMPTS: { default: 5, min: 1 },
-  OCR_IMAGE_URL_TTL_SECONDS: { default: 120, min: 1 },
-  READ_URL_TTL_SECONDS: { default: 3600, min: 1 },
-  OCR_RAW_TEXT_RETENTION_DAYS: { default: 0, min: 0 },
-  BILL_IMAGE_RETENTION_DAYS: { default: 0, min: 0 },
+  HEALTH_STRICT_STATUS: 'false', // app.controller.ts
+  REQUIRE_UPLOAD_SIZE: 'false', // storage.service.ts
+  UPLOAD_SIGNATURE_ENFORCE: 'false', // file-signature.ts
 };
 
 function isBlank(value: string | undefined): boolean {
@@ -120,15 +96,6 @@ function collectWarnings(raw: RawEnv, config: EnvConfig): string[] {
       warning(
         'PASSWORD_PEPPER',
         'ausente: hashes usam pepper vazio (comportamento atual mantido; não configure sem plano de migração)',
-      ),
-    );
-  }
-
-  if (isBlank(raw.RESET_CODE_SECRET)) {
-    warnings.push(
-      warning(
-        'RESET_CODE_SECRET',
-        'ausente: será derivado de JWT_SECRET via HKDF',
       ),
     );
   }
@@ -217,29 +184,6 @@ function collectWarnings(raw: RawEnv, config: EnvConfig): string[] {
     }
   }
 
-  for (const [name, spec] of Object.entries(ENUM_FLAGS)) {
-    const value = raw[name];
-    if (value !== undefined && !spec.values.includes(value)) {
-      warnings.push(warning(name, `inválida: usando default ${spec.default}`));
-      config[name] = spec.default;
-    }
-  }
-
-  for (const [name, spec] of Object.entries(NUMERIC_SETTINGS)) {
-    const value = raw[name];
-    if (value === undefined) continue;
-    const parsed = Number(value);
-    const valid =
-      value.trim() !== '' &&
-      Number.isInteger(parsed) &&
-      parsed >= spec.min &&
-      (spec.max === undefined || parsed <= spec.max);
-    if (!valid) {
-      warnings.push(warning(name, `inválida: usando default ${spec.default}`));
-      config[name] = String(spec.default);
-    }
-  }
-
   return warnings;
 }
 
@@ -268,24 +212,4 @@ export function parseEnv(raw: RawEnv): ParsedEnv {
   const config = { ...raw } as EnvConfig;
   const warnings = collectWarnings(raw, config);
   return { config, warnings };
-}
-
-/**
- * Deriva um segredo de 32 bytes (hex) a partir de um segredo mestre via HKDF-SHA256.
- * Usado como fallback seguro para segredos novos (ex.: RESET_CODE_SECRET, LOCAL_FILES_SECRET).
- */
-export function deriveSecret(masterSecret: string, info: string): string {
-  return Buffer.from(
-    hkdfSync('sha256', masterSecret, 'rateio-api', info, 32),
-  ).toString('hex');
-}
-
-/** Segredo efetivo: o configurado, ou derivado de JWT_SECRET quando ausente. */
-export function resolveDerivedSecret(env: RawEnv, name: string): string {
-  const configured = env[name];
-  if (!isBlank(configured)) return configured as string;
-  if (isBlank(env.JWT_SECRET)) {
-    throw new EnvValidationError(['JWT_SECRET'], ['JWT_SECRET (missing)']);
-  }
-  return deriveSecret(env.JWT_SECRET as string, name);
 }

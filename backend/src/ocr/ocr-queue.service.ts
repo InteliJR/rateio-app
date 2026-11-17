@@ -6,6 +6,7 @@ import { MetricsService } from '../observability/metrics.service';
 import { OcrResultDto } from './dto/ocr-result.dto';
 import { OcrService } from './ocr.service';
 import { StorageService } from '../storage/storage.service';
+import { CreditsService } from '../credits/credits.service';
 
 @Injectable()
 export class OcrQueueService {
@@ -28,15 +29,23 @@ export class OcrQueueService {
   );
   private activeWorkers = 0;
 
+  /**
+   * Enquanto estiver desligado, o ledger não é tocado pela fila: a cobrança só
+   * passa a valer depois de validada. Ligar por configuração, sem nova publicação.
+   */
+  private readonly creditsEnforced =
+    process.env.CREDITS_ENFORCEMENT_ENABLED === 'true';
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly ocrService: OcrService,
     private readonly metrics: MetricsService,
     private readonly storage: StorageService,
+    private readonly credits: CreditsService,
   ) {}
 
   async enqueue(billId: string, userId: string) {
-    await this.prisma.ocrJob.upsert({
+    const job = await this.prisma.ocrJob.upsert({
       where: { billId },
       create: {
         billId,
@@ -54,6 +63,12 @@ export class OcrQueueService {
         availableAt: new Date(),
       },
     });
+
+    if (this.creditsEnforced) {
+      // Reserva antes de processar. Uma reserva por trabalho, então as
+      // retentativas automáticas reaproveitam a mesma e não cobram de novo.
+      await this.credits.reserve(userId, job.id);
+    }
 
     this.metrics.recordOcrQueued();
   }
@@ -189,6 +204,11 @@ export class OcrQueueService {
       const ocrResult = await this.ocrService.processImage(imageUrl);
       await this.persistOcrResult(job.billId, ocrResult);
 
+      if (this.creditsEnforced) {
+        // Leitura utilizável: só agora o crédito reservado é efetivamente gasto.
+        await this.credits.consume(job.id);
+      }
+
       const durationMs = Date.now() - startedAt;
       this.metrics.recordOcrCompleted(durationMs);
 
@@ -300,6 +320,11 @@ export class OcrQueueService {
         `OCR failed for bill ${billId}. Scheduled retry. Error: ${errorMessage}`,
       );
       return;
+    }
+
+    if (this.creditsEnforced) {
+      // Falha definitiva: o usuário não paga por uma leitura sem resultado.
+      await this.credits.release(jobId, `Falha na leitura: ${errorMessage}`);
     }
 
     await this.prisma.$transaction(async (tx) => {

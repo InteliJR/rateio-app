@@ -1,25 +1,24 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
-import request from 'supertest';
-import { App } from 'supertest/types';
-import { AppModule } from './../src/app.module';
+import { SmokeApp, createSmokeApp } from './support/smoke-app';
 
 describe('AppController (e2e)', () => {
-  let app: INestApplication<App>;
+  let smoke: SmokeApp;
 
-  beforeEach(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
+  beforeAll(async () => {
+    smoke = await createSmokeApp();
+  });
 
-    app = moduleFixture.createNestApplication();
-    await app.init();
+  afterAll(async () => {
+    await smoke.close();
   });
 
   it('/ (GET)', () => {
-    return request(app.getHttpServer())
-      .get('/')
-      .expect(200)
-      .expect('Hello World!');
+    return smoke.http().get('/').expect(200).expect('Hello World!');
+  });
+
+  it('/health (GET)', async () => {
+    const response = await smoke.http().get('/health').expect(200);
+
+    expect(response.body.status).toBe('ok');
+    expect(response.body.database.status).toBe('connected');
   });
 });
