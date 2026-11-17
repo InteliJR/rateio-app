@@ -317,9 +317,22 @@ export class FakePrisma {
     return value;
   }
 
+  /**
+   * Relógio estritamente crescente para createdAt. Sem ele, registros criados no mesmo
+   * milissegundo (comum em máquinas rápidas) empatam na ordenação por data e a ordem
+   * passa a depender da velocidade da máquina, tornando os testes instáveis.
+   */
+  private lastTimestamp = 0;
+
+  private nextTimestamp(): Date {
+    const t = Math.max(Date.now(), this.lastTimestamp + 1);
+    this.lastTimestamp = t;
+    return new Date(t);
+  }
+
   private buildRow(model: string, data: Row): Row {
     const meta = this.meta(model);
-    const now = new Date();
+    const now = this.nextTimestamp();
     const row: Row = { id: randomUUID(), ...meta.defaults(), createdAt: now };
     if (meta.updatedAt) row.updatedAt = now;
     for (const [field, value] of Object.entries(data)) {
