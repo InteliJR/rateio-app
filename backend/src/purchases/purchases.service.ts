@@ -11,6 +11,9 @@ import { CreditsGranter } from './credits-granter';
 import { getProductCredits } from './purchase-products';
 import { VerifyGooglePurchaseDto } from './dto/verify-google-purchase.dto';
 
+/** Limite da coluna Int (32 bits) onde os créditos são gravados. */
+const MAX_CREDITS = 2_147_483_647;
+
 export interface PurchaseResult {
   status: PurchaseStatus;
   productId: string;
@@ -103,6 +106,7 @@ export class PurchasesService {
     const info = await this.verifier.getProductPurchase(
       purchase.productId,
       purchase.purchaseToken,
+      userId,
     );
 
     if (info.obfuscatedAccountId && info.obfuscatedAccountId !== userId) {
@@ -126,11 +130,24 @@ export class PurchasesService {
       throw new BadRequestException('Compra cancelada');
     }
 
+    if (!info.obfuscatedAccountId) {
+      // O app deve enviar o id do usuário (obfuscatedAccountId) ao iniciar a
+      // compra; sem ele não há como provar de quem ela é. A Google reembolsa
+      // compras não consumidas, então o usuário não fica sem o dinheiro.
+      await this.prisma.purchase.update({
+        where: { id: purchase.id },
+        data: { status: PurchaseStatus.REJECTED },
+      });
+      throw new BadRequestException('Compra sem identificação da conta');
+    }
+
+    const credits = this.totalCredits(purchase, info.quantity);
+
     // O ledger deve ser idempotente por `reference`; assim, requisições
     // concorrentes com o mesmo token não somam créditos duas vezes.
     await this.credits.grant({
       userId,
-      credits: purchase.credits,
+      credits,
       reference: purchase.id,
     });
 
@@ -138,6 +155,7 @@ export class PurchasesService {
       where: { id: purchase.id },
       data: {
         status: PurchaseStatus.CREDITED,
+        credits,
         orderId: info.orderId ?? purchase.orderId,
         consumedAt: info.consumed ? new Date() : purchase.consumedAt,
       },
@@ -148,6 +166,32 @@ export class PurchasesService {
     }
 
     return this.toResult(credited, false);
+  }
+
+  /**
+   * Créditos da compra: valor por unidade do catálogo vezes a quantidade que a
+   * Google registrou. Enquanto não creditada, `purchase.credits` guarda só o
+   * valor por unidade; ao creditar, passa a guardar o total.
+   *
+   * O `?? purchase.credits` só vale para produto que saiu do catálogo
+   * (GOOGLE_PLAY_PRODUCTS) com a compra ainda pendente, quando `credits` é o
+   * valor por unidade. Compra já creditada não passa por aqui: a validação
+   * devolve o resultado antes e `reconcile` só consome o produto. Por isso
+   * `credits` nunca é o total neste ponto e a multiplicação não se repete.
+   * Se algum dia uma compra creditada voltar a ser revalidada, guarde o valor
+   * por unidade em coluna própria em vez de reaproveitar `credits`.
+   */
+  private totalCredits(purchase: Purchase, quantity = 1): number {
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      throw new BadRequestException('Quantidade da compra inválida');
+    }
+
+    const perUnit = getProductCredits(purchase.productId) ?? purchase.credits;
+    const total = perUnit * quantity;
+    if (!Number.isSafeInteger(total) || total > MAX_CREDITS) {
+      throw new BadRequestException('Quantidade da compra inválida');
+    }
+    return total;
   }
 
   /** Consumir libera o produto para nova compra; falha aqui não desfaz o crédito. */

@@ -8,7 +8,11 @@ import {
 import { CreditsGranter } from './credits-granter';
 
 class FakeGooglePlayVerifier extends GooglePlayVerifier {
-  info: GooglePurchaseInfo = { state: 'PURCHASED', consumed: false };
+  info: GooglePurchaseInfo = {
+    state: 'PURCHASED',
+    consumed: false,
+    obfuscatedAccountId: 'user-1',
+  };
   consumeFails = false;
   consumeCalls = 0;
 
@@ -111,6 +115,126 @@ describe('PurchasesService', () => {
     expect(prisma.rows.get('token-1').consumedAt).toBeInstanceOf(Date);
   });
 
+  it('credita créditos por unidade vezes a quantidade comprada', async () => {
+    verifier.info = {
+      state: 'PURCHASED',
+      consumed: false,
+      obfuscatedAccountId: 'user-1',
+      quantity: 3,
+    };
+
+    const result = await service.verifyGooglePurchase('user-1', dto);
+
+    expect(result.credits).toBe(30);
+    expect(granter.grant).toHaveBeenCalledWith({
+      userId: 'user-1',
+      credits: 30,
+      reference: 'p1',
+    });
+    expect(prisma.rows.get('token-1').credits).toBe(30);
+  });
+
+  it('retorna o total creditado quando o token se repete', async () => {
+    verifier.info = {
+      state: 'PURCHASED',
+      consumed: false,
+      obfuscatedAccountId: 'user-1',
+      quantity: 3,
+    };
+    await service.verifyGooglePurchase('user-1', dto);
+
+    const result = await service.verifyGooglePurchase('user-1', dto);
+
+    expect(result.alreadyCredited).toBe(true);
+    expect(result.credits).toBe(30);
+    expect(granter.grant).toHaveBeenCalledTimes(1);
+  });
+
+  it('usa a quantidade confirmada quando a compra pendente é paga', async () => {
+    verifier.info = { state: 'PENDING', consumed: false, quantity: 2 };
+    await service.verifyGooglePurchase('user-1', dto);
+
+    verifier.info = {
+      state: 'PURCHASED',
+      consumed: false,
+      obfuscatedAccountId: 'user-1',
+      quantity: 2,
+    };
+    const reconciled = await service.reconcile('user-1');
+
+    expect(reconciled[0].credits).toBe(20);
+    expect(granter.grant).toHaveBeenCalledWith({
+      userId: 'user-1',
+      credits: 20,
+      reference: 'p1',
+    });
+  });
+
+  it.each([0, -1, 1.5])(
+    'rejeita quantidade inválida (%s) sem creditar',
+    async (quantity) => {
+      verifier.info = {
+        state: 'PURCHASED',
+        consumed: false,
+        obfuscatedAccountId: 'user-1',
+        quantity,
+      };
+
+      await expect(
+        service.verifyGooglePurchase('user-1', dto),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(granter.grant).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejeita quantidade que estoura o limite de créditos', async () => {
+    verifier.info = {
+      state: 'PURCHASED',
+      consumed: false,
+      obfuscatedAccountId: 'user-1',
+      quantity: 1_000_000_000,
+    };
+
+    await expect(
+      service.verifyGooglePurchase('user-1', dto),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(granter.grant).not.toHaveBeenCalled();
+  });
+
+  it('rejeita compra sem identificação da conta e não credita', async () => {
+    verifier.info = { state: 'PURCHASED', consumed: false };
+
+    await expect(
+      service.verifyGooglePurchase('user-1', dto),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(granter.grant).not.toHaveBeenCalled();
+    expect(verifier.consumeCalls).toBe(0);
+    expect(prisma.rows.get('token-1').status).toBe(PurchaseStatus.REJECTED);
+  });
+
+  it('não reconcilia compra recusada por falta de identificação', async () => {
+    verifier.info = { state: 'PURCHASED', consumed: false };
+    await expect(
+      service.verifyGooglePurchase('user-1', dto),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    const spy = jest.spyOn(verifier, 'getProductPurchase');
+    const reconciled = await service.reconcile('user-1');
+
+    expect(reconciled).toEqual([]);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('mantém pendente a compra pendente sem identificação', async () => {
+    verifier.info = { state: 'PENDING', consumed: false };
+
+    const result = await service.verifyGooglePurchase('user-1', dto);
+
+    expect(result.status).toBe(PurchaseStatus.PENDING);
+    expect(granter.grant).not.toHaveBeenCalled();
+  });
+
   it('não credita de novo quando o token se repete', async () => {
     await service.verifyGooglePurchase('user-1', dto);
     const result = await service.verifyGooglePurchase('user-1', dto);
@@ -134,7 +258,11 @@ describe('PurchasesService', () => {
     verifier.info = { state: 'PENDING', consumed: false };
     await service.verifyGooglePurchase('user-1', dto);
 
-    verifier.info = { state: 'PURCHASED', consumed: false };
+    verifier.info = {
+      state: 'PURCHASED',
+      consumed: false,
+      obfuscatedAccountId: 'user-1',
+    };
     const result = await service.verifyGooglePurchase('user-1', dto);
 
     expect(result.status).toBe(PurchaseStatus.CREDITED);
@@ -158,7 +286,11 @@ describe('PurchasesService', () => {
       service.verifyGooglePurchase('user-1', dto),
     ).rejects.toBeInstanceOf(BadRequestException);
 
-    verifier.info = { state: 'PURCHASED', consumed: false };
+    verifier.info = {
+      state: 'PURCHASED',
+      consumed: false,
+      obfuscatedAccountId: 'user-1',
+    };
     await expect(
       service.verifyGooglePurchase('user-1', dto),
     ).rejects.toBeInstanceOf(BadRequestException);
@@ -255,7 +387,11 @@ describe('PurchasesService', () => {
     verifier.info = { state: 'PENDING', consumed: false };
     await service.verifyGooglePurchase('user-1', dto);
 
-    verifier.info = { state: 'PURCHASED', consumed: false };
+    verifier.info = {
+      state: 'PURCHASED',
+      consumed: false,
+      obfuscatedAccountId: 'user-1',
+    };
     const reconciled = await service.reconcile('user-1');
 
     expect(reconciled[0].status).toBe(PurchaseStatus.CREDITED);
