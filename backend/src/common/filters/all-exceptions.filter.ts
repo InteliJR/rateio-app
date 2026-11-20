@@ -27,14 +27,19 @@ export class AllExceptionsFilter implements ExceptionFilter {
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message: string | object = 'Erro interno do servidor';
     let errorType = 'InternalServerError';
+    // Corpo de HttpException idêntico ao do Nest em produção (requisito 2.12): o app
+    // antigo recebe exatamente o mesmo formato. O requestId vai só no cabeçalho X-Request-Id.
+    let httpExceptionBody: object | undefined;
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
       const res = exception.getResponse();
       if (typeof res === 'object' && res !== null) {
+        httpExceptionBody = res;
         message = (res as any).message || res;
         errorType = (res as any).error || exception.name;
       } else {
+        httpExceptionBody = { statusCode: status, message: res };
         message = res;
         errorType = exception.name;
       }
@@ -92,11 +97,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
       this.logger.warn(JSON.stringify(redact(logPayload)));
     }
 
+    if (httpExceptionBody) {
+      response.status(status).json(httpExceptionBody);
+      return;
+    }
+
     response.status(status).json({
       statusCode: status,
       message,
       error: errorType,
-      requestId,
     });
   }
 }

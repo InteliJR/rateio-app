@@ -1,4 +1,9 @@
-import { HttpException, HttpStatus } from '@nestjs/common';
+import {
+  ConflictException,
+  HttpException,
+  HttpStatus,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { AllExceptionsFilter } from './all-exceptions.filter';
 
 describe('AllExceptionsFilter', () => {
@@ -36,13 +41,28 @@ describe('AllExceptionsFilter', () => {
     filter.catch(exception, mockHost);
 
     expect(mockResponse.status).toHaveBeenCalledWith(HttpStatus.FORBIDDEN);
-    expect(mockResponse.json).toHaveBeenCalledWith(
-      expect.objectContaining({
-        statusCode: HttpStatus.FORBIDDEN,
-        message: 'Acesso proibido',
-        requestId: 'req-abc-123',
-      }),
-    );
+    // Corpo idêntico ao padrão do Nest (2.12): sem campos extras como requestId
+    expect(mockResponse.json).toHaveBeenCalledWith({
+      statusCode: HttpStatus.FORBIDDEN,
+      message: 'Acesso proibido',
+    });
+  });
+
+  it('deve devolver o corpo original da HttpException sem inventar campos', () => {
+    // Ex.: 401 do passport em produção: { message: 'Unauthorized', statusCode: 401 }
+    filter.catch(new UnauthorizedException(), mockHost);
+    expect(mockResponse.status).toHaveBeenCalledWith(HttpStatus.UNAUTHORIZED);
+    expect(mockResponse.json).toHaveBeenCalledWith({
+      message: 'Unauthorized',
+      statusCode: 401,
+    });
+
+    filter.catch(new ConflictException('Email já cadastrado'), mockHost);
+    expect(mockResponse.json).toHaveBeenLastCalledWith({
+      message: 'Email já cadastrado',
+      error: 'Conflict',
+      statusCode: 409,
+    });
   });
 
   it('deve converter erro P2002 do Prisma em 409 Conflict', () => {

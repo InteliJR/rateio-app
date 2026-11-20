@@ -26,7 +26,8 @@
     "test:db:up": "bash scripts/test-db.sh up",
     "test:db:down": "bash scripts/test-db.sh down",
     "seed": "ts-node -r tsconfig-paths/register prisma/seed.ts",
-    "check:env": "ts-node -r tsconfig-paths/register scripts/check-env.ts"
+    "check:env": "ts-node -r tsconfig-paths/register scripts/check-env.ts",
+    "test:security": "jest --config ./test/jest-security.json"
   },
   "prisma": {
     "seed": "ts-node -r tsconfig-paths/register prisma/seed.ts"

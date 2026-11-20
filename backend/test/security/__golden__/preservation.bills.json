@@ -1,0 +1,1168 @@
+{
+  "description": "Comportamento observado na produção (origin/main). Gerado por PRESERVATION_MODE=record; não editar à mão.",
+  "observations": {
+    "finalize.0": {
+      "status": 201,
+      "summary": {
+        "subtotal": 1933.8400000000001,
+        "totalFees": 96.69,
+        "grandTotal": 2030.5300000000002
+      },
+      "participantTotals": [
+        {
+          "subtotal": 1933.84,
+          "fees": 96.69,
+          "total": 2030.53
+        }
+      ],
+      "billStatus": "COMPLETED",
+      "feesPersisted": 1,
+      "error": null
+    },
+    "finalize.1": {
+      "status": 201,
+      "summary": {
+        "subtotal": 2327.04,
+        "totalFees": 0,
+        "grandTotal": 2327.04
+      },
+      "participantTotals": [
+        {
+          "subtotal": 2327.04,
+          "fees": 0,
+          "total": 2327.04
+        }
+      ],
+      "billStatus": "COMPLETED",
+      "feesPersisted": 0,
+      "error": null
+    },
+    "finalize.2": {
+      "status": 201,
+      "summary": {
+        "subtotal": 2327.6499999999996,
+        "totalFees": 442.25,
+        "grandTotal": 2769.8999999999996
+      },
+      "participantTotals": [
+        {
+          "subtotal": 1163.82,
+          "fees": 221.12,
+          "total": 1384.94
+        },
+        {
+          "subtotal": 1163.83,
+          "fees": 221.13,
+          "total": 1384.96
+        }
+      ],
+      "billStatus": "COMPLETED",
+      "feesPersisted": 1,
+      "error": null
+    },
+    "finalize.3": {
+      "status": 201,
+      "summary": {
+        "subtotal": 822.3,
+        "totalFees": 65.78,
+        "grandTotal": 888.0799999999999
+      },
+      "participantTotals": [
+        {
+          "subtotal": 411.15,
+          "fees": 32.89,
+          "total": 444.04
+        },
+        {
+          "subtotal": 411.15,
+          "fees": 32.89,
+          "total": 444.04
+        }
+      ],
+      "billStatus": "COMPLETED",
+      "feesPersisted": 1,
+      "error": null
+    },
+    "finalize.4": {
+      "status": 201,
+      "summary": {
+        "subtotal": 2719.21,
+        "totalFees": 244.73,
+        "grandTotal": 2963.94
+      },
+      "participantTotals": [
+        {
+          "subtotal": 2719.21,
+          "fees": 244.73,
+          "total": 2963.94
+        }
+      ],
+      "billStatus": "COMPLETED",
+      "feesPersisted": 1,
+      "error": null
+    },
+    "finalize.5": {
+      "status": 201,
+      "summary": {
+        "subtotal": 1650.9900000000002,
+        "totalFees": 0,
+        "grandTotal": 1650.9900000000002
+      },
+      "participantTotals": [
+        {
+          "subtotal": 825.49,
+          "fees": 0,
+          "total": 825.49
+        },
+        {
+          "subtotal": 825.5,
+          "fees": 0,
+          "total": 825.5
+        }
+      ],
+      "billStatus": "COMPLETED",
+      "feesPersisted": 0,
+      "error": null
+    },
+    "finalize.6": {
+      "status": 201,
+      "summary": {
+        "subtotal": 2803.65,
+        "totalFees": 364.47,
+        "grandTotal": 3168.12
+      },
+      "participantTotals": [
+        {
+          "subtotal": 1401.82,
+          "fees": 182.23,
+          "total": 1584.05
+        },
+        {
+          "subtotal": 1401.83,
+          "fees": 182.24,
+          "total": 1584.07
+        }
+      ],
+      "billStatus": "COMPLETED",
+      "feesPersisted": 1,
+      "error": null
+    },
+    "finalize.7": {
+      "status": 201,
+      "summary": {
+        "subtotal": 418.27,
+        "totalFees": 12.55,
+        "grandTotal": 430.82
+      },
+      "participantTotals": [
+        {
+          "subtotal": 209.13,
+          "fees": 6.27,
+          "total": 215.4
+        },
+        {
+          "subtotal": 209.14,
+          "fees": 6.28,
+          "total": 215.42
+        }
+      ],
+      "billStatus": "COMPLETED",
+      "feesPersisted": 1,
+      "error": null
+    },
+    "finalize.8": {
+      "status": 201,
+      "summary": {
+        "subtotal": 1778.38,
+        "totalFees": 283.73,
+        "grandTotal": 2062.11
+      },
+      "participantTotals": [
+        {
+          "subtotal": 592.78,
+          "fees": 94.58,
+          "total": 687.36
+        },
+        {
+          "subtotal": 592.78,
+          "fees": 94.58,
+          "total": 687.36
+        },
+        {
+          "subtotal": 592.82,
+          "fees": 94.57,
+          "total": 687.39
+        }
+      ],
+      "billStatus": "COMPLETED",
+      "feesPersisted": 2,
+      "error": null
+    },
+    "finalize.9": {
+      "status": 201,
+      "summary": {
+        "subtotal": 1552.09,
+        "totalFees": 0,
+        "grandTotal": 1552.09
+      },
+      "participantTotals": [
+        {
+          "subtotal": 776.04,
+          "fees": 0,
+          "total": 776.04
+        },
+        {
+          "subtotal": 776.05,
+          "fees": 0,
+          "total": 776.05
+        }
+      ],
+      "billStatus": "COMPLETED",
+      "feesPersisted": 0,
+      "error": null
+    },
+    "finalize.10": {
+      "status": 201,
+      "summary": {
+        "subtotal": 317.85,
+        "totalFees": 19.07,
+        "grandTotal": 336.92
+      },
+      "participantTotals": [
+        {
+          "subtotal": 105.95,
+          "fees": 6.36,
+          "total": 112.31
+        },
+        {
+          "subtotal": 105.95,
+          "fees": 6.36,
+          "total": 112.31
+        },
+        {
+          "subtotal": 105.95,
+          "fees": 6.35,
+          "total": 112.3
+        }
+      ],
+      "billStatus": "COMPLETED",
+      "feesPersisted": 1,
+      "error": null
+    },
+    "finalize.11": {
+      "status": 201,
+      "summary": {
+        "subtotal": 414.95,
+        "totalFees": 0,
+        "grandTotal": 414.95
+      },
+      "participantTotals": [
+        {
+          "subtotal": 414.95,
+          "fees": 0,
+          "total": 414.95
+        }
+      ],
+      "billStatus": "COMPLETED",
+      "feesPersisted": 0,
+      "error": null
+    },
+    "finalize.12": {
+      "status": 201,
+      "summary": {
+        "subtotal": 1495.1899999999998,
+        "totalFees": 134.57,
+        "grandTotal": 1629.7599999999998
+      },
+      "participantTotals": [
+        {
+          "subtotal": 373.79,
+          "fees": 33.64,
+          "total": 407.43
+        },
+        {
+          "subtotal": 373.79,
+          "fees": 33.64,
+          "total": 407.43
+        },
+        {
+          "subtotal": 373.79,
+          "fees": 33.64,
+          "total": 407.43
+        },
+        {
+          "subtotal": 373.82,
+          "fees": 33.65,
+          "total": 407.47
+        }
+      ],
+      "billStatus": "COMPLETED",
+      "feesPersisted": 1,
+      "error": null
+    },
+    "finalize.13": {
+      "status": 201,
+      "summary": {
+        "subtotal": 1626.97,
+        "totalFees": 0,
+        "grandTotal": 1626.97
+      },
+      "participantTotals": [
+        {
+          "subtotal": 1626.97,
+          "fees": 0,
+          "total": 1626.97
+        }
+      ],
+      "billStatus": "COMPLETED",
+      "feesPersisted": 0,
+      "error": null
+    },
+    "finalize.14": {
+      "status": 201,
+      "summary": {
+        "subtotal": 1578.75,
+        "totalFees": 237.63,
+        "grandTotal": 1816.38
+      },
+      "participantTotals": [
+        {
+          "subtotal": 394.68,
+          "fees": 59.41,
+          "total": 454.09
+        },
+        {
+          "subtotal": 394.68,
+          "fees": 59.41,
+          "total": 454.09
+        },
+        {
+          "subtotal": 394.68,
+          "fees": 59.41,
+          "total": 454.09
+        },
+        {
+          "subtotal": 394.71,
+          "fees": 59.4,
+          "total": 454.11
+        }
+      ],
+      "billStatus": "COMPLETED",
+      "feesPersisted": 2,
+      "error": null
+    },
+    "finalize.15": {
+      "status": 201,
+      "summary": {
+        "subtotal": 3116.4,
+        "totalFees": 313.24,
+        "grandTotal": 3429.6400000000003
+      },
+      "participantTotals": [
+        {
+          "subtotal": 1038.79,
+          "fees": 104.41,
+          "total": 1143.2
+        },
+        {
+          "subtotal": 1038.79,
+          "fees": 104.41,
+          "total": 1143.2
+        },
+        {
+          "subtotal": 1038.82,
+          "fees": 104.42,
+          "total": 1143.24
+        }
+      ],
+      "billStatus": "COMPLETED",
+      "feesPersisted": 2,
+      "error": null
+    },
+    "finalize.16": {
+      "status": 201,
+      "summary": {
+        "subtotal": 560.48,
+        "totalFees": 529.53,
+        "grandTotal": 1090.01
+      },
+      "participantTotals": [
+        {
+          "subtotal": 560.48,
+          "fees": 529.53,
+          "total": 1090.01
+        }
+      ],
+      "billStatus": "COMPLETED",
+      "feesPersisted": 2,
+      "error": null
+    },
+    "finalize.17": {
+      "status": 201,
+      "summary": {
+        "subtotal": 3274.55,
+        "totalFees": 732.3,
+        "grandTotal": 4006.8500000000004
+      },
+      "participantTotals": [
+        {
+          "subtotal": 3274.55,
+          "fees": 732.3,
+          "total": 4006.85
+        }
+      ],
+      "billStatus": "COMPLETED",
+      "feesPersisted": 2,
+      "error": null
+    },
+    "finalize.18": {
+      "status": 201,
+      "summary": {
+        "subtotal": 1544.37,
+        "totalFees": 0,
+        "grandTotal": 1544.37
+      },
+      "participantTotals": [
+        {
+          "subtotal": 386.08,
+          "fees": 0,
+          "total": 386.08
+        },
+        {
+          "subtotal": 386.08,
+          "fees": 0,
+          "total": 386.08
+        },
+        {
+          "subtotal": 386.08,
+          "fees": 0,
+          "total": 386.08
+        },
+        {
+          "subtotal": 386.13,
+          "fees": 0,
+          "total": 386.13
+        }
+      ],
+      "billStatus": "COMPLETED",
+      "feesPersisted": 0,
+      "error": null
+    },
+    "finalize.19": {
+      "status": 201,
+      "summary": {
+        "subtotal": 579.33,
+        "totalFees": 34.76,
+        "grandTotal": 614.09
+      },
+      "participantTotals": [
+        {
+          "subtotal": 579.33,
+          "fees": 34.76,
+          "total": 614.09
+        }
+      ],
+      "billStatus": "COMPLETED",
+      "feesPersisted": 1,
+      "error": null
+    },
+    "finalize.contract": {
+      "bill": {
+        "createdAt": "string",
+        "establishmentName": "string",
+        "fees": [
+          {
+            "billId": "string",
+            "createdAt": "string",
+            "description": "string",
+            "id": "string",
+            "type": "string",
+            "updatedAt": "string",
+            "value": "string"
+          }
+        ],
+        "id": "string",
+        "imageKey": "null",
+        "imageUrl": "null",
+        "items": [
+          {
+            "billId": "string",
+            "createdAt": "string",
+            "id": "string",
+            "measurementUnit": "string",
+            "name": "string",
+            "quantity": "string",
+            "totalPrice": "string",
+            "unitPrice": "string",
+            "updatedAt": "string"
+          }
+        ],
+        "ocrRawText": "null",
+        "participants": [
+          {
+            "billId": "string",
+            "createdAt": "string",
+            "id": "string",
+            "name": "string",
+            "updatedAt": "string"
+          }
+        ],
+        "status": "string",
+        "totalAmount": "null",
+        "updatedAt": "string",
+        "userId": "string"
+      },
+      "fees": [
+        {
+          "billId": "string",
+          "createdAt": "string",
+          "description": "string",
+          "id": "string",
+          "type": "string",
+          "updatedAt": "string",
+          "value": "string"
+        }
+      ],
+      "participantTotals": {
+        "<uuid>": {
+          "fees": "number",
+          "subtotal": "number",
+          "total": "number"
+        }
+      },
+      "summary": {
+        "grandTotal": "number",
+        "subtotal": "number",
+        "totalFees": "number"
+      }
+    },
+    "authz.otherUser": {
+      "bill.get": {
+        "status": 403,
+        "body": {
+          "error": "Forbidden",
+          "message": "Você não tem acesso a esta conta",
+          "statusCode": 403
+        }
+      },
+      "bill.summary": {
+        "status": 403,
+        "body": {
+          "error": "Forbidden",
+          "message": "Você não tem acesso a esta conta",
+          "statusCode": 403
+        }
+      },
+      "bill.patch": {
+        "status": 403,
+        "body": {
+          "error": "Forbidden",
+          "message": "Você não tem acesso a esta conta",
+          "statusCode": 403
+        }
+      },
+      "bill.finalize": {
+        "status": 403,
+        "body": {
+          "error": "Forbidden",
+          "message": "Você não tem acesso a esta conta",
+          "statusCode": 403
+        }
+      },
+      "bill.duplicate": {
+        "status": 404,
+        "body": {
+          "error": "Not Found",
+          "message": "Conta não encontrada",
+          "statusCode": 404
+        }
+      },
+      "bill.retryOcr": {
+        "status": 404,
+        "body": {
+          "error": "Not Found",
+          "message": "Conta não encontrada",
+          "statusCode": 404
+        }
+      },
+      "bill.attach": {
+        "status": 404,
+        "body": {
+          "error": "Not Found",
+          "message": "Conta nao encontrada",
+          "statusCode": 404
+        }
+      },
+      "item.create": {
+        "status": 403,
+        "body": {
+          "error": "Forbidden",
+          "message": "Você não tem acesso a esta conta",
+          "statusCode": 403
+        }
+      },
+      "item.patch": {
+        "status": 403,
+        "body": {
+          "error": "Forbidden",
+          "message": "Você não tem acesso a esta conta",
+          "statusCode": 403
+        }
+      },
+      "item.delete": {
+        "status": 403,
+        "body": {
+          "error": "Forbidden",
+          "message": "Você não tem acesso a esta conta",
+          "statusCode": 403
+        }
+      },
+      "bill.fee": {
+        "status": 403,
+        "body": {
+          "error": "Forbidden",
+          "message": "Você não tem acesso a esta conta",
+          "statusCode": 403
+        }
+      },
+      "participants.list": {
+        "status": 403,
+        "body": {
+          "error": "Forbidden",
+          "message": "Você não tem acesso a esta conta",
+          "statusCode": 403
+        }
+      },
+      "participants.create": {
+        "status": 403,
+        "body": {
+          "error": "Forbidden",
+          "message": "Você não tem acesso a esta conta",
+          "statusCode": 403
+        }
+      },
+      "participant.get": {
+        "status": 403,
+        "body": {
+          "error": "Forbidden",
+          "message": "Você não tem acesso a este participante",
+          "statusCode": 403
+        }
+      },
+      "participant.patch": {
+        "status": 403,
+        "body": {
+          "error": "Forbidden",
+          "message": "Você não tem acesso a este participante",
+          "statusCode": 403
+        }
+      },
+      "participant.delete": {
+        "status": 403,
+        "body": {
+          "error": "Forbidden",
+          "message": "Você não tem acesso a este participante",
+          "statusCode": 403
+        }
+      },
+      "divisions.list": {
+        "status": 403,
+        "body": {
+          "error": "Forbidden",
+          "message": "Você não tem acesso a esta conta",
+          "statusCode": 403
+        }
+      },
+      "divisions.create": {
+        "status": 403,
+        "body": {
+          "error": "Forbidden",
+          "message": "Você não tem acesso a este item",
+          "statusCode": 403
+        }
+      },
+      "division.get": {
+        "status": 403,
+        "body": {
+          "error": "Forbidden",
+          "message": "Você não tem acesso a esta divisão",
+          "statusCode": 403
+        }
+      },
+      "division.patch": {
+        "status": 403,
+        "body": {
+          "error": "Forbidden",
+          "message": "Você não tem acesso a esta divisão",
+          "statusCode": 403
+        }
+      },
+      "division.delete": {
+        "status": 403,
+        "body": {
+          "error": "Forbidden",
+          "message": "Você não tem acesso a esta divisão",
+          "statusCode": 403
+        }
+      },
+      "fees.list": {
+        "status": 403,
+        "body": {
+          "error": "Forbidden",
+          "message": "Você não tem acesso a esta conta",
+          "statusCode": 403
+        }
+      },
+      "fees.create": {
+        "status": 403,
+        "body": {
+          "error": "Forbidden",
+          "message": "Você não tem acesso a esta conta",
+          "statusCode": 403
+        }
+      },
+      "fee.get": {
+        "status": 403,
+        "body": {
+          "error": "Forbidden",
+          "message": "Você não tem acesso a esta taxa",
+          "statusCode": 403
+        }
+      },
+      "fee.patch": {
+        "status": 403,
+        "body": {
+          "error": "Forbidden",
+          "message": "Você não tem acesso a esta taxa",
+          "statusCode": 403
+        }
+      },
+      "fee.delete": {
+        "status": 403,
+        "body": {
+          "error": "Forbidden",
+          "message": "Você não tem acesso a esta taxa",
+          "statusCode": 403
+        }
+      },
+      "bill.delete": {
+        "status": 403,
+        "body": {
+          "error": "Forbidden",
+          "message": "Você não tem acesso a esta conta",
+          "statusCode": 403
+        }
+      }
+    },
+    "authz.ownerBillIntact": {
+      "exists": true,
+      "participants": 2,
+      "items": 1
+    },
+    "authz.noToken": {
+      "status": 401,
+      "body": {
+        "message": "Unauthorized",
+        "statusCode": 401
+      }
+    },
+    "upload.multipart.jpeg": {
+      "status": 201,
+      "billStatus": "PENDING_OCR",
+      "keys": {
+        "createdAt": "string",
+        "establishmentName": "null",
+        "id": "string",
+        "imageKey": "string",
+        "imageUrl": "string",
+        "message": "string",
+        "ocrRawText": "null",
+        "status": "string",
+        "totalAmount": "null",
+        "updatedAt": "string",
+        "userId": "string"
+      },
+      "storedObject": {
+        "folder": "bills",
+        "extension": "jpg"
+      },
+      "contentType": "image/jpeg"
+    },
+    "upload.multipart.png": {
+      "status": 201,
+      "billStatus": "PENDING_OCR",
+      "keys": {
+        "createdAt": "string",
+        "establishmentName": "null",
+        "id": "string",
+        "imageKey": "string",
+        "imageUrl": "string",
+        "message": "string",
+        "ocrRawText": "null",
+        "status": "string",
+        "totalAmount": "null",
+        "updatedAt": "string",
+        "userId": "string"
+      },
+      "storedObject": {
+        "folder": "bills",
+        "extension": "png"
+      },
+      "contentType": "image/png"
+    },
+    "upload.multipart.gif": {
+      "status": 201,
+      "billStatus": "PENDING_OCR",
+      "keys": {
+        "createdAt": "string",
+        "establishmentName": "null",
+        "id": "string",
+        "imageKey": "string",
+        "imageUrl": "string",
+        "message": "string",
+        "ocrRawText": "null",
+        "status": "string",
+        "totalAmount": "null",
+        "updatedAt": "string",
+        "userId": "string"
+      },
+      "storedObject": {
+        "folder": "bills",
+        "extension": "gif"
+      },
+      "contentType": "image/gif"
+    },
+    "upload.multipart.webp": {
+      "status": 201,
+      "billStatus": "PENDING_OCR",
+      "keys": {
+        "createdAt": "string",
+        "establishmentName": "null",
+        "id": "string",
+        "imageKey": "string",
+        "imageUrl": "string",
+        "message": "string",
+        "ocrRawText": "null",
+        "status": "string",
+        "totalAmount": "null",
+        "updatedAt": "string",
+        "userId": "string"
+      },
+      "storedObject": {
+        "folder": "bills",
+        "extension": "webp"
+      },
+      "contentType": "image/webp"
+    },
+    "upload.presigned.noSize": {
+      "status": 201,
+      "keys": {
+        "expiresIn": "number",
+        "fileUrl": "string",
+        "headers": {
+          "Content-Type": "string"
+        },
+        "key": "string",
+        "uploadUrl": "string"
+      }
+    },
+    "upload.presigned.keyShape": "bills/<userId>/<uuid>.jpg",
+    "upload.presigned.create": {
+      "status": 201,
+      "billStatus": "PENDING_OCR",
+      "keys": {
+        "createdAt": "string",
+        "establishmentName": "null",
+        "id": "string",
+        "imageKey": "string",
+        "imageUrl": "string",
+        "message": "string",
+        "ocrRawText": "null",
+        "status": "string",
+        "totalAmount": "null",
+        "updatedAt": "string",
+        "userId": "string"
+      }
+    },
+    "upload.existing.multipart": {
+      "status": 201,
+      "billStatus": "PENDING_OCR",
+      "keys": {
+        "createdAt": "string",
+        "establishmentName": "string",
+        "id": "string",
+        "imageKey": "string",
+        "imageUrl": "string",
+        "message": "string",
+        "ocrRawText": "null",
+        "status": "string",
+        "totalAmount": "null",
+        "updatedAt": "string",
+        "userId": "string"
+      }
+    },
+    "upload.existing.attach": {
+      "status": 201,
+      "billStatus": "PENDING_OCR",
+      "keys": {
+        "createdAt": "string",
+        "establishmentName": "string",
+        "id": "string",
+        "imageKey": "string",
+        "imageUrl": "string",
+        "message": "string",
+        "ocrRawText": "null",
+        "status": "string",
+        "totalAmount": "null",
+        "updatedAt": "string",
+        "userId": "string"
+      }
+    },
+    "avatar.presigned.noSize": {
+      "status": 201,
+      "keys": {
+        "expiresIn": "number",
+        "fileUrl": "string",
+        "headers": {
+          "Content-Type": "string"
+        },
+        "key": "string",
+        "uploadUrl": "string"
+      }
+    },
+    "avatar.multipart": {
+      "status": 201,
+      "body": {
+        "avatarUrl": "<url>",
+        "createdAt": "<date>",
+        "email": "<email>",
+        "id": "<uuid>",
+        "isActive": true,
+        "name": "Usuário Teste",
+        "role": "USER"
+      },
+      "storedObject": {
+        "folder": "avatars",
+        "extension": "png"
+      }
+    },
+    "avatar.remove": {
+      "status": 200,
+      "body": {
+        "avatarUrl": null,
+        "createdAt": "<date>",
+        "email": "<email>",
+        "id": "<uuid>",
+        "isActive": true,
+        "name": "Usuário Teste",
+        "role": "USER"
+      }
+    },
+    "bill.createManual": {
+      "status": 201,
+      "body": {
+        "createdAt": "<date>",
+        "establishmentName": "Jantar",
+        "id": "<uuid>",
+        "imageKey": "",
+        "imageUrl": "",
+        "ocrRawText": null,
+        "status": "DIVIDING",
+        "totalAmount": null,
+        "updatedAt": "<date>",
+        "userId": "<uuid>"
+      }
+    },
+    "bill.list": {
+      "status": 200,
+      "keys": {
+        "data": [
+          {
+            "_count": {
+              "items": "number",
+              "participants": "number"
+            },
+            "createdAt": "string",
+            "establishmentName": "string",
+            "fees": [],
+            "id": "string",
+            "imageUrl": "null",
+            "status": "string",
+            "totalAmount": "null",
+            "updatedAt": "string"
+          }
+        ],
+        "meta": {
+          "limit": "number",
+          "page": "number",
+          "total": "number",
+          "totalPages": "number"
+        }
+      }
+    },
+    "bill.detail": {
+      "status": 200,
+      "body": {
+        "createdAt": "<date>",
+        "establishmentName": "Restaurante Teste",
+        "fees": [],
+        "id": "<uuid>",
+        "imageKey": null,
+        "imageUrl": null,
+        "items": [
+          {
+            "divisions": [],
+            "id": "<uuid>",
+            "measurementUnit": "UNIT",
+            "name": "Prato",
+            "quantity": "1",
+            "totalPrice": "42",
+            "unitPrice": "42"
+          }
+        ],
+        "ocrRawText": null,
+        "participants": [
+          {
+            "divisions": [],
+            "id": "<uuid>",
+            "name": "Ana"
+          },
+          {
+            "divisions": [],
+            "id": "<uuid>",
+            "name": "Bruno"
+          }
+        ],
+        "status": "DIVIDING",
+        "totalAmount": null,
+        "updatedAt": "<date>",
+        "userId": "<uuid>"
+      }
+    },
+    "bill.summary": {
+      "status": 200,
+      "keys": {
+        "bill": {
+          "createdAt": "string",
+          "establishmentName": "string",
+          "id": "string",
+          "imageUrl": "null",
+          "status": "string",
+          "updatedAt": "string"
+        },
+        "items": [
+          {
+            "id": "string",
+            "measurementUnit": "string",
+            "name": "string",
+            "quantity": "number",
+            "totalPrice": "number",
+            "unitPrice": "number"
+          }
+        ],
+        "participants": [
+          {
+            "feeDetails": [],
+            "fees": "number",
+            "id": "string",
+            "items": [],
+            "name": "string",
+            "subtotal": "number",
+            "total": "number"
+          }
+        ],
+        "summary": {
+          "subtotal": "number",
+          "total": "number",
+          "totalFees": "number"
+        }
+      }
+    },
+    "bill.duplicate": {
+      "status": 201,
+      "keys": {
+        "createdAt": "string",
+        "establishmentName": "string",
+        "fees": [],
+        "id": "string",
+        "imageKey": "string",
+        "imageUrl": "string",
+        "items": [
+          {
+            "billId": "string",
+            "createdAt": "string",
+            "id": "string",
+            "measurementUnit": "string",
+            "name": "string",
+            "quantity": "string",
+            "totalPrice": "string",
+            "unitPrice": "string",
+            "updatedAt": "string"
+          }
+        ],
+        "message": "string",
+        "ocrRawText": "null",
+        "participants": [
+          {
+            "billId": "string",
+            "createdAt": "string",
+            "id": "string",
+            "name": "string",
+            "updatedAt": "string"
+          }
+        ],
+        "status": "string",
+        "totalAmount": "null",
+        "updatedAt": "string",
+        "userId": "string"
+      }
+    },
+    "bill.delete": {
+      "status": 200,
+      "body": {
+        "message": "Conta deletada com sucesso"
+      }
+    },
+    "bill.detailAfterDelete": {
+      "status": 404,
+      "body": {
+        "error": "Not Found",
+        "message": "Conta não encontrada",
+        "statusCode": 404
+      }
+    },
+    "profile.get": {
+      "status": 200,
+      "body": {
+        "avatarUrl": null,
+        "createdAt": "<date>",
+        "email": "<email>",
+        "id": "<uuid>",
+        "isActive": true,
+        "name": "Usuário Teste",
+        "role": "USER",
+        "updatedAt": "<date>"
+      }
+    },
+    "profile.patchName": {
+      "status": 200,
+      "body": {
+        "avatarUrl": null,
+        "createdAt": "<date>",
+        "email": "<email>",
+        "id": "<uuid>",
+        "isActive": true,
+        "name": "Nome Novo",
+        "role": "USER",
+        "updatedAt": "<date>"
+      }
+    },
+    "profile.deleteAccount": {
+      "status": 200,
+      "body": {
+        "message": "Conta excluída com sucesso"
+      }
+    },
+    "profile.deleteAccount.userGone": true
+  }
+}
