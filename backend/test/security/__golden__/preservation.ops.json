@@ -1,0 +1,215 @@
+{
+  "description": "Comportamento observado na produção (origin/main). Gerado por PRESERVATION_MODE=record; não editar à mão.",
+  "observations": {
+    "health.dbUp": {
+      "status": 200,
+      "bodyStatus": "ok",
+      "timestampIsIso": true,
+      "databaseStatus": "connected"
+    },
+    "helmet.headers": {
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "SAMEORIGIN",
+      "strict-transport-security": true,
+      "content-security-policy": true,
+      "cross-origin-resource-policy": "cross-origin",
+      "x-powered-by": null
+    },
+    "cors.noOrigin": {
+      "status": 200,
+      "allowOrigin": "*"
+    },
+    "cors.webOriginDefault": {
+      "preflightStatus": 204,
+      "preflightAllowOrigin": "*",
+      "simpleAllowOrigin": "*"
+    },
+    "throttle.auth": {
+      "login": [
+        401,
+        401,
+        401,
+        429
+      ],
+      "google": [
+        500,
+        500,
+        500,
+        429
+      ],
+      "register": [
+        400,
+        400,
+        400,
+        400,
+        400,
+        429
+      ],
+      "refresh": [
+        401,
+        401,
+        401,
+        401,
+        401,
+        401,
+        401,
+        401,
+        401,
+        401,
+        429
+      ],
+      "forgot": [
+        200,
+        200,
+        200,
+        429
+      ],
+      "reset": [
+        401,
+        401,
+        401,
+        401,
+        401,
+        429
+      ]
+    },
+    "throttle.bills": {
+      "createBill": [
+        201,
+        201,
+        429
+      ],
+      "uploadImage": [
+        400,
+        400,
+        429
+      ],
+      "retryOcr": [
+        400,
+        429
+      ]
+    },
+    "cron.withSecret": {
+      "queue": 200,
+      "processGet": 200,
+      "processPost": 200,
+      "queueCounters": true
+    },
+    "cron.noSecret": {
+      "status": 403,
+      "body": {
+        "error": "Forbidden",
+        "message": "Invalid internal credential.",
+        "statusCode": 403
+      }
+    },
+    "cron.wrongSecret": {
+      "status": 403,
+      "body": {
+        "error": "Forbidden",
+        "message": "Invalid internal credential.",
+        "statusCode": 403
+      }
+    },
+    "admin.listAsUser": {
+      "status": 403,
+      "body": {
+        "error": "Forbidden",
+        "message": "Acesso negado. Roles necessárias: ADMIN",
+        "statusCode": 403
+      }
+    },
+    "admin.listNoToken": {
+      "status": 401,
+      "body": {
+        "message": "Unauthorized",
+        "statusCode": 401
+      }
+    },
+    "admin.listAsAdmin": {
+      "status": 200,
+      "keys": [
+        {
+          "avatarUrl": "null",
+          "createdAt": "string",
+          "email": "string",
+          "id": "string",
+          "isActive": "boolean",
+          "name": "string",
+          "role": "string",
+          "updatedAt": "string"
+        }
+      ]
+    },
+    "admin.createUser": {
+      "status": 201,
+      "body": {
+        "avatarUrl": null,
+        "createdAt": "<date>",
+        "email": "<email>",
+        "id": "<uuid>",
+        "isActive": false,
+        "name": "Criado",
+        "role": "USER"
+      }
+    },
+    "admin.getUser": {
+      "status": 200,
+      "body": {
+        "avatarUrl": null,
+        "createdAt": "<date>",
+        "email": "<email>",
+        "id": "<uuid>",
+        "isActive": true,
+        "name": "Usuário Teste",
+        "role": "USER",
+        "updatedAt": "<date>"
+      }
+    },
+    "admin.deactivateSelf": {
+      "status": 400,
+      "body": {
+        "error": "Bad Request",
+        "message": "Você não pode desativar sua própria conta",
+        "statusCode": 400
+      }
+    },
+    "admin.changeOwnRole": {
+      "status": 400,
+      "body": {
+        "error": "Bad Request",
+        "message": "Você não pode alterar sua própria role",
+        "statusCode": 400
+      }
+    },
+    "admin.deactivateOther": {
+      "status": 200,
+      "body": {
+        "avatarUrl": null,
+        "createdAt": "<date>",
+        "email": "<email>",
+        "id": "<uuid>",
+        "isActive": false,
+        "name": "Usuário Teste",
+        "role": "USER",
+        "updatedAt": "<date>"
+      }
+    },
+    "admin.deleteLastAdmin": {
+      "status": 400,
+      "body": {
+        "error": "Bad Request",
+        "message": "Não é possível excluir o último administrador ativo do sistema",
+        "statusCode": 400
+      }
+    },
+    "admin.deactivatedAccess": {
+      "status": 401,
+      "body": {
+        "error": "Unauthorized",
+        "message": "Usuário foi desativado",
+        "statusCode": 401
+      }
+    }
+  }
+}
