@@ -10,7 +10,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { BillStatus } from '@prisma/client';
-import { CreateBillItemDto } from '../../bill-items/dto/create-bill-item.dto';
+import { CreateBillItemDto } from './create-bill-item.dto';
 import { MAX_MONEY_VALUE } from '../../common/numeric-limits';
 
 export class UpdateBillDto {

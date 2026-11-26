@@ -1,6 +1,7 @@
 /**
  * Catálogo de produtos consumíveis, lido de GOOGLE_PLAY_PRODUCTS no formato
  * "productId:créditos,productId:créditos" (ex.: "credits_10:10,credits_30:30").
+ * Os créditos são por unidade: a compra de N unidades credita N vezes o valor.
  */
 export function getProductCredits(productId: string): number | undefined {
   const entries = (process.env.GOOGLE_PLAY_PRODUCTS ?? '')

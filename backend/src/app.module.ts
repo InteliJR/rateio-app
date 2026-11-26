@@ -13,13 +13,15 @@ import { CommonModule } from './common/common.module';
 import { StorageModule } from './storage/storage.module';
 import { OcrModule } from './ocr/ocr.module';
 import { BillsModule } from './bills/bills.module';
-import { BillItemsModule } from './bill-items/bill-items.module';
+
 import { ParticipantsModule } from './participants/participants.module';
 import { DivisionsModule } from './divisions/divisions.module';
 import { FeesModule } from './fees/fees.module';
+import { CreditsModule } from './credits/credits.module';
 import { PurchasesModule } from './purchases/purchases.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { MetricsInterceptor } from './observability/metrics.interceptor';
+import { parseEnv } from './config/env.schema';
 
 function getRateLimitConfig() {
   const ttl = Number(process.env.THROTTLE_TTL_MS ?? 60000);
@@ -35,12 +37,13 @@ function getRateLimitConfig() {
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      // Segunda barreira (testes, scripts ou entrypoints que não passem por main.ts):
+      // lança se os segredos JWT forem inválidos; avisos já são registrados no boot
+      validate: (raw) => parseEnv(raw).config,
     }),
     ScheduleModule.forRoot(),
     // Global rate limiting should be lenient enough for normal app usage.
-    ThrottlerModule.forRoot([
-      getRateLimitConfig(),
-    ]),
+    ThrottlerModule.forRoot([getRateLimitConfig()]),
     ObservabilityModule,
     PrismaModule,
     AuthModule,
@@ -50,10 +53,11 @@ function getRateLimitConfig() {
     StorageModule,
     OcrModule,
     BillsModule,
-    BillItemsModule,
+
     ParticipantsModule,
     DivisionsModule,
     FeesModule,
+    CreditsModule,
     PurchasesModule,
   ],
   controllers: [AppController],

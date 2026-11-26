@@ -1,9 +1,7 @@
-import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Res } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
-import * as packageJson from '../package.json';
-import { MetricsService } from './observability/metrics.service';
+import type { Response } from 'express';
 import { AppService } from './app.service';
-import { OcrQueueService } from './ocr/ocr-queue.service';
 import { PrismaService } from './prisma/prisma.service';
 
 @Controller()
@@ -11,8 +9,6 @@ export class AppController {
   constructor(
     private readonly appService: AppService,
     private readonly prisma: PrismaService,
-    private readonly metrics: MetricsService,
-    private readonly ocrQueue: OcrQueueService,
   ) {}
 
   @SkipThrottle()
@@ -24,22 +20,21 @@ export class AppController {
   @SkipThrottle()
   @Get('health')
   @HttpCode(HttpStatus.OK)
-  async healthCheck() {
-    const [dbStatus, queueStatus] = await Promise.all([
-      this.checkDbConnection(),
-      this.ocrQueue.getQueueSnapshot(),
-    ]);
-
+  async healthCheck(@Res({ passthrough: true }) res: Response) {
+    const dbStatus = await this.checkDbConnection();
     const isDatabaseDown = dbStatus.status !== 'connected';
     const isStrict = process.env.HEALTH_STRICT_STATUS === 'true';
+
+    if (isDatabaseDown && isStrict) {
+      res.status(HttpStatus.SERVICE_UNAVAILABLE);
+    }
 
     return {
       status: isDatabaseDown && isStrict ? 'error' : 'ok',
       timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      database: dbStatus,
-      ocrQueue: queueStatus,
-      version: packageJson.version,
+      database: {
+        status: dbStatus.status,
+      },
     };
   }
 

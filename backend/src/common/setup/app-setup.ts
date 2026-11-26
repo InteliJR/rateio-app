@@ -1,7 +1,16 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
+import { CorrelationIdMiddleware } from '../middleware/correlation-id.middleware';
+import { AllExceptionsFilter } from '../filters/all-exceptions.filter';
 
 export function configureApp(app: INestApplication): void {
+  const correlationMiddleware = new CorrelationIdMiddleware();
+  app.use((req: any, res: any, next: any) =>
+    correlationMiddleware.use(req, res, next),
+  );
+
+  app.useGlobalFilters(new AllExceptionsFilter());
+
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: 'cross-origin' },
@@ -42,10 +51,8 @@ export function configureApp(app: INestApplication): void {
       credentials: true,
     });
   } else {
-    // Comportamento tolerante de retrocompatibilidade: CORS aberto com aviso
-    console.warn(
-      '[Security Warning] CORS_ALLOWED_ORIGINS is not defined. CORS is currently open to all origins.',
-    );
+    // Comportamento tolerante de retrocompatibilidade: CORS aberto.
+    // O aviso de startup é emitido de forma centralizada por parseEnv (env_warning: CORS_ALLOWED_ORIGINS)
     app.enableCors();
   }
 }
