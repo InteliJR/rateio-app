@@ -18,6 +18,7 @@ interface ProductPurchaseResponse {
   consumptionState?: number;
   orderId?: string;
   obfuscatedExternalAccountId?: string;
+  quantity?: number;
 }
 
 @Injectable()
@@ -39,6 +40,7 @@ export class GooglePlayApiVerifier extends GooglePlayVerifier {
       orderId: data.orderId,
       obfuscatedAccountId: data.obfuscatedExternalAccountId,
       consumed: data.consumptionState === 1,
+      quantity: data.quantity,
     };
   }
 

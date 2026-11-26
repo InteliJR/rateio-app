@@ -20,8 +20,8 @@ import { CreateBillDto } from './dto/create-bill.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { FinalizeBillDto } from './dto/finalize-bill.dto';
-import { CreateBillItemDto } from '../bill-items/dto/create-bill-item.dto';
-import { UpdateBillItemDto } from '../bill-items/dto/update-bill-item.dto';
+import { CreateBillItemDto } from './dto/create-bill-item.dto';
+import { UpdateBillItemDto } from './dto/update-bill-item.dto';
 import { BatchUpdateBillItemsDto } from './dto/update-bill.dto';
 import { CreateFeeDto } from '../fees/dto/create-fee.dto';
 import { BillStatus } from '@prisma/client';
@@ -118,12 +118,19 @@ export class BillsController {
     @Body() presignedUploadDto: PresignedUploadDto,
     @Request() req: any,
   ) {
-    return this.billsService.createImageUploadUrl(req.user.id, presignedUploadDto);
+    return this.billsService.createImageUploadUrl(
+      req.user.id,
+      presignedUploadDto,
+    );
   }
 
   @Throttle({ default: { limit: 2, ttl: 60000 } })
   @Post()
-  @UseInterceptors(FileInterceptor('image'))
+  @UseInterceptors(
+    FileInterceptor('image', {
+      limits: { fileSize: 10 * 1024 * 1024, files: 1, fields: 20 },
+    }),
+  )
   async create(
     @UploadedFile() file: Express.Multer.File | undefined,
     @Body() createBillDto: CreateBillDto,
@@ -147,7 +154,11 @@ export class BillsController {
    */
   @Throttle({ default: { limit: 2, ttl: 60000 } })
   @Post(':id/image')
-  @UseInterceptors(FileInterceptor('image'))
+  @UseInterceptors(
+    FileInterceptor('image', {
+      limits: { fileSize: 10 * 1024 * 1024, files: 1, fields: 20 },
+    }),
+  )
   async uploadImage(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File | undefined,
@@ -193,7 +204,11 @@ export class BillsController {
     @Body() batchUpdateDto: BatchUpdateBillItemsDto,
     @Request() req: any,
   ) {
-    return this.billsService.batchUpdateItems(billId, req.user.id, batchUpdateDto);
+    return this.billsService.batchUpdateItems(
+      billId,
+      req.user.id,
+      batchUpdateDto,
+    );
   }
 
   /**

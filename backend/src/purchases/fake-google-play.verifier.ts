@@ -11,7 +11,9 @@ import {
  *   pending-...        compra pendente
  *   canceled-...       compra cancelada
  *   other-account-...  compra vinculada a outra conta
- *   qualquer outro     compra paga
+ *   no-account-...     compra paga sem o identificador da conta
+ *   qty<N>-...         compra paga de N unidades (ex.: qty3-abc)
+ *   qualquer outro     compra paga de 1 unidade da conta do usuário
  *
  * Nunca é ligada em produção (ver createGooglePlayVerifier).
  */
@@ -23,6 +25,7 @@ export class FakeGooglePlayVerifier extends GooglePlayVerifier {
   async getProductPurchase(
     _productId: string,
     purchaseToken: string,
+    accountId?: string,
   ): Promise<GooglePurchaseInfo> {
     const consumed = this.consumed.has(purchaseToken);
     const orderId = `FAKE.${purchaseToken}`;
@@ -41,7 +44,18 @@ export class FakeGooglePlayVerifier extends GooglePlayVerifier {
         consumed,
       };
     }
-    return { state: 'PURCHASED', orderId, consumed };
+    const quantity = purchaseToken.match(/^qty(\d+)-/)?.[1];
+    return {
+      state: 'PURCHASED',
+      orderId,
+      // Como a Google real, devolve o usuário que o app informou na compra;
+      // no-account-... simula um app que não enviou o identificador.
+      obfuscatedAccountId: purchaseToken.startsWith('no-account-')
+        ? undefined
+        : accountId,
+      consumed,
+      quantity: quantity ? Number(quantity) : undefined,
+    };
   }
 
   async consumeProductPurchase(

@@ -4,8 +4,12 @@ import { join } from 'path';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { StorageService } from './storage/storage.service';
 import { configureApp } from './common/setup/app-setup';
+import { validateEnvAtBoot } from './config/env.bootstrap';
 
 async function bootstrap() {
+  // Fail-fast: segredos JWT inválidos encerram o processo (código 1) citando só os nomes
+  validateEnvAtBoot({ exitOnError: true });
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.set('trust proxy', 1);
 

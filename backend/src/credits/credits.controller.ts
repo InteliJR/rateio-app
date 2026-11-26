@@ -1,5 +1,6 @@
 import {
   Body,
+  ConflictException,
   Controller,
   Get,
   Param,
@@ -8,6 +9,7 @@ import {
   Patch,
   Query,
   Request,
+  UnprocessableEntityException,
   UseGuards,
   ValidationPipe,
 } from '@nestjs/common';
@@ -16,9 +18,11 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import {
+  AdjustReferenceConflictError,
   CreditBalance,
   CreditHistoryPage,
   CreditsService,
+  NegativeBalanceError,
 } from './credits.service';
 import { AdjustCreditsDto } from './dto/adjust-credits.dto';
 
@@ -59,17 +63,27 @@ export class CreditsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Patch(':userId/adjust')
-  adjust(
+  async adjust(
     @Param('userId', ParseUUIDPipe) userId: string,
     @Body(ValidationPipe) dto: AdjustCreditsDto,
     @Request() req: RequestWithUser,
   ) {
-    return this.creditsService.adminAdjust({
-      userId,
-      amount: dto.amount,
-      reason: dto.reason,
-      actorId: req.user.id,
-      reference: dto.reference,
-    });
+    try {
+      return await this.creditsService.adminAdjust({
+        userId,
+        amount: dto.amount,
+        reason: dto.reason,
+        actorId: req.user.id,
+        reference: dto.reference,
+      });
+    } catch (error) {
+      if (error instanceof NegativeBalanceError) {
+        throw new UnprocessableEntityException(error.message);
+      }
+      if (error instanceof AdjustReferenceConflictError) {
+        throw new ConflictException(error.message);
+      }
+      throw error;
+    }
   }
 }
