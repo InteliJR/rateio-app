@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -9,10 +9,33 @@ import {
 import { useRouter } from "expo-router";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useTheme } from "../../../contexts/ThemeContext";
+import { CreditBalanceChip } from "../../../components/credits/CreditBalanceChip";
+import { InsufficientCreditsSheet } from "../../../components/credits/InsufficientCreditsSheet";
+import { useCredits } from "../../../hooks/useCredits";
 
 export default function CreateStartScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+  const { hasNoCredits } = useCredits();
+  const [showNoCredits, setShowNoCredits] = useState(false);
+
+  const irParaManual = () => {
+    setShowNoCredits(false);
+    router.push({
+      pathname: "/(tabs)/(create)/new",
+      params: { mode: "manual" },
+    });
+  };
+
+  const lerNotaFiscal = () => {
+    // Só barra quando temos certeza de que não há saldo. Em caso de dúvida,
+    // deixa seguir: o backend recusa e a tela de leitura trata o erro.
+    if (hasNoCredits) {
+      setShowNoCredits(true);
+      return;
+    }
+    router.push("/(tabs)/(create)/camera");
+  };
 
   return (
     <ScrollView
@@ -28,6 +51,8 @@ export default function CreateStartScreen() {
         </Text>
       </View>
 
+      <CreditBalanceChip />
+
       <View style={styles.options}>
         <TouchableOpacity
           style={[
@@ -38,7 +63,7 @@ export default function CreateStartScreen() {
             },
           ]}
           activeOpacity={0.85}
-          onPress={() => router.push("/(tabs)/(create)/camera")}
+          onPress={lerNotaFiscal}
         >
           <View style={[styles.iconBox, { backgroundColor: colors.primary }]}>
             <MaterialCommunityIcons
@@ -48,9 +73,23 @@ export default function CreateStartScreen() {
             />
           </View>
           <View style={styles.optionText}>
-            <Text style={[styles.optionTitle, { color: colors.text }]}>
-              Ler nota fiscal
-            </Text>
+            <View style={styles.optionTitleRow}>
+              <Text style={[styles.optionTitle, { color: colors.text }]}>
+                Ler nota fiscal
+              </Text>
+              <Text
+                style={[
+                  styles.badge,
+                  {
+                    color: colors.selectionChipInactiveText,
+                    backgroundColor: colors.selectionChipInactiveBackground,
+                    borderColor: colors.selectionChipInactiveBorder,
+                  },
+                ]}
+              >
+                usa 1 leitura
+              </Text>
+            </View>
             <Text style={[styles.optionDescription, { color: colors.textSecondary }]}>
               Tire uma foto ou escolha uma imagem para reconhecer os itens automaticamente.
             </Text>
@@ -86,9 +125,23 @@ export default function CreateStartScreen() {
             />
           </View>
           <View style={styles.optionText}>
-            <Text style={[styles.optionTitle, { color: colors.text }]}>
-              Adicionar manualmente
-            </Text>
+            <View style={styles.optionTitleRow}>
+              <Text style={[styles.optionTitle, { color: colors.text }]}>
+                Adicionar manualmente
+              </Text>
+              <Text
+                style={[
+                  styles.badge,
+                  {
+                    color: colors.successText,
+                    backgroundColor: colors.successLight,
+                    borderColor: colors.successBorder,
+                  },
+                ]}
+              >
+                sempre grátis
+              </Text>
+            </View>
             <Text style={[styles.optionDescription, { color: colors.textSecondary }]}>
               Informe os dados da conta e cadastre os itens sem usar a câmera.
             </Text>
@@ -100,6 +153,12 @@ export default function CreateStartScreen() {
           />
         </TouchableOpacity>
       </View>
+
+      <InsufficientCreditsSheet
+        visible={showNoCredits}
+        onClose={() => setShowNoCredits(false)}
+        onCreateManually={irParaManual}
+      />
     </ScrollView>
   );
 }
@@ -148,9 +207,24 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 4,
   },
+  optionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+  },
   optionTitle: {
     fontSize: 17,
     fontWeight: "700",
+  },
+  badge: {
+    fontSize: 11,
+    fontWeight: "700",
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    overflow: "hidden",
   },
   optionDescription: {
     fontSize: 13,
