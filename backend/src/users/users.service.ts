@@ -3,20 +3,28 @@ import {
   ConflictException,
   NotFoundException,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { UserRole } from '@prisma/client';
 import * as argon2 from 'argon2';
+import { readEnv } from '../config/read-env';
 
 @Injectable()
 export class UsersService {
   constructor(
     private prisma: PrismaService,
     private storageService: StorageService,
-  ) {}
+    @Optional() private readonly configService?: ConfigService,
+  ) {
+    // Mesmo resultado efetivo de antes (inclusive '' se ausente), sem rehash nem transição:
+    // os hashes existentes continuam validando (3.11). Ausência gera aviso no boot (parseEnv).
+    this.pepper = readEnv(this.configService, 'PASSWORD_PEPPER') || '';
+  }
 
-  private readonly pepper = process.env.PASSWORD_PEPPER || '';
+  private readonly pepper: string;
 
   // Método auxiliar centralizado para hash de senha
   private async hashPassword(password: string): Promise<string> {

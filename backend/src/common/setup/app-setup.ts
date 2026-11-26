@@ -51,10 +51,8 @@ export function configureApp(app: INestApplication): void {
       credentials: true,
     });
   } else {
-    // Comportamento tolerante de retrocompatibilidade: CORS aberto com aviso
-    console.warn(
-      '[Security Warning] CORS_ALLOWED_ORIGINS is not defined. CORS is currently open to all origins.',
-    );
+    // Comportamento tolerante de retrocompatibilidade: CORS aberto.
+    // O aviso de startup é emitido de forma centralizada por parseEnv (env_warning: CORS_ALLOWED_ORIGINS)
     app.enableCors();
   }
 }

@@ -72,12 +72,18 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const logPayload = {
       requestId,
       method: request.method,
-      url: request.url,
+      // Somente o caminho: query strings podem carregar tokens ou e-mails
+      url: (request.originalUrl || request.url || '').split('?')[0],
       statusCode: status,
       errorType,
       errorName: (exception as any)?.name || 'UnknownError',
       prismaCode: (exception as any)?.code,
-      details: status >= 500 ? (exception as any)?.message : undefined,
+      // Mensagens internas (Prisma/Postgres/S3/SMTP) podem conter nomes de colunas,
+      // valores e credenciais: só vão para o log em desenvolvimento explícito (contrato 2.15)
+      details:
+        status >= 500 && process.env.NODE_ENV === 'development'
+          ? (exception as any)?.message
+          : undefined,
     };
 
     if (status >= 500) {

@@ -32,6 +32,11 @@ import participantsService, {
 } from "../../../services/participants.service";
 import { useRateioDraftStore } from "../../../store/rateioDraftStore";
 import {
+  CreditReservedNotice,
+  CreditReturnedNotice,
+} from "../../../components/credits/CreditNotices";
+import { useInvalidateCredits } from "../../../hooks/useCredits";
+import {
   getItemTotalPrice,
   normalizeMeasurementUnit,
 } from "../../../lib/measurementUnits";
@@ -65,6 +70,8 @@ export default function ScannedBillScreen() {
   const draftAllocations = useRateioDraftStore(
     (state) => state.itemAllocations,
   );
+
+  const invalidateCredits = useInvalidateCredits();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -173,6 +180,9 @@ export default function ScannedBillScreen() {
         if (bill.status !== "PENDING_OCR") {
           clearInterval(interval);
           await loadBillData();
+          // A leitura terminou: ou o crédito foi consumido, ou foi devolvido.
+          // Nos dois casos o saldo em cache está velho.
+          invalidateCredits();
         }
       } catch {
         clearInterval(interval);
@@ -180,7 +190,7 @@ export default function ScannedBillScreen() {
     }, 2500);
 
     return () => clearInterval(interval);
-  }, [billStatus, id, loadBillData]);
+  }, [billStatus, id, loadBillData, invalidateCredits]);
 
   useEffect(() => {
     if (!id || draftBillId !== id) return;
@@ -500,6 +510,9 @@ export default function ScannedBillScreen() {
         <Text style={[styles.processingText, { color: colors.textSecondary }]}>
           Assim que os itens forem reconhecidos, a revisão da conta será aberta.
         </Text>
+        <View style={styles.processingNotice}>
+          <CreditReservedNotice />
+        </View>
       </View>
     );
   }
@@ -526,25 +539,28 @@ export default function ScannedBillScreen() {
           </View>
 
           {billStatus === "OCR_FAILED" && (
-            <View
-              style={[
-                styles.warningCard,
-                {
-                  backgroundColor: colors.warningLight,
-                  borderColor: colors.warning,
-                },
-              ]}
-            >
-              <Ionicons
-                name="warning-outline"
-                size={20}
-                color={colors.warning}
-              />
-              <Text style={[styles.warningText, { color: colors.text }]}>
-                O OCR não conseguiu identificar todos os itens. Revise a conta e
-                ajuste o que for necessário.
-              </Text>
-            </View>
+            <>
+              <View
+                style={[
+                  styles.warningCard,
+                  {
+                    backgroundColor: colors.warningLight,
+                    borderColor: colors.warning,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="warning-outline"
+                  size={20}
+                  color={colors.warning}
+                />
+                <Text style={[styles.warningText, { color: colors.text }]}>
+                  O OCR não conseguiu identificar todos os itens. Revise a conta
+                  e ajuste o que for necessário.
+                </Text>
+              </View>
+              <CreditReturnedNotice />
+            </>
           )}
 
           <View style={styles.section}>
@@ -769,6 +785,10 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: "center",
     lineHeight: 20,
+  },
+  processingNotice: {
+    marginTop: 24,
+    alignSelf: "stretch",
   },
   scrollContent: {
     paddingBottom: 32,

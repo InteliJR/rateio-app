@@ -4,10 +4,14 @@ import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/common/setup/app-setup';
+import { validateEnvAtBoot } from '../src/config/env.bootstrap';
 
 let cachedServer: ReturnType<typeof express> | null = null;
 
 async function createServer() {
+  // Em serverless lança em vez de encerrar o processo; a mensagem cita só os nomes
+  validateEnvAtBoot({ exitOnError: false });
+
   const server = express();
   server.set('trust proxy', 1);
   const adapter = new ExpressAdapter(server);
